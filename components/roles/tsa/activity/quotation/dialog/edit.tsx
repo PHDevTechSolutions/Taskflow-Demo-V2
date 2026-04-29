@@ -2417,7 +2417,8 @@ ${payload.whtType && payload.whtType !== "none"
       currentY += logisticsBlock.h;
 
       const termsAndSigBlock = await renderBlock(
-        `<div class="content-area" style="padding-top:0;"><div class="terms-grid"><div class="terms-label">Payment:</div><div class="terms-val"><p><strong style="color:red;">For Cash on Delivery (COD)</strong></p><p><strong>NOTE: Orders below 10,000 pesos can be paid in cash at the time of delivery.</strong></p><p><strong>BANK DETAILS</strong></p><p><b>Payee to: </b><strong>${isEcoshift ? "ECOSHIFT CORPORATION" : "DISRUPTIVE SOLUTIONS INC."}</strong></p><div class="bank-grid" style="display:flex;gap:20px;"><div><strong>BANK: METROBANK</strong><br/>Account Name: ${isEcoshift ? "ECOSHIFT CORPORATION" : "DISRUPTIVE SOLUTIONS INC."}<br/>Account Number: ${isEcoshift ? "243-7-243805100" : "243-7-24354164-2"}</div><div><strong>BANK: BDO</strong><br/>Account Name: ${isEcoshift ? "ECOSHIFT CORPORATION" : "DISRUPTIVE SOLUTIONS INC."}<br/>Account Number: ${isEcoshift ? "0021-8801-7271" : "0021-8801-9258"}</div></div></div><div class="terms-label">DELIVERY:</div><div class="terms-val terms-highlight"><p>Delivery/Pick up is subject to confirmation.</p></div><div class="terms-label">Validity:</div><div class="terms-val"><p class="text-red-strong"><u>Thirty (30) calendar days from the date of this offer.</u></p></div><div class="terms-label">CANCELLATION:</div><div class="terms-val terms-highlight"><p>1. Above quoted items are non-cancellable.</p><p>2. Downpayment for items not in stock/indent and order/special items are non-refundable.</p><p>5. Cancellation for Special Projects (SPF) are not allowed and will be subject to a 100% charge.</p></div></div></div><div class="sig-hierarchy"><p class="sig-message">Thank you for allowing us to service your requirements. We hope that the above offer merits your acceptance. Unless otherwise indicated, you are deemed to have accepted the Terms and Conditions of this Quotation.</p><div class="sig-grid"><div class="sig-side-internal"><div style="position:relative;min-height:85px;"><p class="sig-italic">${isEcoshift ? "Ecoshift Corporation" : "Disruptive Solutions Inc"}</p><img src="${payload.agentSignature || ""}" style="position:absolute;top:28px;left:0;width:110px;height:auto;object-fit:contain;"/><p class="sig-name" style="margin-top:46px;">${payload.salesRepresentative}</p><div class="sig-line" style="width:220px;margin-top:2px;"></div><p class="sig-sub-label">Sales Representative</p><p class="sig-detail">Mobile: ${payload.agentContactNumber || "N/A"}</p><p class="sig-detail">Email: ${payload.agentEmailAddress || "N/A"}</p></div><div style="position:relative;min-height:85px;"><p class="sig-approved-label">Approved By:</p><img src="${payload.TsmSignature || ""}" style="position:absolute;top:22px;left:0;width:110px;height:auto;object-fit:contain;"/><p class="sig-name" style="margin-top:46px;">${payload.salestsmname}</p><div class="sig-line" style="width:220px;margin-top:2px;"></div><p class="sig-sub-label">Sales Manager</p><p class="sig-detail">Mobile: ${payload.TsmContactNumber || "N/A"}</p><p class="sig-detail">Email: ${payload.TsmEmailAddress || "N/A"}</p></div><div style="position:relative;min-height:75px;"><p class="sig-approved-label">Noted By:</p><img src="${payload.ManagerSignature || ""}" style="position:absolute;top:22px;left:0;width:110px;height:auto;object-fit:contain;"/><p class="sig-name" style="margin-top:46px;">${payload.salesmanagername}</p><div class="sig-line" style="width:220px;margin-top:2px;"></div><p class="sig-sub-label">Sales-B2B</p></div></div><div class="sig-side-client"><div style="text-align:center;"><div class="sig-line" style="margin-top:68px;width:220px;"></div><p class="sig-client-label">Company Authorized Representative</p><p class="sig-client-sub">(Please Sign Over Printed Name)</p></div><div style="text-align:center;"><div class="sig-line" style="margin-top:55px;width:220px;"></div><p class="sig-client-label">Payment Release Date</p></div><div style="text-align:center;"><div class="sig-line" style="margin-top:55px;width:220px;"></div><p class="sig-client-label">Position in the Company</p></div></div></div></div></div>`,
+        `<div class="content-area" style="padding-top:0;"><div class="terms-grid"><div class="terms-label">Payment:</div><div class="terms-val"><p><strong style="color:red;">For Cash on Delivery (COD)</strong></p><p><strong>NOTE: Orders below 10,000 pesos can be paid in cash at the time of delivery.</strong></p><p><strong>BANK DETAILS</strong></p><p><b>Payee to: </b><strong>${isEcoshift ? "ECOSHIFT CORPORATION" : "DISRUPTIVE SOLUTIONS INC."}</strong></p><div class="bank-grid" style="display:flex;gap:20px;"><div><strong>BANK: METROBANK</strong><br/>Account Name: ${isEcoshift ? "ECOSHIFT CORPORATION" : "DISRUPTIVE SOLUTIONS INC."}<br/>Account Number: ${isEcoshift ? "243-7-243805100" : "243-7-24354164-2"}</div><div><strong>BANK: BDO</strong><br/>Account Name: ${isEcoshift ? "ECOSHIFT CORPORATION" : "DISRUPTIVE SOLUTIONS INC."}<br/>Account Number: ${isEcoshift ? "0021-8801-7271" : "0021-8801-9258"}</div></div></div><div class="terms-label">DELIVERY:</div><div class="terms-val terms-highlight"><p>Delivery/Pick up is subject to confirmation.</p></div><div class="terms-label">Validity:</div><div class="terms-val"><p class="text-red-strong"><u>Thirty (30) calendar days from the date of this offer.</u></p></div><div class="terms-label">CANCELLATION:</div><div class="terms-val terms-highlight"><p>1. Above quoted items are non-cancellable.</p><p>2. Downpayment for items not in stock/indent and order/special items are non-refundable.</p><p>5. Cancellation for Special Projects (SPF) are not allowed and will be subject to a 100% charge.</p></div></div><div class="sig-hierarchy"><p class="sig-message">Thank you for allowing us to service your requirements. We hope that the above offer merits your acceptance. Unless otherwise indicated, you are deemed to have accepted the Terms and Conditions of this Quotation.</p><div class="sig-grid"><div class="sig-side-internal"><div style="position:relative;min-height:85px;"><p class="sig-italic">${isEcoshift ? "Ecoshift Corporation" : "Disruptive Solutions Inc"}</p>${payload.agentSignature ? `<img src="${payload.agentSignature}" style="position:absolute;top:28px;left:0;width:110px;height:auto;object-fit:contain;"/>` : ""}<p class="sig-name" style="margin-top:${payload.agentSignature ? "46px" : "8px"};">${payload.salesRepresentative}</p><div class="sig-line" style="width:220px;margin-top:2px;"></div><p class="sig-sub-label">Sales Representative</p><p class="sig-detail">Mobile: ${payload.agentContactNumber || "N/A"}</p><p class="sig-detail">Email: ${payload.agentEmailAddress || "N/A"}</p></div><div style="position:relative;min-height:85px;"><p class="sig-approved-label">Approved By:</p>${payload.TsmSignature ? `<img src="${payload.TsmSignature}" style="position:absolute;top:22px;left:0;width:110px;height:auto;object-fit:contain;"/>` : ""}<p class="sig-name" style="margin-top:${payload.TsmSignature ? "46px" : "8px"};">${payload.salestsmname}</p><div class="sig-line" style="width:220px;margin-top:2px;"></div><p class="sig-sub-label">Sales Manager</p><p class="sig-detail">Mobile: ${payload.TsmContactNumber || "N/A"}</p><p class="sig-detail">Email: ${payload.TsmEmailAddress || "N/A"}</p></div><div style="position:relative;min-height:75px;"><p class="sig-approved-label">Noted By:</p>${payload.ManagerSignature ? `<img src="${payload.ManagerSignature}" style="position:absolute;top:22px;left:0;width:110px;height:auto;object-fit:contain;"/>` : ""}<p class="sig-name" style="margin-top:${payload.ManagerSignature ? "46px" : "8px"};">${payload.salesmanagername}</p><div class="sig-line" style="width:220px;margin-top:2px;"></div><p class="sig-sub-label">Sales-B2B</p></div></div><div class="sig-side-client"><div style="text-align:center;"><div class="sig-line" style="margin-top:68px;width:220px;"></div><p class="sig-client-label">Company Authorized Representative</p><p class="sig-client-sub">(Please Sign Over Printed Name)</p></div><div style="text-align:center;"><div class="sig-line" style="margin-top:55px;width:220px;"></div><p class="sig-client-label">Payment Release Date</p></div><div style="text-align:center;"><div class="sig-line" style="margin-top:55px;width:220px;"></div><p class="sig-client-label">Position in the Company</p></div></div></div></div></div>`,
+
       );
       if (currentY + termsAndSigBlock.h > pdfHeight - BOTTOM_MARGIN) {
         finalizeCurrentPage();
@@ -4041,11 +4042,18 @@ ${payload.whtType && payload.whtType !== "none"
                                   <td className="p-1 sm:p-2">
                                     <div className="flex items-center gap-1 sm:gap-2">
                                       {(product.product_photo || product.images?.[0]?.src) ? (
-                                        <img
-                                          src={product.product_photo || product.images?.[0]?.src}
-                                          alt={`Product ${index + 1}`}
-                                          className="w-8 h-8 sm:w-12 sm:h-12 object-contain rounded shrink-0 border border-gray-100"
-                                        />
+                                        <button
+                                          type="button"
+                                          onClick={() => openFullImage(product.product_photo || product.images?.[0]?.src || "")}
+                                          className="p-0 m-0 bg-transparent border-0 cursor-pointer hover:ring-2 hover:ring-blue-400 rounded transition-all"
+                                          title="Click to preview image"
+                                        >
+                                          <img
+                                            src={product.product_photo || product.images?.[0]?.src}
+                                            alt={`Product ${index + 1}`}
+                                            className="w-8 h-8 sm:w-12 sm:h-12 object-contain rounded shrink-0 border border-gray-100"
+                                          />
+                                        </button>
                                       ) : (
                                         <div className="w-8 h-8 sm:w-12 sm:h-12 bg-gray-50 border border-gray-200 rounded shrink-0 flex items-center justify-center">
                                           <span className="text-[8px] text-gray-300">IMG</span>
@@ -5396,12 +5404,36 @@ ${payload.whtType && payload.whtType !== "none"
             {/* Close button */}
             <button 
               onClick={() => setToast(prev => ({ ...prev, show: false }))}
-              className="flex-shrink-0 w-7 h-7 rounded-full flex items-center justify-center bg-white/10 hover:bg-white/20 transition-all duration-200 group-hover:scale-105"
+              className="text-white/70 hover:text-white transition-colors p-1 hover:bg-white/10 rounded"
             >
-              <svg className="w-4 h-4 text-white/80" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
               </svg>
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* ── IMAGE PREVIEW DIALOG ─────────────────────────────────────────────── */}
+      {isImageDialogOpen && fullImageUrl && (
+        <div 
+          className="fixed inset-0 bg-black/80 z-[100] flex items-center justify-center p-4"
+          onClick={() => setIsImageDialogOpen(false)}
+        >
+          <div className="relative max-w-4xl max-h-[90vh] w-full flex flex-col items-center">
+            <button
+              onClick={() => setIsImageDialogOpen(false)}
+              className="absolute -top-10 right-0 text-white hover:text-gray-300 transition-colors"
+            >
+              <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+            <img
+              src={fullImageUrl}
+              alt="Product Preview"
+              className="max-w-full max-h-[80vh] object-contain rounded-lg shadow-2xl bg-white"
+            />
           </div>
         </div>
       )}

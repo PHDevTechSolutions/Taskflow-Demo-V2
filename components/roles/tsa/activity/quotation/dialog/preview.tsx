@@ -119,6 +119,11 @@ export const Preview: React.FC<PreviewProps> = ({
     const [soHelperOpen, setSoHelperOpen] = React.useState(false);
     const [selectedItems, setSelectedItems] = React.useState<Set<number>>(new Set());
 
+    // ── Image Preview ─────────────────────────────────────────────────────────
+    const [imagePreviewOpen, setImagePreviewOpen] = React.useState(false);
+    const [previewImageUrl, setPreviewImageUrl] = React.useState<string | null>(null);
+    const [previewImageTitle, setPreviewImageTitle] = React.useState<string>("");
+
     const toggleItemSelection = (idx: number) => {
         const newSet = new Set(selectedItems);
         if (newSet.has(idx)) newSet.delete(idx);
@@ -174,7 +179,7 @@ export const Preview: React.FC<PreviewProps> = ({
                 const generateToken = (ref: string, total: string) => {
                     const raw = `${ref}|${total}|${SECURITY_SALT}`;
                     let hash = 0;
-                    for (let i = 0; i < raw.length; i++) {
+                    for (let i = 0; i <raw.length; i++) {
                         const chr = raw.charCodeAt(i);
                         hash = (hash << 5) - hash + chr;
                         hash |= 0;
@@ -393,9 +398,19 @@ export const Preview: React.FC<PreviewProps> = ({
                                     <td className="p-4 text-center border-r border-black align-top font-black text-[#121212]">{item.qty}</td>
                                     <td className="p-3 border-r border-black align-top bg-white">
                                         {item.photo ? (
-                                            <img src={item.photo} className="w-24 h-24 object-contain mx-auto mix-blend-multiply" alt="sku-ref" />
+                                            <img 
+                                                src={item.photo} 
+                                                className="w-24 h-24 object-contain mx-auto mix-blend-multiply cursor-pointer hover:opacity-80 transition-opacity border border-gray-200 rounded" 
+                                                alt="sku-ref"
+                                                onClick={() => {
+                                                    setPreviewImageUrl(item.photo || null);
+                                                    setPreviewImageTitle(item.title);
+                                                    setImagePreviewOpen(true);
+                                                }}
+                                                title="Click to preview image"
+                                            />
                                         ) : (
-                                            <div className="w-24 h-24 bg-gray-50 flex items-center justify-center text-[8px] text-gray-300 italic">No Image</div>
+                                            <div className="w-24 h-24 bg-gray-50 flex items-center justify-center text-[8px] text-gray-300 italic border border-gray-200 rounded">No Image</div>
                                         )}
                                     </td>
                                     <td className="p-4 border-r border-black align-top">
@@ -569,62 +584,57 @@ export const Preview: React.FC<PreviewProps> = ({
                                     <table className="w-full border-collapse text-[10px]">
                                         <tbody>
 
-                                            {/* Gross Sales (shown as "Net Sales" when no discount row, or "Gross Sales" when discount row is shown) */}
+                                            {/* Row 1: Gross Sales (only shown when Show Discount Row is checked) */}
+                                            {showSummaryDiscounts && payload.items.some((i: any) => i.discountAmount > 0) && (
+                                                <tr className="border-b border-gray-100">
+                                                    <td className="px-3 py-1.5 text-right font-bold uppercase border-r-2 border-black w-[55%] text-[9px] text-gray-500">
+                                                        Gross Sales (Before Discount)
+                                                    </td>
+                                                    <td className="px-3 py-1.5 text-right font-black text-gray-900">
+                                                        ₱{(payload.items.reduce((a: number, i: any) => a + (i.unitPrice || 0) * (i.qty || 0), 0)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                    </td>
+                                                </tr>
+                                            )}
+
+                                            {/* Row 2: Total Discount (only if any discount exists AND showSummaryDiscounts is true) */}
+                                            {showSummaryDiscounts && payload.items.some((i: any) => i.discountAmount > 0) && (
+                                                <tr className="border-b border-gray-100">
+                                                    <td className="px-3 py-1.5 text-right font-bold uppercase border-r-2 border-black text-[9px] text-red-500">
+                                                        Less: Trade Discount
+                                                    </td>
+                                                    <td className="px-3 py-1.5 text-right font-black text-red-600">
+                                                        -₱{(payload.items.reduce((a: number, i: any) => a + ((i.discountAmount || 0) * (i.qty || 0)), 0)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                    </td>
+                                                </tr>
+                                            )}
+
+                                            {/* Row 3: Net Sales */}
                                             <tr className="border-b border-gray-100">
-                                                <td className="px-3 py-1.5 text-right font-bold uppercase border-r-2 border-black text-gray-400 text-[9px]">
-                                                    {showSummaryDiscounts ? "Gross Sales" : `Net Sales ${payload.vatType === "vat_inc" ? "(VAT Inc)" : "(Non-VAT)"}`}
+                                                <td className="px-3 py-1.5 text-right font-bold uppercase border-r-2 border-black w-[55%] text-[9px] text-gray-500">
+                                                    Net Sales {payload.vatType === "vat_inc" ? "(VAT Inclusive)" : "(Non-VAT)"}
                                                 </td>
-                                                <td className="px-3 py-1.5 text-right font-black tabular-nums">
+                                                <td className="px-3 py-1.5 text-right font-black text-gray-900">
                                                     ₱{netSales.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                                 </td>
                                             </tr>
 
-                                            {/* Less: Trade Discount — only shown when showSummaryDiscounts is enabled */}
-                                            {showSummaryDiscounts && (() => {
-                                                const totalDiscount = (payload.items || []).reduce((acc, item) => {
-                                                    const disc = (item as any).discountAmount ?? 0;
-                                                    return acc + (disc * Number(item.qty));
-                                                }, 0);
-                                                return totalDiscount > 0 ? (
-                                                    <>
-                                                        <tr className="border-b border-yellow-200 bg-yellow-50">
-                                                            <td className="px-3 py-1.5 text-right font-bold uppercase border-r-2 border-black text-yellow-700 text-[9px]">
-                                                                Less: Trade Discount
-                                                            </td>
-                                                            <td className="px-3 py-1.5 text-right font-black tabular-nums text-yellow-700">
-                                                                −₱{totalDiscount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                                                            </td>
-                                                        </tr>
-                                                        <tr className="border-b border-gray-100">
-                                                            <td className="px-3 py-1.5 text-right font-bold uppercase border-r-2 border-black text-gray-400 text-[9px]">
-                                                                Net Sales {payload.vatType === "vat_inc" ? "(VAT Inc)" : "(Non-VAT)"}
-                                                            </td>
-                                                            <td className="px-3 py-1.5 text-right font-black tabular-nums">
-                                                                ₱{(((payload.items || []).reduce((acc, item) => acc + (item.totalAmount !== undefined ? Number(item.totalAmount) : (Number(item.qty) || 0) * item.unitPrice), 0)) - totalDiscount)
-                                                                    .toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                                                            </td>
-                                                        </tr>
-                                                    </>
-                                                ) : null;
-                                            })()}
-
-                                            {/* Delivery Fee */}
+                                            {/* Row 4: Delivery */}
                                             <tr className="border-b border-gray-100">
-                                                <td className="px-3 py-1.5 text-right font-bold uppercase border-r-2 border-black text-gray-400 text-[9px]">
+                                                <td className="px-3 py-1.5 text-right font-bold uppercase border-r-2 border-black text-[9px] text-gray-500">
                                                     Delivery Charge
                                                 </td>
-                                                <td className="px-3 py-1.5 text-right font-black tabular-nums">
+                                                <td className="px-3 py-1.5 text-right font-black text-gray-900">
                                                     ₱{(Number(payload.deliveryFee) || 0)
                                                         .toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                                 </td>
                                             </tr>
 
-                                            {/* Restocking Fee */}
+                                            {/* Row 5: Restocking Fee */}
                                             <tr className="border-b-2 border-black">
-                                                <td className="px-3 py-1.5 text-right font-bold uppercase border-r-2 border-black text-gray-400 text-[9px]">
+                                                <td className="px-3 py-1.5 text-right font-bold uppercase border-r-2 border-black text-[9px] text-gray-500">
                                                     Restocking Fee
                                                 </td>
-                                                <td className="px-3 py-1.5 text-right font-black tabular-nums">
+                                                <td className="px-3 py-1.5 text-right font-black text-gray-900">
                                                     ₱{(Number(payload.restockingFee) || 0)
                                                         .toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                                 </td>
@@ -642,10 +652,10 @@ export const Preview: React.FC<PreviewProps> = ({
                                             {payload.vatType === "vat_inc" && (
                                                 <>
                                                     <tr className="border-b border-gray-100">
-                                                        <td className="px-3 py-1.5 text-right font-bold uppercase border-r-2 border-black text-gray-400 text-[8px]">
+                                                        <td className="px-3 py-1.5 text-right font-bold uppercase border-r-2 border-black text-gray-500 text-[8px]">
                                                             Less: VAT (12%)
                                                         </td>
-                                                        <td className="px-3 py-1.5 text-right font-bold text-gray-400 tabular-nums">
+                                                        <td className="px-3 py-1.5 text-right font-bold text-gray-500 tabular-nums">
                                                             ₱{(netSales * (12 / 112))
                                                                 .toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                                         </td>
@@ -654,10 +664,10 @@ export const Preview: React.FC<PreviewProps> = ({
                                                     <tr className={payload.whtType && payload.whtType !== "none"
                                                         ? "border-b border-gray-100"
                                                         : "border-b-2 border-black"}>
-                                                        <td className="px-3 py-1.5 text-right font-bold uppercase border-r-2 border-black text-gray-400 text-[8px]">
+                                                        <td className="px-3 py-1.5 text-right font-bold uppercase border-r-2 border-black text-gray-500 text-[8px]">
                                                             Net of VAT (Tax Base)
                                                         </td>
-                                                        <td className="px-3 py-1.5 text-right font-bold text-gray-400 tabular-nums">
+                                                        <td className="px-3 py-1.5 text-right font-bold text-gray-500 tabular-nums">
                                                             ₱{(netSales / 1.12)
                                                                 .toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                                         </td>
@@ -1178,6 +1188,31 @@ export const Preview: React.FC<PreviewProps> = ({
                     animation: slideInRight 0.3s ease-out;
                 }
             `}</style>
+
+            {/* ── IMAGE PREVIEW DIALOG ─────────────────────────────────────────────── */}
+            {imagePreviewOpen && previewImageUrl && (
+                <div 
+                    className="fixed inset-0 bg-black/80 z-[100] flex items-center justify-center p-4"
+                    onClick={() => setImagePreviewOpen(false)}
+                >
+                    <div className="relative max-w-4xl max-h-[90vh] w-full flex flex-col items-center">
+                        <button
+                            onClick={() => setImagePreviewOpen(false)}
+                            className="absolute -top-10 right-0 text-white hover:text-gray-300 transition-colors"
+                        >
+                            <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                        </button>
+                        <img
+                            src={previewImageUrl}
+                            alt={previewImageTitle}
+                            className="max-w-full max-h-[80vh] object-contain rounded-lg shadow-2xl bg-white"
+                        />
+                        <p className="text-white mt-4 text-sm font-medium">{previewImageTitle}</p>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };
