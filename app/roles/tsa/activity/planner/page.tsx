@@ -668,16 +668,22 @@ function DashboardContent() {
     }
   }, [userDetails.referenceid, fetchActivitiesForNoActivity, fetchAccountsForNoActivity]);
 
-  // ─── Calculate accounts WITH activity ─────────────────────────────────────
-  const accountsWithActivity = React.useMemo(() => {
-    const s = new Set<string>();
+  // ─── Last activity date per account (last touch) ────────────────────────────
+  const lastActivityDateMap = React.useMemo(() => {
+    const m: Record<string, string> = {};
     activities.forEach((a) => {
-      if (a.account_reference_number) s.add(a.account_reference_number);
+      if (a.account_reference_number && a.date_created) {
+        const key = a.account_reference_number;
+        const existing = m[key];
+        if (!existing || new Date(a.date_created).getTime() > new Date(existing).getTime()) {
+          m[key] = a.date_created;
+        }
+      }
     });
-    return s;
+    return m;
   }, [activities]);
 
-  // ─── Calculate NO ACTIVITY accounts with aging ─────────────────────────────
+  // ─── Calculate aging from any date string ────────────────────────────────────
   const calculateAging = (dateStr: string): number => {
     const date = new Date(dateStr);
     const now = new Date();
@@ -685,25 +691,41 @@ function DashboardContent() {
     return Math.floor(diffMs / (1000 * 60 * 60 * 24));
   };
 
+  // ─── All accounts with last touch info, sorted by most neglected ─────────────
+  // No activity = uses account date_created as aging baseline
+  // Has activity = uses last activity date_created as aging baseline
+  // Sorted: most neglected (longest since last touch) at top
   const filteredNoActivityAccounts = React.useMemo(() => {
-    let filtered = accounts
-      .filter((account) => !accountsWithActivity.has(account.account_reference_number))
-      .map((account) => ({
+    const enriched = accounts.map((account) => {
+      const lastTouch = lastActivityDateMap[account.account_reference_number] || null;
+      const referenceDate = lastTouch || account.date_created;
+      const agingDays = calculateAging(referenceDate);
+      return {
         ...account,
-        agingDays: calculateAging(account.date_created),
-      }))
-      .sort((a, b) => b.agingDays - a.agingDays);
-    
+        lastTouch,
+        hasActivity: !!lastTouch,
+        agingDays,
+      };
+    });
+
+    // Sort: no-activity accounts first (by aging desc), then has-activity (by aging desc)
+    let sorted = enriched.sort((a, b) => {
+      // No activity always above has activity
+      if (!a.hasActivity && b.hasActivity) return -1;
+      if (a.hasActivity && !b.hasActivity) return 1;
+      return b.agingDays - a.agingDays;
+    });
+
     if (noActivitySearch.trim()) {
       const searchLower = noActivitySearch.toLowerCase();
-      filtered = filtered.filter((acc) =>
+      sorted = sorted.filter((acc) =>
         acc.company_name.toLowerCase().includes(searchLower) ||
         acc.type_client.toLowerCase().includes(searchLower)
       );
     }
-    
-    return filtered;
-  }, [accounts, accountsWithActivity, noActivitySearch]);
+
+    return sorted;
+  }, [accounts, lastActivityDateMap, noActivitySearch]);
 
   const displayedNoActivityAccounts = React.useMemo(() => {
     return filteredNoActivityAccounts.slice(0, displayedNoActivityCount);
@@ -815,36 +837,84 @@ function DashboardContent() {
                         </div>
                       ) : (
                         <>
-                          {displayedNoActivityAccounts.map((account) => (
-                            <div
-                              key={account.id}
-                              className="p-2 bg-amber-50 border border-amber-200 rounded-none text-xs hover:bg-amber-100 transition-colors cursor-pointer"
-                            >
-                              <div className="flex items-center justify-between gap-2">
-                                <span className="font-medium truncate flex-1">{account.company_name}</span>
-                                <Badge
-                                  className={`text-[9px] shrink-0 ${
-                                    account.agingDays > 30
-                                      ? "bg-red-100 text-red-700 border-red-200"
-                                      : account.agingDays > 14
-                                      ? "bg-orange-100 text-orange-700 border-orange-200"
-                                      : "bg-yellow-100 text-yellow-700 border-yellow-200"
-                                  }`}
-                                >
-                                  {account.agingDays}d
-                                </Badge>
-                              </div>
-                              <div className="flex items-center gap-2 mt-1">
-                                <Badge className="text-[8px] bg-blue-100 text-blue-700 border-blue-200 uppercase">
-                                  {account.type_client}
-                                </Badge>
-                                <span className="text-[9px] text-gray-400">
-                                  {new Date(account.date_created).toLocaleDateString("en-PH")}
-                                </span>
-                              </div>
-                            </div>
-                          ))}
-                          
+                          {(() => {
+                            const noTouch = displayedNoActivityAccounts.filter((a) => !a.hasActivity);
+                            const lastTouch = displayedNoActivityAccounts.filter((a) => a.hasActivity);
+                            const showDivider = noTouch.length > 0 && lastTouch.length > 0;
+
+                            return (
+                              <>
+                                {noTouch.map((account) => (
+                                  <div
+                                    key={account.id}
+                                    className="p-2 bg-red-50 border border-red-200 rounded-none text-xs hover:bg-red-100 transition-colors cursor-pointer"
+                                  >
+                                    <div className="flex items-center justify-between gap-2">
+                                      <span className="font-medium truncate flex-1">{account.company_name}</span>
+                                      <Badge
+                                        className={`text-[9px] shrink-0 ${
+                                          account.agingDays > 30
+                                            ? "bg-red-100 text-red-700 border-red-200"
+                                            : account.agingDays > 14
+                                            ? "bg-orange-100 text-orange-700 border-orange-200"
+                                            : "bg-yellow-100 text-yellow-700 border-yellow-200"
+                                        }`}
+                                      >
+                                        {account.agingDays}d
+                                      </Badge>
+                                    </div>
+                                    <div className="flex items-center gap-2 mt-1">
+                                      <Badge className="text-[8px] bg-blue-100 text-blue-700 border-blue-200 uppercase">
+                                        {account.type_client}
+                                      </Badge>
+                                      <span className="text-[9px] text-red-500 font-semibold">
+                                        No touch · {new Date(account.date_created).toLocaleDateString("en-PH")}
+                                      </span>
+                                    </div>
+                                  </div>
+                                ))}
+
+                                {showDivider && (
+                                  <div className="flex items-center gap-2 py-1">
+                                    <div className="flex-1 h-px bg-amber-300" />
+                                    <span className="text-[8px] font-bold uppercase tracking-wider text-amber-600">Last Touch</span>
+                                    <div className="flex-1 h-px bg-amber-300" />
+                                  </div>
+                                )}
+
+                                {lastTouch.map((account) => (
+                                  <div
+                                    key={account.id}
+                                    className="p-2 bg-amber-50/60 border border-amber-200/70 rounded-none text-xs hover:bg-amber-100 transition-colors cursor-pointer"
+                                  >
+                                    <div className="flex items-center justify-between gap-2">
+                                      <span className="font-medium truncate flex-1">{account.company_name}</span>
+                                      <Badge
+                                        className={`text-[9px] shrink-0 ${
+                                          account.agingDays > 30
+                                            ? "bg-red-100 text-red-700 border-red-200"
+                                            : account.agingDays > 14
+                                            ? "bg-orange-100 text-orange-700 border-orange-200"
+                                            : "bg-yellow-100 text-yellow-700 border-yellow-200"
+                                        }`}
+                                      >
+                                        {account.agingDays}d
+                                      </Badge>
+                                    </div>
+                                    <div className="flex items-center gap-2 mt-1">
+                                      <Badge className="text-[8px] bg-blue-100 text-blue-700 border-blue-200 uppercase">
+                                        {account.type_client}
+                                      </Badge>
+                                      <span className="text-[9px] text-gray-500">
+                                        Last touch: {new Date(account.lastTouch!).toLocaleDateString("en-PH")}
+                                      </span>
+                                    </div>
+                                  </div>
+                                ))}
+                              </>
+                            );
+                          })()}
+
                           {/* Load more button */}
                           {hasMoreNoActivity && (
                             <button

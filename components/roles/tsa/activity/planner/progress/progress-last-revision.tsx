@@ -8,6 +8,13 @@ import {
   AccordionContent,
 } from "@/components/ui/accordion";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   CheckCircle2Icon,
   Trash,
   Check,
@@ -18,6 +25,7 @@ import {
   Activity,
   MoreVertical,
   Lock,
+  MessageSquare,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -32,6 +40,11 @@ import {
   HoverCardContent,
   HoverCardTrigger,
 } from "@/components/ui/hover-card";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import { toast } from "sonner";
 import { sileo } from "sileo";
 import { supabase } from "@/utils/supabase";
@@ -92,6 +105,7 @@ interface HistoryItem {
   call_status?: string;
   type_activity: string;
   tsm_approved_status: string;
+  quotation_status: string;
   status?: string; // Added for delivery/completion check
 }
 
@@ -151,6 +165,10 @@ export const Progress: React.FC<NewTaskProps> = ({
   const [history, setHistory] = useState<HistoryItem[]>([]);
 
   const [searchTerm, setSearchTerm] = useState("");
+  const [statusFilter, setStatusFilter] = useState<string>("all");
+  const PROGRESS_BATCH_SIZE = 20;
+  const [displayedProgressCount, setDisplayedProgressCount] = useState(PROGRESS_BATCH_SIZE);
+  const [tsmFeedbackOpen, setTsmFeedbackOpen] = useState<string | null>(null);
 
   const fetchAllData = useCallback(() => {
     if (!referenceid) {
@@ -270,16 +288,21 @@ export const Progress: React.FC<NewTaskProps> = ({
     );
   };
 
-  const allowedStatuses = [
-    "On-Progress",
-    "Assisted",
-    "SO-Done",
-    "Pending",
-    "Cancelled",
-  ];
-
+  // Show all activities EXCEPT:
+  // - Quote-Done with today's scheduled date (goes to Scheduled card)
+  // - Completed and Delivered (finished activities)
   const mergedData = activities
-    .filter((a) => allowedStatuses.includes(a.status))
+    .filter((a) => {
+      // Exclude Completed and Delivered statuses
+      if (a.status === "Completed" || a.status === "Delivered") {
+        return false;
+      }
+      // Exclude Quote-Done status with today's scheduled date (goes to Scheduled)
+      if (a.status === "Quote-Done" && a.scheduled_date && isToday(a.scheduled_date)) {
+        return false;
+      }
+      return true;
+    })
     .filter((a) => isDateInRange(a.date_created, dateCreatedFilterRange))
     .map((activity) => {
       const relatedHistoryItems = history.filter(
@@ -298,7 +321,13 @@ export const Progress: React.FC<NewTaskProps> = ({
     );
 
   const filteredData = mergedData.filter((item) => {
+    // Status filter
+    if (statusFilter !== "all" && item.status !== statusFilter) {
+      return false;
+    }
+    // Search filter
     const lowerSearch = searchTerm.toLowerCase();
+    if (!lowerSearch) return true;
     return (
       (item.company_name?.toLowerCase() ?? "").includes(lowerSearch) ||
       (item.ticket_reference_number?.toLowerCase().includes(lowerSearch) ??
@@ -310,6 +339,15 @@ export const Progress: React.FC<NewTaskProps> = ({
       )
     );
   });
+
+  // Paginated data for lazy loading
+  const displayedProgressData = filteredData.slice(0, displayedProgressCount);
+  const hasMoreProgress = filteredData.length > displayedProgressCount;
+
+  // Reset pagination when search or filter changes
+  useEffect(() => {
+    setDisplayedProgressCount(PROGRESS_BATCH_SIZE);
+  }, [searchTerm, statusFilter]);
 
   const openDoneDialog = (id: string) => {
     setSelectedActivityId(id);
@@ -461,36 +499,60 @@ export const Progress: React.FC<NewTaskProps> = ({
 
   return (
     <>
-      <Input
-        type="search"
-        placeholder="Search..."
-        className="text-xs grow rounded-none mb-2"
-        value={searchTerm}
-        onChange={(e) => setSearchTerm(e.target.value)}
-        aria-label="Search accounts"
-      />
+      <div className="flex gap-2 mb-2">
+        <Input
+          type="search"
+          placeholder="Search..."
+          className="text-xs grow rounded-none"
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          aria-label="Search accounts"
+        />
+        <Select value={statusFilter} onValueChange={setStatusFilter}>
+          <SelectTrigger className="w-[140px] text-xs rounded-none">
+            <SelectValue placeholder="Filter by Status" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Status</SelectItem>
+            <SelectItem value="Assisted">Assisted</SelectItem>
+            <SelectItem value="On-Progress">On-Progress</SelectItem>
+            <SelectItem value="SO-Done">SO-Done</SelectItem>
+            <SelectItem value="Quote-Done">Quote-Done</SelectItem>
+            <SelectItem value="Pending">Pending</SelectItem>
+            <SelectItem value="Cancelled">Cancelled</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
 
       <div className="max-h-[70vh] overflow-auto space-y-8 custom-scrollbar">
         <Accordion type="single" collapsible className="w-full">
-          {filteredData.map((item) => {
+          {displayedProgressData.map((item) => {
             // Define bg colors base sa status
             let badgeClass = "bg-gray-200 text-gray-800"; // default light gray
+            let cardBgClass = "bg-gray-100"; // default light background
 
             if (item.status === "Assisted" || item.status === "On-Progress") {
               badgeClass = "bg-orange-400 text-white";
+              cardBgClass = "bg-orange-100";
             } else if (item.status === "SO-Done") {
               badgeClass = "bg-yellow-400 text-black";
+              cardBgClass = "bg-yellow-100";
             } else if (item.status === "Quote-Done") {
               badgeClass = "bg-blue-500 text-white";
+              cardBgClass = "bg-blue-100";
+            } else if (item.status === "Pending") {
+              badgeClass = "bg-purple-500 text-white";
+              cardBgClass = "bg-purple-100";
             } else if (item.status === "Cancelled") {
               badgeClass = "bg-red-600 text-white";
+              cardBgClass = "bg-red-100";
             }
 
             return (
               <AccordionItem
                 key={item.id}
                 value={item.id}
-                className="w-full border rounded-none bg-orange-100 shadow-sm mt-2"
+                className={`w-full border rounded-none ${cardBgClass} shadow-sm mt-2`}
               >
                 <div className="p-2 select-none">
                   <div className="flex justify-between items-center">
@@ -529,6 +591,66 @@ export const Progress: React.FC<NewTaskProps> = ({
                         tsmDetails={tsmDetails ?? null}
                         signature={signature}
                       />
+
+                      {/* TSM Feedback Chat Icon */}
+                      {item.relatedHistoryItems.some(
+                        (h) =>
+                          h.tsm_approved_status &&
+                          h.tsm_approved_status !== "-",
+                      ) && (() => {
+                        const feedbackItems = item.relatedHistoryItems.filter(
+                          (h) => h.tsm_approved_status && h.tsm_approved_status !== "-"
+                        );
+
+                        return (
+                          <Popover open={tsmFeedbackOpen === item.id} onOpenChange={(open) => setTsmFeedbackOpen(open ? item.id : null)}>
+                            <PopoverTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-7 w-7 p-0 text-blue-600 hover:text-blue-700 hover:bg-blue-50 relative"
+                                title="TSM Feedback"
+                              >
+                                <MessageSquare className="h-3 w-3" />
+                                <Badge
+                                  variant="destructive"
+                                  className="absolute -top-1 -right-1 h-4 w-4 flex items-center justify-center p-0 text-[10px]"
+                                >
+                                  {feedbackItems.length}
+                                </Badge>
+                              </Button>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-80 rounded-none">
+                              <div className="space-y-2">
+                                <p className="text-xs font-bold uppercase text-gray-700">TSM Feedback</p>
+                                <div className="text-xs space-y-2 max-h-60 overflow-y-auto">
+                                  {feedbackItems.map((h, idx) => (
+                                    <div key={idx} className="border-b pb-2 last:border-0">
+                                      <div className="font-semibold text-blue-600 uppercase py-1">
+                                        {h.tsm_approved_status}
+                                      </div>
+                                      <div className="space-y-1 text-gray-600">
+                                        {h.type_activity && h.type_activity !== "-" && (
+                                          <div><span className="font-medium">Type:</span> {h.type_activity}</div>
+                                        )}
+                                        {h.quotation_number && h.quotation_number !== "-" && (
+                                          <div><span className="font-medium">Quotation #:</span> {h.quotation_number}</div>
+                                        )}
+                                        {h.so_number && h.so_number !== "-" && (
+                                          <div><span className="font-medium">SO #:</span> {h.so_number}</div>
+                                        )}
+                                        {h.call_type && h.call_type !== "-" && (
+                                          <div><span className="font-medium">Call Type:</span> {h.call_type}</div>
+                                        )}
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            </PopoverContent>
+                          </Popover>
+                        );
+                      })()}
 
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
@@ -805,22 +927,6 @@ export const Progress: React.FC<NewTaskProps> = ({
                             </span>
                           </p>
                         )}
-                      <Separator className="mb-2 mt-2" />
-                      {item.relatedHistoryItems.some(
-                        (h) =>
-                          h.tsm_approved_status &&
-                          h.tsm_approved_status !== "-",
-                      ) && (
-                          <p>
-                            <strong>TSM Feedback:</strong>{" "}
-                            <span className="uppercase">
-                              {item.relatedHistoryItems
-                                .map((h) => h.tsm_approved_status ?? "-")
-                                .filter((v) => v !== "-")
-                                .join(", ")}
-                            </span>
-                          </p>
-                        )}
                     </>
                   )}
 
@@ -837,6 +943,19 @@ export const Progress: React.FC<NewTaskProps> = ({
             );
           })}
         </Accordion>
+
+        {/* ─── Lazy Loading: Load More Button ─── */}
+        {hasMoreProgress && (
+          <div className="flex justify-center py-4 mt-4">
+            <Button
+              variant="outline"
+              className="rounded-none text-xs"
+              onClick={() => setDisplayedProgressCount(prev => prev + PROGRESS_BATCH_SIZE)}
+            >
+              Load More ({filteredData.length - displayedProgressCount} remaining)
+            </Button>
+          </div>
+        )}
       </div>
 
       <DeleteDialog

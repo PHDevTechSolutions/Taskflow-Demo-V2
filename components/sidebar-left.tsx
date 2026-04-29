@@ -79,7 +79,7 @@ const data = {
         { name: "Active", url: "/roles/tsa/companies/active", icon: BookOpen },
         { name: "Deletion", url: "/roles/tsa/companies/remove", icon: Trash2 },
         { name: "Group / Industry", url: "/roles/tsa/companies/group", icon: Users },
-        { name: "Account Management", url: "/roles/tsa/companies/account-management", icon: Building },
+        //{ name: "Account Management", url: "/roles/tsa/companies/account-management", icon: Building },
         { name: "All", url: "/roles/tsm/companies/all", icon: BookOpen },
         //{ name: "Approval Editing", url: "/roles/tsm/companies/approval-editing", icon: Edit },
         { name: "All Clients", url: "/roles/manager/companies/all", icon: BookOpen },

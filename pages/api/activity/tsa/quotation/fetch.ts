@@ -1,11 +1,14 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { supabase } from "@/utils/supabase";
 
-const BATCH_SIZE = 5000;
+const BATCH_SIZE = 500;
+const DEFAULT_LIMIT = 500;
+const MAX_LIMIT = 2000;
 
 // Generator for history batches
-async function* fetchHistoryBatches(referenceid: string, fromDate?: string, toDate?: string) {
+async function* fetchHistoryBatches(referenceid: string, fromDate?: string, toDate?: string, limit?: number) {
   let lastId: number | null = null;
+  let totalFetched = 0;
 
   while (true) {
     let query = supabase
@@ -15,21 +18,27 @@ async function* fetchHistoryBatches(referenceid: string, fromDate?: string, toDa
       .order("id", { ascending: true })
       .limit(BATCH_SIZE);
 
-    if (lastId) query = query.gt("id", lastId);
-    if (fromDate && toDate) query = query.gte("date_created", fromDate).lte("date_created", toDate);
+    if (lastId !== null) query = query.gt("id", lastId);
+    if (fromDate) query = query.gte("date_created", fromDate);
+    if (toDate) query = query.lte("date_created", toDate);
 
     const { data, error } = await query;
     if (error) throw error;
     if (!data || data.length === 0) break;
 
     yield data;
+    totalFetched += data.length;
+
+    // Stop if we reached the limit
+    if (limit && totalFetched >= limit) break;
     lastId = data[data.length - 1].id;
   }
 }
 
 // Generator for revised quotations batches
-async function* fetchRevisedQuotationsBatches(referenceid: string, fromDate?: string, toDate?: string) {
+async function* fetchRevisedQuotationsBatches(referenceid: string, fromDate?: string, toDate?: string, limit?: number) {
   let lastId: number | null = null;
+  let totalFetched = 0;
 
   while (true) {
     let query = supabase
@@ -39,14 +48,19 @@ async function* fetchRevisedQuotationsBatches(referenceid: string, fromDate?: st
       .order("id", { ascending: true })
       .limit(BATCH_SIZE);
 
-    if (lastId) query = query.gt("id", lastId);
-    if (fromDate && toDate) query = query.gte("date_created", fromDate).lte("date_created", toDate);
+    if (lastId !== null) query = query.gt("id", lastId);
+    if (fromDate) query = query.gte("date_created", fromDate);
+    if (toDate) query = query.lte("date_created", toDate);
 
     const { data, error } = await query;
     if (error) throw error;
     if (!data || data.length === 0) break;
 
     yield data;
+    totalFetched += data.length;
+
+    // Stop if we reached the limit
+    if (limit && totalFetched >= limit) break;
     lastId = data[data.length - 1].id;
   }
 }
@@ -73,11 +87,20 @@ async function* fetchSignatoriesBatches(referenceid: string, quotationNumbers: s
 }
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  const { referenceid, from, to } = req.query;
+  const { referenceid, from, to, limit } = req.query;
 
   if (!referenceid || typeof referenceid !== "string") {
     return res.status(400).json({ message: "Missing or invalid referenceid" });
   }
+
+  // Parse limit with safeguards
+  const parsedLimit = Math.min(
+    parseInt(typeof limit === "string" ? limit : String(DEFAULT_LIMIT), 10) || DEFAULT_LIMIT,
+    MAX_LIMIT
+  );
+
+  // Per-table limit to distribute load
+  const perTableLimit = Math.ceil(parsedLimit / 2); // Split between history and revised_quotations
 
   try {
     res.setHeader("Content-Type", "application/json");
@@ -86,17 +109,23 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const allQuotationNumbers: string[] = [];
     const revisedQuotationsMap = new Map<string, any>();
 
-    // First, fetch revised quotations to get PDF config
-    for await (const revisedBatch of fetchRevisedQuotationsBatches(referenceid, from as string, to as string)) {
+    // First, fetch revised quotations to get PDF config (limited)
+    for await (const revisedBatch of fetchRevisedQuotationsBatches(referenceid, from as string, to as string, perTableLimit)) {
       for (const r of revisedBatch) {
         revisedQuotationsMap.set(r.activity_reference_number || r.quotation_number, r);
       }
     }
 
-    // ---------------- Stream history ----------------
+    // ---------------- Stream history (limited) ----------------
     const mergedActivities: any[] = [];
-    for await (const historyBatch of fetchHistoryBatches(referenceid, from as string, to as string)) {
+    let hasMore = false;
+
+    for await (const historyBatch of fetchHistoryBatches(referenceid, from as string, to as string, parsedLimit)) {
       for (const h of historyBatch) {
+        if (mergedActivities.length >= parsedLimit) {
+          hasMore = true;
+          break;
+        }
         allQuotationNumbers.push(h.quotation_number);
         // Merge with revised quotation data if available (for PDF config)
         const revised = revisedQuotationsMap.get(h.activity_reference_number || h.quotation_number);
@@ -113,14 +142,22 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           visible_columns: revised?.visible_columns ?? h.visible_columns ?? null,
         });
       }
+      if (hasMore) break;
     }
 
-    // ---------------- Stream signatories ----------------
+    // ---------------- Stream signatories (limited) ----------------
     const signaturesMap = new Map<string, any>();
-    for await (const sigBatch of fetchSignatoriesBatches(referenceid, allQuotationNumbers)) {
+    const uniqueQuotations = [...new Set(allQuotationNumbers)];
+    const signatoryLimit = parsedLimit * 2;
+    let signatoryCount = 0;
+
+    for await (const sigBatch of fetchSignatoriesBatches(referenceid, uniqueQuotations)) {
       for (const s of sigBatch) {
+        if (signatoryCount >= signatoryLimit) break;
         signaturesMap.set(s.quotation_number, s);
+        signatoryCount++;
       }
+      if (signatoryCount >= signatoryLimit) break;
     }
 
     // ---------------- Merge signatures into activities ----------------
@@ -148,7 +185,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       firstHistory = false;
     }
 
-    res.write(`],"cached":false}`);
+    res.write(`],"has_more":${hasMore},"limit":${parsedLimit},"cached":false}`);
     res.end();
   } catch (err: any) {
     console.error("Server error:", err);

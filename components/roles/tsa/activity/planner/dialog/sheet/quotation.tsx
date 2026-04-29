@@ -4103,7 +4103,7 @@ ${spec.value}
                               </SelectTrigger>
                               <SelectContent className="text-[10px]">
                                 {availableContacts && availableContacts.length > 0 ? (
-                                  availableContacts.map((contact, idx) => (
+                                  availableContacts.filter((c) => c.name).map((contact, idx) => (
                                     <SelectItem key={idx} value={contact.name} className="text-[10px] py-1">
                                       <span className="font-bold">{contact.name}</span>
                                     </SelectItem>

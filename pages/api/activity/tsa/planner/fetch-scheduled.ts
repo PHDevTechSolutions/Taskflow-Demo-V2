@@ -1,8 +1,11 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { supabase } from "@/utils/supabase";
 
-const BATCH_SIZE = 1000;
+const BATCH_SIZE = 500;
 const CHUNK_SIZE = 500;
+const DEFAULT_LIMIT = 500;
+const MAX_LIMIT = 2000;
+const HARD_MAX_FOR_FETCH_ALL = 10000; // For fetchAll mode, allow up to 10k per request
 
 // ─────────────────────────────────────────────────────────────────────────────
 // ROOT CAUSE OF MISSING MARCH DATA:
@@ -31,14 +34,13 @@ async function* fetchActivityBatches(
   referenceid: string,
   scheduledFrom?: string,
   scheduledTo?: string,
+  limit?: number,
 ) {
   const hasDateFilter = !!(scheduledFrom || scheduledTo);
+  let totalFetched = 0;
 
   if (hasDateFilter) {
     // ── Date-filtered mode: cursor on (scheduled_date, id) ────────────────
-    // Sort by scheduled_date ASC, then id ASC as tiebreaker.
-    // Cursor advances using the last row's scheduled_date + id so we never
-    // skip rows within the target date range.
     let lastScheduledDate: string | null = null;
     let lastId: number | null = null;
 
@@ -70,6 +72,10 @@ async function* fetchActivityBatches(
       if (!data || data.length === 0) break;
 
       yield data;
+      totalFetched += data.length;
+
+      // Stop if we reached the overall limit
+      if (limit && totalFetched >= limit) break;
 
       if (data.length < BATCH_SIZE) break;
 
@@ -96,6 +102,10 @@ async function* fetchActivityBatches(
       if (!data || data.length === 0) break;
 
       yield data;
+      totalFetched += data.length;
+
+      // Stop if we reached the overall limit
+      if (limit && totalFetched >= limit) break;
 
       if (data.length < BATCH_SIZE) break;
       lastId = data[data.length - 1].id;
@@ -142,15 +152,33 @@ export default async function handler(
   req: NextApiRequest,
   res: NextApiResponse,
 ) {
-  const { referenceid, from, to } = req.query;
+  const { referenceid, from, to, limit, fetchAll, cursor } = req.query;
 
   if (!referenceid || typeof referenceid !== "string") {
     return res.status(400).json({ message: "Missing or invalid referenceid" });
   }
 
+  // Check if this is a fetch-all request
+  const isFetchAll = fetchAll === "true";
+
+  // Parse limit - allow higher limit for fetchAll mode
+  let parsedLimit: number;
+  if (isFetchAll) {
+    parsedLimit = Math.min(
+      parseInt(typeof limit === "string" ? limit : String(HARD_MAX_FOR_FETCH_ALL), 10) || HARD_MAX_FOR_FETCH_ALL,
+      HARD_MAX_FOR_FETCH_ALL
+    );
+  } else {
+    parsedLimit = Math.min(
+      parseInt(typeof limit === "string" ? limit : String(DEFAULT_LIMIT), 10) || DEFAULT_LIMIT,
+      MAX_LIMIT
+    );
+  }
+
   // Normalize to YYYY-MM-DD
   let scheduledFrom: string | undefined;
   let scheduledTo: string | undefined;
+  let cursorDate: string | undefined;
 
   if (typeof from === "string" && from) {
     scheduledFrom = from.length > 10 ? from.slice(0, 10) : from;
@@ -158,6 +186,17 @@ export default async function handler(
   if (typeof to === "string" && to) {
     scheduledTo = to.length > 10 ? to.slice(0, 10) : to;
   }
+  if (typeof cursor === "string" && cursor) {
+    cursorDate = cursor;
+  }
+
+  // Adjust date range if cursor is provided
+  if (cursorDate) {
+    scheduledTo = cursorDate; // Set end date to cursor for fetching older data
+  }
+
+  // Track data for cursor generation
+  let lastActivityDate: string | null = null;
 
   try {
     res.setHeader("Content-Type", "application/json");
@@ -166,9 +205,20 @@ export default async function handler(
     let firstActivity = true;
     const allActivityReferenceNumbers: string[] = [];
     let totalActivities = 0;
+    let hasMoreActivities = false;
 
-    for await (const batch of fetchActivityBatches(referenceid, scheduledFrom, scheduledTo)) {
+    for await (const batch of fetchActivityBatches(referenceid, scheduledFrom, scheduledTo, parsedLimit)) {
       for (const row of batch) {
+        if (totalActivities >= parsedLimit) {
+          hasMoreActivities = true;
+          break;
+        }
+
+        // Track the oldest date seen (for next cursor)
+        if (!lastActivityDate || new Date(row.scheduled_date) < new Date(lastActivityDate)) {
+          lastActivityDate = row.scheduled_date;
+        }
+
         if (row.activity_reference_number) {
           allActivityReferenceNumbers.push(row.activity_reference_number);
         }
@@ -177,6 +227,7 @@ export default async function handler(
         firstActivity = false;
         totalActivities++;
       }
+      if (hasMoreActivities) break;
     }
 
     res.write(`],"history":[`);
@@ -186,16 +237,32 @@ export default async function handler(
 
     const uniqueRefs = [...new Set(allActivityReferenceNumbers)];
 
+    // Limit history based on activities fetched
+    const historyLimit = parsedLimit * 2;
+    let historyCount = 0;
+
     for await (const batch of fetchHistoryBatches(uniqueRefs)) {
       for (const row of batch) {
+        if (historyCount >= historyLimit) break;
+
         const json = JSON.stringify(row);
         res.write(firstHistory ? json : `,${json}`);
         firstHistory = false;
         totalHistory++;
+        historyCount++;
       }
+      if (historyCount >= historyLimit) break;
     }
 
-    res.write(`],"total_activities":${totalActivities},"total_history":${totalHistory}}`);
+    // Generate next cursor
+    let nextCursor: string | null = null;
+    if (hasMoreActivities && lastActivityDate) {
+      const cursorDate = new Date(lastActivityDate);
+      cursorDate.setDate(cursorDate.getDate() - 1); // Go back 1 day
+      nextCursor = cursorDate.toISOString().slice(0, 10); // YYYY-MM-DD format
+    }
+
+    res.write(`],"total_activities":${totalActivities},"total_history":${totalHistory},"has_more":${hasMoreActivities},"next_cursor":"${nextCursor || ""}","is_fetch_all":${isFetchAll},"limit":${parsedLimit}}`);
     res.end();
   } catch (err: any) {
     console.error("[fetch-scheduled] Server error:", err);

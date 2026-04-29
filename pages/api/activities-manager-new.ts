@@ -1,8 +1,9 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { supabase } from "@/utils/supabase";
 
-const MAX_LIMIT = 1000; // Supabase hard limit - don't exceed this
+const MAX_LIMIT = 1000; // Supabase hard limit per query
 const DEFAULT_LIMIT = 1000; // Use maximum allowed per request
+const FETCH_ALL_MAX_TOTAL = 2000; // Max total records even in fetchAll mode to prevent 4MB limit
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== "GET") {
@@ -10,15 +11,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   try {
-    const { referenceid, from, to, limit, offset, company_name, fetchAll } = req.query;
+    const { manager, from, to, limit, offset, company_name, fetchAll } = req.query;
 
-    if (!referenceid || typeof referenceid !== "string") {
-      return res.status(400).json({ success: false, error: "Missing referenceid" });
+    if (!manager || typeof manager !== "string") {
+      return res.status(400).json({ success: false, error: "Missing manager" });
     }
 
     // If fetchAll=true, use batch processing for large datasets
     if (fetchAll === "true") {
-      return await fetchAllActivities(req, res, referenceid, from, to, company_name);
+      return await fetchAllActivities(req, res, manager, from, to, company_name);
     }
 
     // Parse pagination params
@@ -32,7 +33,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     let query = supabase
       .from("history")
       .select("*", { count: "exact" })
-      .eq("referenceid", referenceid);
+      .eq("manager", manager);
 
     // Filter by date range if provided
     if (from && typeof from === "string") {
@@ -78,7 +79,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 async function fetchAllActivities(
   req: NextApiRequest,
   res: NextApiResponse,
-  referenceid: string,
+  manager: string,
   from?: string | string[],
   to?: string | string[],
   company_name?: string | string[]
@@ -86,17 +87,17 @@ async function fetchAllActivities(
   const BATCH_SIZE = 1000; // Supabase limit
   let allActivities: any[] = [];
   let offset = 0;
-  let hasMore = true;
+  let hasMoreData = true;
   let totalProcessed = 0;
   const startTime = Date.now();
   const MAX_RUNTIME = 55000; // 55 seconds max to avoid timeout
 
-  while (hasMore) {
+  while (hasMoreData && allActivities.length < FETCH_ALL_MAX_TOTAL) {
     // Build query for this batch
     let query = supabase
       .from("history")
       .select("*", { count: "exact" })
-      .eq("referenceid", referenceid);
+      .eq("manager", manager);
 
     // Apply date filters if provided
     if (from && typeof from === "string") {
@@ -105,8 +106,7 @@ async function fetchAllActivities(
     if (to && typeof to === "string") {
       const toDate = new Date(to);
       toDate.setHours(23, 59, 59, 999);
-      const toISOString = toDate.toISOString();
-      query = query.lte("date_created", toISOString);
+      query = query.lte("date_created", toDate.toISOString());
     }
 
     // Apply company filter if provided
@@ -119,24 +119,34 @@ async function fetchAllActivities(
       .order("date_created", { ascending: false })
       .range(offset, offset + BATCH_SIZE - 1);
 
+    if (error) {
+      break;
+    }
 
     if (batch && batch.length > 0) {
       allActivities = [...allActivities, ...batch];
       totalProcessed += batch.length;
       offset += BATCH_SIZE;
-      hasMore = (count || 0) > offset;
+      hasMoreData = (count || 0) > offset;
 
       // Safety check to prevent infinite loops
       if (batch.length < BATCH_SIZE) {
-        hasMore = false;
+        hasMoreData = false;
       }
     } else {
-      hasMore = false;
+      hasMoreData = false;
+    }
+
+    // Check for total limit reached
+    if (allActivities.length >= FETCH_ALL_MAX_TOTAL) {
+      hasMoreData = true; // Indicate there may be more data
+      break;
     }
 
     // Check for timeout to prevent API timeout
     const elapsedTime = Date.now() - startTime;
     if (elapsedTime > MAX_RUNTIME) {
+      hasMoreData = true;
       break;
     }
   }
@@ -148,8 +158,12 @@ async function fetchAllActivities(
       total: allActivities.length,
       limit: BATCH_SIZE,
       offset: 0,
-      hasMore: false,
+      hasMore: hasMoreData, // True if we hit the limit or timeout
+      maxLimit: FETCH_ALL_MAX_TOTAL,
     },
     batchProcessed: true,
+    note: hasMoreData
+      ? `Limited to ${FETCH_ALL_MAX_TOTAL} records. Use date filters or pagination (offset/limit) to fetch more.`
+      : undefined,
   });
 }

@@ -1,7 +1,7 @@
 // popup/breaches.tsx
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import {
   Dialog,
   DialogContent,
@@ -259,11 +259,14 @@ export function BreachesDialog() {
     }
   }, []);
 
-  const fetchActivities = useCallback(async (refId: string) => {
+  const fetchActivities = useCallback(async (refId: string, from?: string, to?: string) => {
     if (!refId) return;
     setLoadingActivities(true);
     try {
-      const res = await fetch(`/api/activity/tsa/breaches/fetch?referenceid=${encodeURIComponent(refId)}`);
+      let url = `/api/activity/tsa/breaches/fetch?referenceid=${encodeURIComponent(refId)}`;
+      if (from) url += `&from=${encodeURIComponent(from)}`;
+      if (to) url += `&to=${encodeURIComponent(to)}`;
+      const res = await fetch(url);
       if (!res.ok) throw new Error();
       const data = await res.json();
       setActivities(data.activities || []);
@@ -363,16 +366,27 @@ export function BreachesDialog() {
     }
   }, []);
 
+  // ─── Compute month range from fromDate for territory coverage ──────────
+  // Coverage needs the full month; other metrics filter client-side by day
+  const monthRange = useMemo(() => {
+    const d = new Date(fromDate + "T00:00:00Z");
+    const year = d.getUTCFullYear();
+    const month = d.getUTCMonth();
+    const monthStart = new Date(Date.UTC(year, month, 1)).toISOString().split("T")[0];
+    const monthEnd = new Date(Date.UTC(year, month + 1, 0)).toISOString().split("T")[0];
+    return { monthStart, monthEnd };
+  }, [fromDate]);
+
   // ─── Auto-fetch when referenceid or date changes ────────────────────────
 
   useEffect(() => {
     const refId = userDetails.referenceid;
     if (!refId) return;
     fetchClusterData(refId);
-    fetchActivities(refId);
+    fetchActivities(refId, monthRange.monthStart, monthRange.monthEnd);
     fetchOverdue(refId, fromDate, toDate);
     fetchCsrMetrics(refId, fromDate, toDate);
-  }, [userDetails.referenceid, fromDate, toDate, fetchClusterData, fetchActivities, fetchOverdue, fetchCsrMetrics]);
+  }, [userDetails.referenceid, fromDate, toDate, fetchClusterData, fetchActivities, fetchOverdue, fetchCsrMetrics, monthRange]);
 
   // ─── Compute outbound + time metrics ───────────────────────────────────
 
@@ -597,7 +611,7 @@ export function BreachesDialog() {
     const refId = userDetails.referenceid;
     if (!refId) return;
     fetchClusterData(refId);
-    fetchActivities(refId);
+    fetchActivities(refId, monthRange.monthStart, monthRange.monthEnd);
     fetchOverdue(refId, fromDate, toDate);
     fetchCsrMetrics(refId, fromDate, toDate);
     sileo.success({
