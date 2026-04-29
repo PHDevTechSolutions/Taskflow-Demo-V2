@@ -1021,8 +1021,20 @@ export default function TaskListEditDialog({
                                                 <div className="text-gray-600 space-y-0.5">
                                                     <div><span className="font-bold">Product:</span> {q.product_title?.split(",")[0] || "N/A"}</div>
                                                     <div><span className="font-bold">Amount:</span> ₱{parseFloat(q.quotation_amount || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
-                                                    <div className="text-gray-400 text-[10px] mt-1">
-                                                        {q.start_date ? new Date(q.start_date).toLocaleDateString() : "N/A"} - {q.end_date ? new Date(q.end_date).toLocaleDateString() : "N/A"}
+                                                    <div className="text-gray-400 text-[10px] mt-1 flex items-center gap-2">
+                                                        <span>Modified: {q.end_date ? (() => {
+                                                            const d = new Date(q.end_date + 'Z');
+                                                            return d.toLocaleString('en-US', {
+                                                                month: 'short',
+                                                                day: 'numeric',
+                                                                year: 'numeric',
+                                                                hour: 'numeric',
+                                                                minute: '2-digit',
+                                                                hour12: true,
+                                                                timeZone: 'Asia/Manila'
+                                                            });
+                                                        })() : 'N/A'}</span>
+                                                    
                                                     </div>
                                                 </div>
                                             </div>

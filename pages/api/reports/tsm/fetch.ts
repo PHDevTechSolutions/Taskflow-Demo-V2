@@ -45,7 +45,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           so_amount,
           call_type,
           call_status,
-          quotation_status
+          quotation_status,
+          quotation_status_sub
         `)
         .eq("tsm", referenceid)
         // 🔑 CRITICAL: stable ordering (walang skip / duplicate)

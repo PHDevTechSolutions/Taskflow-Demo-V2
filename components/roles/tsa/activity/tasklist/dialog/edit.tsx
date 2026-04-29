@@ -51,6 +51,7 @@ interface Completed {
   contact_number: string;
   contact_person?: string;
   email_address?: string;
+  address?: string;
   payment_terms?: string;
 }
 
@@ -78,10 +79,10 @@ interface TaskListEditDialogProps {
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const EDITABLE_FIELDS: (keyof Completed)[] = [
-  "company_name",
   "contact_person",
   "contact_number",
   "email_address",
+  "address",
   "project_name",
   "project_type",
   "source",
@@ -146,12 +147,15 @@ export default function TaskListEditDialog({
 }: TaskListEditDialogProps) {
   const [saving, setSaving] = useState(false);
 
-  // FIX: initialize from item directly, include company fields and remarks even if empty
+  // Always-visible editable fields (shown even when empty so user can update them)
+  const ALWAYS_VISIBLE_FIELDS: (keyof Completed)[] = [
+    "contact_person", "contact_number", "email_address", "address", "remarks",
+  ];
+
   const buildInitial = (src: Completed): Partial<Completed> =>
     EDITABLE_FIELDS.reduce((acc, key) => {
       const val = src[key];
-      // Always include company_name, contact_number, and remarks as they should always be editable
-      if (key === "company_name" || key === "contact_number" || key === "remarks") {
+      if (ALWAYS_VISIBLE_FIELDS.includes(key)) {
         (acc as any)[key] = val || "";
       } else if (val !== undefined && val !== null && String(val).trim() !== "") {
         (acc as any)[key] = val;
@@ -217,9 +221,10 @@ export default function TaskListEditDialog({
     }
   };
 
-  // Visible fields — type_activity is hidden (read-only context)
-  // remarks is always shown even if empty
-  const visibleEntries = Object.entries(formData).filter(([key]) => key !== "type_activity" && key !== "remarks");
+  // Visible fields — type_activity and company_name are read-only, remarks shown separately
+  const visibleEntries = Object.entries(formData).filter(
+    ([key]) => key !== "type_activity" && key !== "remarks" && key !== "company_name",
+  );
 
   return (
     <Dialog open onOpenChange={(v) => !v && onClose()}>
@@ -245,7 +250,7 @@ export default function TaskListEditDialog({
         {/* ── Fields ──────────────────────────────────────────────────── */}
         <div className="px-6 py-4 space-y-3 max-h-[60vh] overflow-y-auto">
 
-          {/* type_activity — read-only display, not editable */}
+          {/* type_activity — read-only display */}
           {item.type_activity && (
             <div>
               <Label className="text-[11px] font-semibold text-zinc-400 uppercase tracking-widest block mb-1.5">
@@ -253,6 +258,18 @@ export default function TaskListEditDialog({
               </Label>
               <div className="border border-zinc-200 rounded px-3 py-2 bg-zinc-50 text-xs text-zinc-600 font-mono">
                 {item.type_activity}
+              </div>
+            </div>
+          )}
+
+          {/* company_name — read-only display, not editable */}
+          {item.company_name && (
+            <div>
+              <Label className="text-[11px] font-semibold text-zinc-400 uppercase tracking-widest block mb-1.5">
+                Company Name
+              </Label>
+              <div className="border border-zinc-200 rounded px-3 py-2 bg-zinc-50 text-xs text-zinc-700 font-bold">
+                {item.company_name}
               </div>
             </div>
           )}

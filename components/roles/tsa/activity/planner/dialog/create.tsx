@@ -266,63 +266,29 @@ export function CreateActivityDialog({
     const [selectedContactPerson, setSelectedContactPerson] = useState(contact_person);
     const [selectedContactNumber, setSelectedContactNumber] = useState(contact_number);
     const [selectedEmailAddress, setSelectedEmailAddress] = useState(email_address);
+
+    // Editable contact details (modified in quotation sheet)
+    const [editableContactPerson, setEditableContactPerson] = useState(contact_person);
+    const [editableContactNumber, setEditableContactNumber] = useState(contact_number);
+    const [editableEmailAddress, setEditableEmailAddress] = useState(email_address);
     const [showContactDialog, setShowContactDialog] = useState(false); // <-- dito
 
     const [quotationSubject, setQuotationSubject] = useState("For Quotation");
 
-    // Quotation display configuration state - load from localStorage to match quotation sheet
-    const [hideDiscountInPreview, setHideDiscountInPreview] = useState(() => {
-        const saved = localStorage.getItem('quotation_preferences');
-        return saved ? JSON.parse(saved).hideDiscountInPreview ?? false : false;
-    });
-    const [showDiscountColumns, setShowDiscountColumns] = useState(() => {
-        const saved = localStorage.getItem('quotation_preferences');
-        return saved ? JSON.parse(saved).showDiscountColumns ?? true : true;
-    });
-    const [showSummaryDiscounts, setShowSummaryDiscounts] = useState(() => {
-        const saved = localStorage.getItem('quotation_preferences');
-        return saved ? JSON.parse(saved).showSummaryDiscounts ?? true : true;
-    });
-    const [showProfitMargins, setShowProfitMargins] = useState(() => {
-        const saved = localStorage.getItem('quotation_preferences');
-        return saved ? JSON.parse(saved).showProfitMargins ?? false : false;
-    });
-    const [marginAlertThreshold, setMarginAlertThreshold] = useState(() => {
-        const saved = localStorage.getItem('quotation_preferences');
-        return saved ? JSON.parse(saved).marginAlertThreshold ?? 10 : 10;
-    });
-    const [showMarginAlerts, setShowMarginAlerts] = useState(() => {
-        const saved = localStorage.getItem('quotation_preferences');
-        return saved ? JSON.parse(saved).showMarginAlerts ?? true : true;
-    });
-    const [productViewMode, setProductViewMode] = useState(() => {
-        const saved = localStorage.getItem('quotation_preferences');
-        return saved ? JSON.parse(saved).productViewMode ?? 'list' : 'list';
-    });
-    const [visibleColumns, setVisibleColumns] = useState(() => {
-        const saved = localStorage.getItem('quotation_preferences');
-        return saved ? JSON.parse(saved).visibleColumns ?? null : null;
-    });
+    // Quotation display configuration state
+    const [hideDiscountInPreview, setHideDiscountInPreview] = useState(false);
+    const [showDiscountColumns, setShowDiscountColumns] = useState(false);
+    const [showSummaryDiscounts, setShowSummaryDiscounts] = useState(false);
+    const [showProfitMargins, setShowProfitMargins] = useState(false);
+    const [marginAlertThreshold, setMarginAlertThreshold] = useState(0);
+    const [showMarginAlerts, setShowMarginAlerts] = useState(false);
+    const [productViewMode, setProductViewMode] = useState('list');
+    const [visibleColumns, setVisibleColumns] = useState(null);
 
     // AUTO SET DATE CREATED
     useEffect(() => {
         setDateCreated(new Date().toISOString());
     }, []);
-
-    // Save PDF display options to localStorage so they persist across sessions
-    useEffect(() => {
-        const prefs = {
-            hideDiscountInPreview,
-            showDiscountColumns,
-            showSummaryDiscounts,
-            showProfitMargins,
-            marginAlertThreshold,
-            showMarginAlerts,
-            productViewMode,
-            visibleColumns,
-        };
-        localStorage.setItem('quotation_preferences', JSON.stringify(prefs));
-    }, [hideDiscountInPreview, showDiscountColumns, showSummaryDiscounts, showProfitMargins, marginAlertThreshold, showMarginAlerts, productViewMode, visibleColumns]);
 
     const initialState = {
         activityRef: activityReferenceNumber || "",
@@ -511,14 +477,21 @@ export function CreateActivityDialog({
 
         const agent_name = `${firstname ?? ""} ${lastname ?? ""}`.trim();
 
+        // Debug logging
+        console.log("[Create] Product flags before save:", {
+            productIsPromo,
+            productIsHidden,
+            productRowDisplayMode,
+        });
+
         const newActivity: Activity = {
             activity_reference_number: activityRef,
             account_reference_number: accountRef,
             type_client,
             company_name,
-            contact_person: selectedContactPerson,
-            contact_number: selectedContactNumber,
-            email_address: selectedEmailAddress,
+            contact_person: editableContactPerson || selectedContactPerson, // <-- uses edited value
+            contact_number: editableContactNumber || selectedContactNumber, // <-- uses edited value
+            email_address: editableEmailAddress || selectedEmailAddress, // <-- uses edited value
             address,
             date_created: dateCreated,
             date_updated: new Date().toISOString(),
@@ -734,6 +707,7 @@ export function CreateActivityDialog({
     // Handle user confirmed cancel
     const confirmCancel = () => {
         resetForm();
+        setStep(1); // Reset step to 1
         setShowConfirmCancel(false);
         setSheetOpen(false);
     };
@@ -919,90 +893,6 @@ export function CreateActivityDialog({
                                                         desc:
                                                             "Handle Viber replies and messages from clients.",
                                                     },
-                                                    {
-                                                        value: "Admin - Supplier Accreditation",
-                                                        title: "Admin - Supplier Accreditation",
-                                                        desc:
-                                                            "Handle supplier accreditation tasks.",
-                                                    },
-                                                    {
-                                                        value: "Admin - Credit Terms Application",
-                                                        title: "Admin - Credit Terms Application",
-                                                        desc:
-                                                            "Handle credit terms application tasks.",
-                                                    },
-                                                    {
-                                                        value: "Accounting Concerns",
-                                                        title: "Accounting Concerns",
-                                                        desc:
-                                                            "Handle accounting concerns.",
-                                                    },
-                                                    {
-                                                        value: "After Sales Refunds",
-                                                        title: "After Sales Refunds",
-                                                        desc:
-                                                            "Handle after sales refunds.",
-                                                    },
-                                                    {
-                                                        value: "After Sales Repair / Replacement",
-                                                        title: "After Sales Repair / Replacement",
-                                                        desc:
-                                                            "Handle after sales repair or replacement.",
-                                                    },
-                                                    {
-                                                        value: "Bidding Preparations",
-                                                        title: "Bidding Preparations",
-                                                        desc:
-                                                            "Handle bidding preparations.",
-                                                    },
-                                                    {
-                                                        value: "Customer Orders",
-                                                        title: "Customer Orders",
-                                                        desc:
-                                                            "Handle customer orders.",
-                                                    },
-                                                    {
-                                                        value: "Customer Inquiry Sales",
-                                                        title: "Customer Inquiry Sales",
-                                                        desc:
-                                                            "Handle customer inquiry sales.",
-                                                    },
-                                                    {
-                                                        value: "Delivery Concern",
-                                                        title: "Delivery Concern",
-                                                        desc:
-                                                            "Handle delivery concerns.",
-                                                    },
-                                                    {
-                                                        value: "FB Marketplace Replies / Messages",
-                                                        title: "FB Marketplace Replies / Messages",
-                                                        desc:
-                                                            "Handle FB Marketplace replies and messages from clients.",
-                                                    },
-                                                    {
-                                                        value: "Follow Up",
-                                                        title: "Follow Up",
-                                                        desc:
-                                                            "Handle follow-up activities.",
-                                                    },
-                                                    {
-                                                        value: "Sample Requests",
-                                                        title: "Sample Requests",
-                                                        desc:
-                                                            "Handle sample requests.",
-                                                    },
-                                                    {
-                                                        value: "Site Visits / Demos",
-                                                        title: "Site Visits / Demos",
-                                                        desc:
-                                                            "Handle site visits and demos.",
-                                                    },
-                                                    {
-                                                        value: "Technical Concerns",
-                                                        title: "Technical Concerns",
-                                                        desc:
-                                                            "Handle technical concerns.",
-                                                    },
                                                 ].map((item) => (
                                                     <FieldLabel key={item.value}>
                                                         <Field orientation="horizontal">
@@ -1170,11 +1060,11 @@ export function CreateActivityDialog({
                                     company_name={company_name}
                                     address={address}
                                     email_address={selectedEmailAddress}
-                                    setEmailAddress={setSelectedEmailAddress}
                                     contact_number={selectedContactNumber}
-                                    setContactNumber={setSelectedContactNumber}
                                     contact_person={selectedContactPerson}
-                                    setContactPerson={setSelectedContactPerson}
+                                    setContactPerson={setEditableContactPerson}
+                                    setContactNumber={setEditableContactNumber}
+                                    setEmailAddress={setEditableEmailAddress}
                                     availableContacts={contactPersons.map((person, idx) => ({
                                         name: person,
                                         contact_number: contactNumbers[idx] || "",
