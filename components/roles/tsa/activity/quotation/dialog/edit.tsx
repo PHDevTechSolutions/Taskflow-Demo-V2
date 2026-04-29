@@ -177,6 +177,38 @@ type SpfOfferProduct = {
   leadTime: string;
 };
 
+type SpfDetailRow = {
+  id?: number;
+  spf_number?: string;
+  status?: string;
+  company_name?: string;
+  supplier_brand?: string;
+  contact_name?: string;
+  contact_number?: string;
+  final_selling_cost?: string;
+  project_lead_time?: string;
+  manager?: string;
+  item_code?: string;
+  referenceid?: string;
+  product_offer_title?: string;
+  product_offer_sku?: string;
+  product_offer_technical_specification?: string;
+  product_offer_packaging_details?: string;
+  product_offer_image_url?: string;
+  product_offer_unit_cost?: string;
+  product_offer_factory_address?: string;
+  product_offer_port_of_discharge?: string;
+  product_offer_subtotal?: string;
+  product_offer_pcs_per_carton?: string;
+  product_offer_quantity?: string;
+  product_offer_final_selling?: string;
+  product_offer_lead_time?: string;
+  product_offer_company_name?: string;
+  product_offer_supplier_brand?: string;
+  product_offer_contact_number?: string;
+  [key: string]: any;
+};
+
 function spfSplitByRow(value?: string | null): string[] {
   return (value || "").split("|ROW|").map((s) => s.trim()).filter((s) => s.length > 0);
 }
@@ -604,133 +636,73 @@ export default function TaskListEditDialog({
   const [showTemplateModal, setShowTemplateModal] = useState(false);
   const [templateName, setTemplateName] = useState("");
   const [productSearchQuery, setProductSearchQuery] = useState("");
+  // Store original data for change detection (PDF security)
+  const [originalProducts, setOriginalProducts] = useState<ProductItem[]>([]);
+  const [originalConfig, setOriginalConfig] = useState<{
+    vatType: string;
+    deliveryFee: string;
+    restockingFee: string;
+    whtType: string;
+    quotationSubject: string;
+    hideDiscountInPreview: boolean;
+    showDiscountColumns: boolean;
+    showSummaryDiscounts: boolean;
+  } | null>(null);
   const [dragRowUid, setDragRowUid] = useState<string | null>(null);
   // Track raw input values for smooth decimal typing (keyed by product uid + field)
   const [rawInputValues, setRawInputValues] = useState<Record<string, string>>({});
   const [dragOverRowUid, setDragOverRowUid] = useState<string | null>(null);
   const [selectedRevisedQuotation, setSelectedRevisedQuotation] =
     useState<RevisedQuotation | null>(null);
-  const [revisedQuotations, setRevisedQuotations] = useState<
-    RevisedQuotation[]
-  >([]);
 
-  const activityReferenceNumber = item.activity_reference_number;
-
-  const [startDate, setStartDate] = useState<string>(() =>
-    new Date().toISOString(),
-  );
-  const [liveTime, setLiveTime] = useState<Date>(() => new Date());
-  const [endDate, setEndDate] = useState<string>(() =>
-    new Date().toISOString(),
-  );
-
-  const [productSource, setProductSource] = useState<
-    "shopify" | "firebase_shopify" | "firebase_taskflow"
-  >("shopify");
+  // SPF modes
   const [isSpfMode, setIsSpfMode] = useState(false);
   const [isSpf1Mode, setIsSpf1Mode] = useState(false);
   const [spf1Loading, setSpf1Loading] = useState(false);
   const [spf1Error, setSpf1Error] = useState<string | null>(null);
   const [spf1Records, setSpf1Records] = useState<SpfCreationRow[]>([]);
-  const [spf1Search, setSpf1Search] = useState("");
-  const [spf1Selected, setSpf1Selected] = useState<SpfCreationRow | null>(null);
-  const [spfUploading, setSpfUploading] = useState(false);
-  const [spfManualProduct, setSpfManualProduct] = useState({
-    title: "",
-    sku: "",
-    price: 0,
-    quantity: 1,
-    description: "",
-    imageUrl: "",
-    cloudinaryPublicId: "",
-  });
-  const [expandedRows, setExpandedRows] = useState<Record<number, boolean>>({});
-  const [showSpfDetailView, setShowSpfDetailView] = useState(false);
   const [spfDetailOffers, setSpfDetailOffers] = useState<SpfCreationRow[]>([]);
-  const [fullImageUrl, setFullImageUrl] = useState<string | null>(null);
-  const [isImageDialogOpen, setIsImageDialogOpen] = useState(false);
+  // Date tracking
+  const [startDate, setStartDate] = useState<string>(() => new Date().toISOString());
+  const [endDate, setEndDate] = useState<string>(() => new Date().toISOString());
 
-  const openFullImage = (url: string) => {
-    setFullImageUrl(url);
-    setIsImageDialogOpen(true);
-  };
-
-  const openSpfDetailView = async (spfNumber: string) => {
-    setShowSpfDetailView(true);
-    setSpfDetailOffers([]);
-    try {
-      const { data, error } = await supabase
-        .from("spf_creation")
-        .select("*")
-        .eq("spf_number", spfNumber)
-        .order("id", { ascending: true });
-      if (!error && data) {
-        setSpfDetailOffers(data as SpfCreationRow[]);
-      }
-    } catch (err) {
-      console.error("Failed to load SPF details:", err);
-    }
-  };
-
-  const deleteCloudinaryImage = async (publicId: string) => {
-    if (!publicId) return;
-    try {
-      await fetch("/api/cloudinary/delete", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ public_id: publicId }),
-      });
-    } catch (err) {
-      console.error("Failed to delete Cloudinary image:", err);
-    }
-  };
-  const [isPreviewOpen, setIsPreviewOpen] = useState<boolean>(false);
-  const [openDescription, setOpenDescription] = useState<
-    Record<number, boolean>
-  >({});
-
-  // Tracks whether the autoAction has already been fired for this dialog instance
-  const autoActionFiredRef = useRef(false);
-
-  const hasSPF = products.some((p: ProductItem) =>
-    p.product_sku?.toUpperCase().includes("SPF")
-  );
-
+  // Update endDate every second for duration tracking
   useEffect(() => {
-    const now = new Date();
-    setStartDate(now.toISOString());
-  }, []);
-
-  useEffect(() => {
-    let baseTime = liveTime;
-    let secondsPassed = 0;
     const interval = setInterval(() => {
-      secondsPassed++;
-      const newLiveTime = new Date(baseTime.getTime() + secondsPassed * 1000);
-      setLiveTime(newLiveTime);
-      setEndDate(newLiveTime.toISOString());
+      setEndDate(new Date().toISOString());
     }, 1000);
     return () => clearInterval(interval);
-  }, [liveTime]);
+  }, []);
 
-  const company_name = company?.company_name || "";
-  const contact_number = item.contact_number || company?.contact_number || "";
-  const email_address = item.email_address || company?.email_address || "";
-  const contact_person = item.contact_person || company?.contact_person || "";
-  const quotation_type = item.quotation_type;
-  const quotationNumber = item.quotation_number || "";
-  const quotationAmountNum = quotationAmount;
-  const productQuantity = item.product_quantity || "";
-  const productAmount = item.product_amount || "";
-  const productPhoto = item.product_photo || "";
-  const productTitle = item.product_title || "";
-  const productSku = item.product_sku || "";
-  const productDescription = item.product_description || "";
-  const itemRemarks = item.item_remarks || "";
-  const address = item.address || company?.address || "";
-  const quotation_number = quotationNumber;
-  const activityRef = "";
-  const formattedDate = new Date().toLocaleDateString();
+  // Revised quotations
+  const [revisedQuotations, setRevisedQuotations] = useState<RevisedQuotation[]>([]);
+  // Product source for SPF
+  const [productSource, setProductSource] = useState<'shopify' | 'firebase_taskflow' | 'firebase_shopify' | 'manual' | 'catalog'>('shopify');
+  // Manual product entry for SPF
+  const [spfManualProduct, setSpfManualProduct] = useState({
+    title: '',
+    sku: '',
+    quantity: '1',
+    price: '',
+    cost: '',
+    leadTime: '',
+    imageUrl: '',
+    description: '',
+    packaging: '',
+    factory: '',
+    port: '',
+    pcsPerCarton: '',
+    supplier: '',
+    contact: '',
+    cloudinaryPublicId: '',
+  });
+  // SPF detail view
+  const [showSpfDetailView, setShowSpfDetailView] = useState(false);
+  // SPF1 search and selection
+  const [spf1Search, setSpf1Search] = useState("");
+  const [spf1Selected, setSpf1Selected] = useState<SpfCreationRow | null>(null);
+  // Description dialog (tracks which product descriptions are expanded)
+  const [openDescription, setOpenDescription] = useState<Record<number, boolean>>({});
 
   useEffect(() => {
     const quantities = splitAndTrim(item.product_quantity);
@@ -841,6 +813,18 @@ export default function TaskListEditDialog({
       });
     }
     setProducts(arr);
+    setOriginalProducts(JSON.parse(JSON.stringify(arr))); // Deep copy for comparison
+    // Store original config
+    setOriginalConfig({
+      vatType: initialVatType,
+      deliveryFee: deliveryFee ?? "",
+      restockingFee: restockingFee ?? "",
+      whtType: whtType ?? "none",
+      quotationSubject: quotationSubject ?? "For Quotation",
+      hideDiscountInPreview: toBoolean(item.hide_discount_in_preview, false),
+      showDiscountColumns: toBoolean(item.show_discount_columns, true),
+      showSummaryDiscounts: toBoolean(item.show_summary_discounts, true),
+    });
     setCheckedRows(newCheckedRows);
   }, [item]);
 
@@ -848,229 +832,50 @@ export default function TaskListEditDialog({
     setPreviewStates(products.map(() => true));
   }, [products]);
 
-  // ── Auto-action: fire once products have loaded ───────────────────────────
-  // "preview"  → open the Review Quotation modal (setIsPreviewOpen(true))
-  // "download" → call DownloadPDF() — identical to clicking the yellow button
-  useEffect(() => {
-    if (!autoAction) return;
-    if (autoActionFiredRef.current) return;
-    if (products.length === 0) return; // wait until products are ready
-
-    autoActionFiredRef.current = true;
-
-    if (autoAction === "preview") {
-      // Small delay so the dialog has finished its paint cycle
-      const t = setTimeout(() => setIsPreviewOpen(true), 150);
-      return () => clearTimeout(t);
-    }
-
-    if (autoAction === "download") {
-      const t = setTimeout(() => DownloadPDF(false, showSummaryDiscounts), 150);
-      return () => clearTimeout(t);
-    }
-  }, [autoAction, products, showSummaryDiscounts]);
-
-  useEffect(() => {
-    let total = 0;
-    products.forEach((p) => {
-      const qty = p.quantity || parseFloat(p.product_quantity ?? "0") || 0;
-      const amt = p.price || parseFloat(p.product_amount ?? "0") || 0;
-      const isDiscounted = p.isDiscounted ?? false;
-      const defaultDiscount = vatTypeState === "vat_exe" ? 12 : 0;
-      const rowDiscount = isDiscounted ? (p.discount ?? defaultDiscount) : 0;
-      let unitDiscountAmt = isDiscounted
-        ? (p.discountAmount != null && p.discountAmount > 0
-          ? p.discountAmount
-          : (amt * rowDiscount) / 100)
-        : 0;
-      // Normalize: if discountAmount >= unit price, it's likely a total for all qty
-      if (unitDiscountAmt >= amt && qty > 1) {
-        unitDiscountAmt = unitDiscountAmt / qty;
-      }
-      const discountedUnitPrice = Math.max(0, amt - unitDiscountAmt);
-      const lineTotal = discountedUnitPrice * qty;
-      total += lineTotal;
+  // Check if there are unsaved changes (for PDF security)
+  const hasUnsavedChanges = useCallback(() => {
+    if (!originalConfig) return false;
+    
+    // Compare products
+    if (products.length !== originalProducts.length) return true;
+    
+    const productsChanged = products.some((product, index) => {
+      const original = originalProducts[index];
+      if (!original) return true;
+      
+      // Compare key fields
+      return (
+        product.product_quantity !== original.product_quantity ||
+        product.product_amount !== original.product_amount ||
+        product.product_title !== original.product_title ||
+        product.product_description !== original.product_description ||
+        product.product_sku !== original.product_sku ||
+        product.item_remarks !== original.item_remarks ||
+        product.isDiscounted !== original.isDiscounted ||
+        product.discount !== original.discount ||
+        product.discountAmount !== original.discountAmount ||
+        product.hideDiscountInPreview !== original.hideDiscountInPreview ||
+        product.displayMode !== original.displayMode ||
+        product.isPromo !== original.isPromo ||
+        product.isHidden !== original.isHidden
+      );
     });
-    setQuotationAmount(total);
-  }, [products, vatTypeState]);
+    
+    if (productsChanged) return true;
+    
+    // Compare configuration
+    if (vatTypeState !== originalConfig.vatType) return true;
+    if (deliveryFeeState !== originalConfig.deliveryFee) return true;
+    if (restockingFeeState !== originalConfig.restockingFee) return true;
+    if (whtTypeState !== originalConfig.whtType) return true;
+    if (quotationSubjectState !== originalConfig.quotationSubject) return true;
+    if (hideDiscountInPreview !== originalConfig.hideDiscountInPreview) return true;
+    if (showDiscountColumns !== originalConfig.showDiscountColumns) return true;
+    if (showSummaryDiscounts !== originalConfig.showSummaryDiscounts) return true;
+    
+    return false;
+  }, [products, originalProducts, originalConfig, vatTypeState, deliveryFeeState, restockingFeeState, whtTypeState, quotationSubjectState, hideDiscountInPreview, showDiscountColumns, showSummaryDiscounts]);
 
-  const handleProductChange = (
-    index: number,
-    field: keyof ProductItem,
-    value: string,
-  ) => {
-    setProducts((prev) => {
-      const newProducts = [...prev];
-      const updated: ProductItem = { ...newProducts[index], [field]: value };
-      // Keep numeric mirrors in sync
-      if (field === "product_quantity") updated.quantity = parseFloat(value) || 0;
-      if (field === "product_amount") {
-        const newPrice = parseFloat(value) || 0;
-        updated.price = newPrice;
-        // Re-derive discountAmount from % if no explicit peso amount was set
-        if (updated.isDiscounted && updated.discount != null && updated.discountAmount == null) {
-          updated.discountAmount = (newPrice * updated.discount) / 100;
-        }
-      }
-      newProducts[index] = updated;
-      return newProducts;
-    });
-  };
-
-  // ==================== UNDO/REDO HISTORY ====================
-  const saveToHistory = (action: string) => {
-    const newHistory = history.slice(0, historyIndex + 1);
-    newHistory.push([...products]);
-    setHistory(newHistory);
-    setHistoryIndex(newHistory.length - 1);
-    setLastHistoryAction(action);
-  };
-
-  const undo = () => {
-    if (historyIndex > 0) {
-      setHistoryIndex(historyIndex - 1);
-      setProducts([...history[historyIndex - 1]]);
-    }
-  };
-
-  const redo = () => {
-    if (historyIndex < history.length - 1) {
-      setHistoryIndex(historyIndex + 1);
-      setProducts([...history[historyIndex + 1]]);
-    }
-  };
-
-  // Keyboard shortcuts for undo/redo
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key === 'z') {
-        e.preventDefault();
-        if (e.shiftKey) redo();
-        else undo();
-      }
-      if ((e.ctrlKey || e.metaKey) && e.key === 'y') {
-        e.preventDefault();
-        redo();
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [history, historyIndex]);
-
-  // ==================== ROW SELECTION HELPERS ====================
-  const toggleRowSelection = (uid: string) => {
-    const newSelected = new Set(selectedRows);
-    if (newSelected.has(uid)) {
-      newSelected.delete(uid);
-    } else {
-      newSelected.add(uid);
-    }
-    setSelectedRows(newSelected);
-  };
-
-  const selectAllRows = () => {
-    if (selectedRows.size === products.length) {
-      setSelectedRows(new Set());
-    } else {
-      setSelectedRows(new Set(products.map((_, idx) => idx.toString())));
-    }
-  };
-
-  // ==================== CLIPBOARD OPERATIONS ====================
-  const copySelectedRows = async () => {
-    const rowsToCopy = products.filter((_, idx) => selectedRows.has(idx.toString()));
-    if (rowsToCopy.length === 0) return;
-
-    const data = rowsToCopy.map(p => [
-      p.title || p.product_title || '',
-      p.product_quantity || '1',
-      p.product_amount || '0',
-      p.discount || '0',
-      ''
-    ]);
-
-    const headers = ['Product', 'Quantity', 'Unit Price', 'Discount %', 'Discount Amount'];
-    const tsvContent = [headers.join('\t'), ...data.map(row => row.join('\t'))].join('\n');
-
-    try {
-      await navigator.clipboard.writeText(tsvContent);
-      alert('Copied to clipboard!');
-    } catch (err) {
-      console.error('Failed to copy:', err);
-    }
-  };
-
-  const pasteFromClipboard = async () => {
-    try {
-      const text = await navigator.clipboard.readText();
-      const lines = text.split(/\r?\n/).filter(line => line.trim());
-
-      if (lines.length < 2) return;
-
-      const headers = lines[0].split('\t').map(h => h.toLowerCase().trim());
-      const newProducts: ProductItem[] = [];
-
-      for (let i = 1; i < lines.length; i++) {
-        const cells = lines[i].includes('\t') ? lines[i].split('\t') : lines[i].split(',');
-        const title = cells[0]?.trim() || 'New Product';
-        const quantity = parseInt(cells[1]) || 1;
-        const price = parseFloat(cells[2]) || 0;
-        const discount = parseFloat(cells[3]) || 0;
-        const discountAmount = parseFloat(cells[4]) || 0;
-
-        newProducts.push({
-          uid: `pasted-${Date.now()}-${i}`,
-          title,
-          product_title: title,
-          product_quantity: quantity.toString(),
-          product_amount: price.toString(),
-          discount,
-          discountAmount: discountAmount,
-          description: '',
-          skus: [],
-          product_sku: '',
-          product_photo: '',
-          item_remarks: '',
-          images: [],
-          isDiscounted: discount > 0,
-          price: price,
-          quantity: quantity,
-          id: `pasted-${Date.now()}-${i}`,
-        } as ProductItem);
-      }
-
-      setProducts([...products, ...newProducts]);
-      saveToHistory('Paste from clipboard');
-    } catch (err) {
-      console.error('Failed to paste:', err);
-      alert('Failed to paste from clipboard. Please check permissions.');
-    }
-  };
-
-  // ==================== RECENT PRODUCTS ====================
-  const addToRecentProducts = useCallback((product: ProductItem) => {
-    setRecentProducts((prev: Product[]) => {
-      const productAsProduct: Product = {
-        id: product.id || `product-${Date.now()}`,
-        title: product.title || product.product_title || '',
-        description: product.description || product.product_description,
-        images: product.images,
-        skus: product.skus,
-        price: product.product_amount,
-        remarks: product.item_remarks,
-      };
-      const filtered = prev.filter((p) => p.id !== productAsProduct.id);
-      const updated: Product[] = [productAsProduct, ...filtered].slice(0, 5);
-      return updated;
-    });
-  }, []);
-
-  const reAddRecentProduct = useCallback((product: ProductItem) => {
-    setProducts(prev => [...prev, { ...product }]);
-    saveToHistory('Re-add recent product');
-  }, []);
-
-  // ==================== MARGIN CALCULATIONS ====================
   const calculateMargin = (price: number, cost: number): number => {
     if (price <= 0) return 0;
     return ((price - cost) / price) * 100;
@@ -1103,6 +908,15 @@ export default function TaskListEditDialog({
     setSavedTemplates(prev => [...prev, newTemplate]);
     setTemplateName('');
     alert('Template saved successfully!');
+  };
+
+  // ==================== UNDO/REDO HISTORY ====================
+  const saveToHistory = (action: string) => {
+    const newHistory = history.slice(0, historyIndex + 1);
+    newHistory.push([...products]);
+    setHistory(newHistory);
+    setHistoryIndex(newHistory.length - 1);
+    setLastHistoryAction(action);
   };
 
   const loadTemplate = (template: { name: string; products: ProductItem[] }) => {
@@ -1209,7 +1023,7 @@ export default function TaskListEditDialog({
           // Prefer explicit peso amount stored on product; fall back to % calc
           let unitDiscountValue = p.discountAmount != null && p.discountAmount > 0
             ? p.discountAmount
-            : (amt * discountPercent) / 100;
+            : p.isDiscounted ? (amt * discountPercent) / 100 : 0;
           // Normalize: if discountAmount >= unit price, it's likely a total for all qty
           if (unitDiscountValue >= amt && qty > 1) {
             unitDiscountValue = unitDiscountValue / qty;
@@ -1329,9 +1143,9 @@ export default function TaskListEditDialog({
     const emailUsername = email?.split("@")[0] ?? "";
 
     let emailDomain = "";
-    if (quotation_type === "Disruptive Solutions Inc")
+    if (item.quotation_type === "Disruptive Solutions Inc")
       emailDomain = "disruptivesolutionsinc.com";
-    else if (quotation_type === "Ecoshift Corporation")
+    else if (item.quotation_type === "Ecoshift Corporation")
       emailDomain = "ecoshiftcorp.com";
     else emailDomain = email?.split("@")[1] ?? "";
     const salesemail =
@@ -1393,13 +1207,13 @@ export default function TaskListEditDialog({
     const totalPriceWithDelivery = (quotationAmount || 0) + deliveryFeeNum + restockingFeeNum;
 
     return {
-      referenceNo: quotationNumber ?? "DRAFT-XXXX",
+      referenceNo: item.quotation_number ?? "DRAFT-XXXX",
       date: new Date().toLocaleDateString(),
-      companyName: company_name ?? "",
-      address: address ?? "",
-      telNo: contact_number ?? "",
-      email: email_address ?? "",
-      attention: contact_person ?? "",
+      companyName: item.company_name ?? "",
+      address: item.address ?? "",
+      telNo: contactNumberState ?? "",
+      email: emailAddressState ?? "",
+      attention: contactPersonState ?? "",
       subject: quotationSubjectState || "For Quotation",
       items,
       vatTypeLabel:
@@ -1412,10 +1226,10 @@ export default function TaskListEditDialog({
       salesRepresentative: salesRepresentativeName,
       salesemail,
       salescontact: contact ?? "",
-      salestsmname: tsmname || "—",
+      salestsmname: tsmname ?? "",
       salestsmemail: tsmemail ?? "",
       salestsmcontact: tsmcontact ?? "",
-      salesmanagername: managername || "—",
+      salesmanagername: managername ?? "",
       vatType: vatTypeState ?? null,
       deliveryFee: deliveryFeeState ?? "",
       restockingFee: parseFloat(restockingFeeState) || 0,
@@ -1455,28 +1269,32 @@ export default function TaskListEditDialog({
   };
 
   const DownloadExcel = async () => {
-    const productCats = productTitle.split(",");
-    const quantities = productQuantity ? productQuantity.split(",") : [];
-    const amounts = productAmount ? productAmount.split(",") : [];
-    const photos = productPhoto ? productPhoto.split(",") : [];
-    const titles = productTitle ? productTitle.split(",") : [];
-    const skus = productSku ? productSku.split(",") : [];
-    const descriptions = productDescription
-      ? productDescription.split("||")
+    const productCats = item.product_title?.split(",") || [];
+    const quantities = item.product_quantity ? item.product_quantity.split(",") : [];
+    const amounts = item.product_amount ? item.product_amount.split(",") : [];
+    const photos = item.product_photo ? item.product_photo.split(",") : [];
+    const titles = item.product_title ? item.product_title.split(",") : [];
+    const skus = item.product_sku ? item.product_sku.split(",") : [];
+    const descriptions = item.product_description
+      ? item.product_description.split("||")
       : [];
-    const remarks = itemRemarks ? itemRemarks.split(",") : [];
+    const remarks = item.item_remarks ? item.item_remarks.split(",") : [];
 
     const salesRepresentativeName = `${firstname} ${lastname}`;
     const emailUsername = email?.split("@")[0] ?? "";
 
     let emailDomain = "";
-    if (company_name === "Disruptive Solutions Inc")
+    if (item.company_name === "Disruptive Solutions Inc")
       emailDomain = "disruptivesolutionsinc.com";
-    else if (company_name === "Ecoshift Corporation")
+    else if (item.company_name === "Ecoshift Corporation")
       emailDomain = "ecoshiftcorp.com";
     else emailDomain = email?.split("@")[1] ?? "";
 
-    const items = productCats.map((_, index) => {
+    const activityRef = item.activity_reference_number || "N/A";
+    const formattedDate = new Date().toLocaleDateString();
+    const quotationAmountNum = quotationAmount || 0;
+
+    const items = productCats.map((_: string, index: number) => {
       const qty = Number(quantities[index] || 0);
       const amount = Number(amounts[index] || 0);
       const photo = photos[index] || "";
@@ -1495,13 +1313,13 @@ export default function TaskListEditDialog({
     });
 
     const quotationData = {
-      referenceNo: quotationNumber || activityRef,
+      referenceNo: item.quotation_number || activityRef,
       date: formattedDate,
-      companyName: company_name,
-      address,
-      telNo: contact_number,
-      email: email_address,
-      attention: contact_person,
+      companyName: item.company_name,
+      address: item.address,
+      telNo: contactNumberState,
+      email: emailAddressState,
+      attention: contactPersonState,
       subject: quotationSubjectState || "For Quotation",
       items,
       vatType: "Vat Inc",
@@ -1514,9 +1332,9 @@ export default function TaskListEditDialog({
     };
 
     let apiEndpoint = "/api/quotation/disruptive";
-    if (quotation_type === "Ecoshift Corporation")
+    if (item.quotation_type === "Ecoshift Corporation")
       apiEndpoint = "/api/quotation/ecoshift";
-    else if (quotation_type === "Disruptive Solutions Inc")
+    else if (item.quotation_type === "Disruptive Solutions Inc")
       apiEndpoint = "/api/quotation/disruptive";
 
     try {
@@ -1540,7 +1358,7 @@ export default function TaskListEditDialog({
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
-      link.download = `quotation_${quotationNumber || item.id}.xlsx`;
+      link.download = `quotation_${item.quotation_number || item.id}.xlsx`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
@@ -1697,7 +1515,7 @@ export default function TaskListEditDialog({
   }, [item.quotation_number]);
 
   const payload = getQuotationPayload();
-  const isEcoshift = quotation_type === "Ecoshift Corporation";
+  const isEcoshift = item.quotation_type === "Ecoshift Corporation";
   const headerImagePath = isEcoshift
     ? "/ecoshift-banner.png"
     : "/disruptive-banner.png";
@@ -1811,7 +1629,7 @@ export default function TaskListEditDialog({
       const { default: jsPDF } = await import("jspdf");
       const { default: html2canvas } = await import("html2canvas");
       const payload = getQuotationPayload();
-      const isEcoshift = quotation_type === "Ecoshift Corporation";
+      const isEcoshift = item.quotation_type === "Ecoshift Corporation";
 
       // ── Build security artefacts BEFORE rendering ────────────────────────
       const issuedAt = new Date().toISOString();
@@ -2448,7 +2266,7 @@ ${payload.whtType && payload.whtType !== "none"
         stampPdfSecurityFooter(pdf, qrDataUrl, payload.referenceNo, issuedAt, p, totalPages, pdfWidth, pdfHeight);
       }
 
-      const safeCompanyName = (payload.companyName || company_name || '').replace(/[^a-zA-Z0-9]/g, '_').substring(0, 30);
+      const safeCompanyName = (payload.companyName || item.company_name || '').replace(/[^a-zA-Z0-9]/g, '_').substring(0, 30);
       pdf.save(`QUOTATION_${payload.referenceNo}_${safeCompanyName}.pdf`);
       document.body.removeChild(iframe);
     } catch (error) {
@@ -2490,6 +2308,78 @@ ${payload.whtType && payload.whtType !== "none"
       : 0;
     return Math.round((totalWithFees - whtAmount) * 100) / 100;
   }, [subtotal, deliveryFeeState, restockingFeeState, whtTypeState, vatTypeState]);
+
+  const [isPreviewOpen, setIsPreviewOpen] = useState(false);
+  const [isImageDialogOpen, setIsImageDialogOpen] = useState(false);
+  const [fullImageUrl, setFullImageUrl] = useState<string | null>(null);
+
+  const openSpfDetailView = (spfNumber: string) => {
+    const record = spf1Records.find(r => r.spf_number === spfNumber);
+    if (record) {
+      setSpfDetailOffers([record]);
+      setShowSpfDetailView(true);
+    }
+  };
+
+  const openFullImage = (url: string) => {
+    setFullImageUrl(url);
+    setIsImageDialogOpen(true);
+  };
+
+  const undo = () => {
+    if (historyIndex > 0) {
+      const newIndex = historyIndex - 1;
+      setHistoryIndex(newIndex);
+      setProducts([...history[newIndex]]);
+      setLastHistoryAction('Undo');
+    }
+  };
+
+  const redo = () => {
+    if (historyIndex < history.length - 1) {
+      const newIndex = historyIndex + 1;
+      setHistoryIndex(newIndex);
+      setProducts([...history[newIndex]]);
+      setLastHistoryAction('Redo');
+    }
+  };
+
+  const copySelectedRows = () => {
+    if (selectedRows.size === 0) return;
+    const rowsToCopy = products.filter(p => selectedRows.has(p.uid));
+    localStorage.setItem('clipboard_products', JSON.stringify(rowsToCopy));
+    showToast(`Copied ${rowsToCopy.length} rows`, 'success');
+  };
+
+  const pasteFromClipboard = () => {
+    const clipboard = localStorage.getItem('clipboard_products');
+    if (!clipboard) {
+      showToast('Clipboard is empty', 'error');
+      return;
+    }
+    try {
+      const parsed = JSON.parse(clipboard);
+      if (Array.isArray(parsed)) {
+        const newProducts = parsed.map((p: any) => ({
+          ...p,
+          uid: `pasted-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+        }));
+        setProducts(prev => [...prev, ...newProducts]);
+        saveToHistory('Paste rows');
+        showToast(`Pasted ${newProducts.length} rows`, 'success');
+      }
+    } catch {
+      showToast('Failed to paste', 'error');
+    }
+  };
+
+  const handleProductChange = (index: number, field: keyof ProductItem, value: any) => {
+    setProducts(prev => {
+      const updated = [...prev];
+      updated[index] = { ...updated[index], [field]: value };
+      return updated;
+    });
+  };
 
   return (
     <>
@@ -2674,11 +2564,11 @@ ${payload.whtType && payload.whtType !== "none"
                       <div className="grid grid-cols-2 gap-1.5">
                         <div className="flex flex-col gap-0.5">
                           <label className="text-[9px] font-black uppercase text-gray-400 tracking-widest">Qty</label>
-                          <Input type="number" min={1} value={spfManualProduct.quantity} onChange={(e) => setSpfManualProduct(prev => ({ ...prev, quantity: Math.max(1, parseInt(e.target.value) || 1) }))} className="rounded-none text-xs" />
+                          <Input type="number" min={1} value={spfManualProduct.quantity} onChange={(e) => setSpfManualProduct(prev => ({ ...prev, quantity: String(Math.max(1, parseInt(e.target.value) || 1)) }))} className="rounded-none text-xs" />
                         </div>
                         <div className="flex flex-col gap-0.5">
                           <label className="text-[9px] font-black uppercase text-gray-400 tracking-widest">Unit Price</label>
-                          <Input type="number" min={0} step="0.01" value={spfManualProduct.price} onChange={(e) => setSpfManualProduct(prev => ({ ...prev, price: Math.max(0, parseFloat(e.target.value) || 0) }))} className="rounded-none text-xs" />
+                          <Input type="number" min={0} step="0.01" value={spfManualProduct.price} onChange={(e) => setSpfManualProduct(prev => ({ ...prev, price: String(Math.max(0, parseFloat(e.target.value) || 0)) }))} className="rounded-none text-xs" />
                         </div>
                       </div>
                       <div className="flex flex-col gap-0.5">
@@ -2698,14 +2588,14 @@ ${payload.whtType && payload.whtType !== "none"
                             images: spfManualProduct.imageUrl ? [{ src: spfManualProduct.imageUrl }] : [],
                             skus: spfManualProduct.sku ? [spfManualProduct.sku] : [],
                             description: spfManualProduct.description,
-                            price: spfManualProduct.price,
-                            quantity: spfManualProduct.quantity,
+                            price: parseFloat(spfManualProduct.price) || 0,
+                            quantity: parseFloat(spfManualProduct.quantity) || 0,
                             isDiscounted: false,
                             discount: 0,
                             cloudinaryPublicId: spfManualProduct.cloudinaryPublicId,
                           };
                           setProducts(prev => [...prev, newProduct]);
-                          setSpfManualProduct({ title: "", sku: "", price: 0, quantity: 1, description: "", imageUrl: "", cloudinaryPublicId: "" });
+                          setSpfManualProduct({ title: "", sku: "", price: "", quantity: "1", description: "", imageUrl: "", cloudinaryPublicId: "", cost: "", leadTime: "", packaging: "", factory: "", port: "", pcsPerCarton: "", supplier: "", contact: "" });
                           setMobilePanelTab("products");
                         }}
                         className="w-full bg-red-600 hover:bg-red-700 text-white rounded-lg h-9 mt-1 flex items-center justify-center gap-2"
@@ -4597,7 +4487,7 @@ ${payload.whtType && payload.whtType !== "none"
                 <span className="text-[11px] font-bold uppercase tracking-wider">Review Quotation</span>
               </Button>
 
-              {(ApprovedStatus === "Approved" || ApprovedStatus === "Approved By Sales Head") && !hasDeleted && (
+              {(ApprovedStatus === "Approved" || ApprovedStatus === "Approved By Sales Head") && !hasDeleted && !hasUnsavedChanges() && (
                 <>
                   <Button
                     type="button"
@@ -4647,7 +4537,7 @@ ${payload.whtType && payload.whtType !== "none"
           </div>
           <Preview
             payload={getQuotationPayload()}
-            quotationType={quotation_type}
+            quotationType={item.quotation_type}
             setIsPreviewOpen={setIsPreviewOpen}
             hideDiscountInPreview={hideDiscountInPreview}
             showDiscountColumns={showDiscountColumns}
@@ -4658,6 +4548,7 @@ ${payload.whtType && payload.whtType !== "none"
             productViewMode={productViewMode}
             visibleColumns={visibleColumns}
             approvedStatus={ApprovedStatus}
+            hasChanges={hasUnsavedChanges()}
           />
         </DialogContent>
       </Dialog>

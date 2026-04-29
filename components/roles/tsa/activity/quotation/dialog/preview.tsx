@@ -82,6 +82,7 @@ type PreviewProps = {
     productViewMode?: string;
     visibleColumns?: any;
     approvedStatus?: string;
+    hasChanges?: boolean;
 };
 
 export const Preview: React.FC<PreviewProps> = ({
@@ -92,9 +93,11 @@ export const Preview: React.FC<PreviewProps> = ({
     showDiscountColumns = false,
     showSummaryDiscounts = false,
     approvedStatus,
+    hasChanges = false,
 }) => {
     // Check if quotation is approved (show PDF/Print buttons only when approved)
-    const isApproved = approvedStatus === "Approved" || approvedStatus === "Approved By Sales Head" || approvedStatus === "APPROVED" || approvedStatus === "Approved By Manager";
+    // Also check for unsaved changes - hide PDF download if there are changes
+    const isApproved = (approvedStatus === "Approved" || approvedStatus === "Approved By Sales Head" || approvedStatus === "APPROVED" || approvedStatus === "Approved By Manager") && !hasChanges;
     const isEcoshift = quotationType === "Ecoshift Corporation";
     const headerImagePath = isEcoshift
         ? "/ecoshift-banner.png"
@@ -245,6 +248,20 @@ export const Preview: React.FC<PreviewProps> = ({
                             </svg>
                             Print
                         </button>
+                    </div>
+                </div>
+            )}
+
+            {/* ── WARNING BANNER (When there are unsaved changes) ───────────────── */}
+            {hasChanges && (
+                <div className="bg-amber-50 border-b border-amber-200 px-4 py-2 flex items-center justify-center sticky top-0 z-50">
+                    <div className="flex items-center gap-2 text-amber-800">
+                        <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                        </svg>
+                        <span className="text-xs font-semibold">
+                            You have unsaved changes. PDF download is disabled until you save.
+                        </span>
                     </div>
                 </div>
             )}
