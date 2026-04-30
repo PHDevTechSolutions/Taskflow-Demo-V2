@@ -44,6 +44,9 @@ export function ApprovalHistory({ history, dateCreatedFilterRange, onRefresh }: 
   const filteredHistory = useMemo(() => {
     let filtered = history;
 
+    // Filter for "Approval for TSM" status only
+    filtered = filtered.filter((h) => h.status === "Approval for TSM");
+
     if (dateCreatedFilterRange?.from && dateCreatedFilterRange?.to) {
       const start = new Date(dateCreatedFilterRange.from);
       start.setHours(0, 0, 0, 0);
