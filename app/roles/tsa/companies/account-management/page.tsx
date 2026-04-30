@@ -103,17 +103,6 @@ const fmtDuration = (start?: string | null, end?: string | null): string | null 
   return m > 0 ? `${h}h ${m}m` : `${h}h`;
 };
 
-// ─── Date range helper ──────────────────────────────────────────────
-const isDateInRange = (dateStr: string, range: DateRange | undefined): boolean => {
-  if (!range?.from) return true; // No filter = include all
-  const date = new Date(dateStr);
-  if (isNaN(date.getTime())) return false;
-  const from = new Date(range.from);
-  from.setHours(0, 0, 0, 0);
-  const to = range.to ? new Date(range.to) : new Date(range.from);
-  to.setHours(23, 59, 59, 999);
-  return date >= from && date <= to;
-};
 
 /* ─── Type client color map ───────────────────────────────────────── */
 
@@ -445,14 +434,16 @@ function DashboardContent() {
     fetchUserData();
   }, [userId]);
 
-  // ─── Fetch ALL accounts & activities (NO date filtering) ───
+  // ─── Fetch accounts (always all) & activities (date-filtered) ───
+  // Default: fetch today's activities only. When date range selected, fetch that range.
+  // Total accounts are always fetched in full (no date filter on accounts).
   useEffect(() => {
     if (!userDetails.referenceid) return;
 
     const fetchData = async () => {
       setLoadingData(true);
       try {
-        // Fetch all accounts from Neon
+        // Fetch ALL accounts (no date filter — accounts are not time-bound)
         const accRes = await fetch(`/api/accounts?referenceid=${encodeURIComponent(userDetails.referenceid)}`);
         if (accRes.ok) {
           const accData = await accRes.json();
@@ -460,107 +451,31 @@ function DashboardContent() {
           setAccounts(list);
         }
 
-        // ─── Fetch activities with smart date filtering and batch processing ───
-        const fetchActivitiesSmart = async () => {
-          // If date range is selected, use server-side filtering for efficiency
-          if (dateCreatedFilterRange?.from) {
-            const fromDate = dateCreatedFilterRange.from.toISOString().split('T')[0];
-            const toDate = dateCreatedFilterRange.to?.toISOString().split('T')[0] || fromDate;
-            
-            console.log(`=== FRONTEND DATE FILTER DEBUG ===`);
-            console.log(`Date range from: ${dateCreatedFilterRange.from}`);
-            console.log(`Date range to: ${dateCreatedFilterRange.to}`);
-            console.log(`Using server-side date filtering: ${fromDate} to ${toDate}`);
-            
-            const activitiesUrl = `/api/activities?referenceid=${encodeURIComponent(userDetails.referenceid)}&from=${fromDate}&to=${toDate}&fetchAll=true`;
-            console.log(`Calling API URL: ${activitiesUrl}`);
-            
-            const actRes = await fetch(activitiesUrl);
-            console.log(`API Response status: ${actRes.status}`);
-            
-            if (actRes.ok) {
-              const actData = await actRes.json();
-              let list = Array.isArray(actData) ? actData : actData.data ?? [];
-              console.log(`Server-side filtered: ${list.length} activities`);
-              
-              // Check for April 14th in the response
-              const april14Records = list.filter((a: Activity) => {
-                const date = a.date_created;
-                return date && (date.includes('2025-04-14') || date.includes('2026-04-14'));
-              });
-              
-              if (april14Records.length > 0) {
-                console.log(`FOUND ${april14Records.length} APRIL 14TH RECORDS IN RESPONSE:`, april14Records.map((r: Activity) => ({ 
-                  company: r.company_name, 
-                  date: r.date_created, 
-                  activity: r.type_activity 
-                })));
-              } else {
-                console.log(`NO APRIL 14TH RECORDS FOUND IN RESPONSE`);
-                console.log(`Sample dates in response:`, list.slice(0, 5).map((a: Activity) => a.date_created));
-              }
-              
-              return list;
-            } else {
-              console.error(`API Error: ${actRes.status} - ${actRes.statusText}`);
-              const errorText = await actRes.text();
-              console.error(`Error response:`, errorText);
-            }
-          }
-          
-          // If no date filter, fetch ALL data using batch processing
-          console.log(`No date filter selected - fetching ALL activities using batch processing`);
-          
-          const activitiesUrl = `/api/activities?referenceid=${encodeURIComponent(userDetails.referenceid)}&fetchAll=true`;
-          const actRes = await fetch(activitiesUrl);
-          
-          if (actRes.ok) {
-            const actData = await actRes.json();
-            let list = Array.isArray(actData) ? actData : actData.data ?? [];
-            console.log(`ALL data fetched via batch processing: ${list.length} activities`);
-            
-            // Check for April 14th in the full dataset
-            const april14Records = list.filter((a: Activity) => {
-              const date = a.date_created;
-              return date && (date.includes('2025-04-14') || date.includes('2026-04-14'));
-            });
-            
-            if (april14Records.length > 0) {
-              console.log(`FOUND ${april14Records.length} APRIL 14TH RECORDS IN FULL DATASET!`);
-            }
-            
-            return list;
-          }
-          
-          // Fallback to basic fetch
-          console.log("Using fallback fetch method");
-          const fallbackUrl = `/api/activities?referenceid=${encodeURIComponent(userDetails.referenceid)}&limit=1000`;
-          const fallbackRes = await fetch(fallbackUrl);
-          
-          if (fallbackRes.ok) {
-            const fallbackData = await fallbackRes.json();
-            let list = Array.isArray(fallbackData) ? fallbackData : fallbackData.data ?? [];
-            return list;
-          }
-          
-          return [];
-        };
-        
-        const allActivities = await fetchActivitiesSmart();
-        
-        console.log("=== ACTIVITIES FETCH DEBUG ===");
-        console.log("Total activities fetched:", allActivities.length);
-        console.log("Date range of activities:");
-        if (allActivities.length > 0) {
-          const dates = allActivities.map((a: Activity) => a.date_created).filter(Boolean) as string[];
-          const earliest = new Date(Math.min(...dates.map((d: string) => new Date(d).getTime())));
-          const latest = new Date(Math.max(...dates.map((d: string) => new Date(d).getTime())));
-          console.log("Earliest date:", earliest.toLocaleDateString());
-          console.log("Latest date:", latest.toLocaleDateString());
-          console.log("Sample February activities:", allActivities.filter((a: Activity) => a.date_created?.includes("2025-02")).slice(0, 3).map((a: Activity) => ({ company: a.company_name, date: a.date_created })));
+        // ─── Fetch activities with server-side date filtering ───
+        // Default: today only. If date range selected: that range.
+        let fromDate: string;
+        let toDate: string;
+
+        if (dateCreatedFilterRange?.from) {
+          fromDate = dateCreatedFilterRange.from.toISOString().split('T')[0];
+          toDate = dateCreatedFilterRange.to?.toISOString().split('T')[0] || fromDate;
+        } else {
+          // Default: today only — saves bandwidth vs fetching all historical
+          const today = new Date().toISOString().split('T')[0];
+          fromDate = today;
+          toDate = today;
         }
-        console.log("============================");
-        setActivities(allActivities);
+
+        const activitiesUrl = `/api/activities?referenceid=${encodeURIComponent(userDetails.referenceid)}&from=${fromDate}&to=${toDate}&fetchAll=true`;
+        const actRes = await fetch(activitiesUrl);
+
+        if (actRes.ok) {
+          const actData = await actRes.json();
+          let list = Array.isArray(actData) ? actData : actData.data ?? [];
+          setActivities(list);
+        } else {
+          setActivities([]);
+        }
       } catch (err) {
         console.error("Fetch error:", err);
         setError("Failed to load data");
@@ -598,15 +513,9 @@ function DashboardContent() {
   // ─── Use all active accounts (no deduplication) ───
   const allActiveAccounts = activeAccounts;
 
-  // ─── Filter activities by date range (default: ALL activities) ───
-  const filteredActivitiesByDate = useMemo(() => {
-    if (!dateCreatedFilterRange?.from) return activities; // No filter = return all
-    return activities.filter((a) => {
-      const dateToCheck = a.date_created;
-      if (!dateToCheck) return false;
-      return isDateInRange(dateToCheck, dateCreatedFilterRange);
-    });
-  }, [activities, dateCreatedFilterRange]);
+  // ─── Activities are already server-side filtered by date range ───
+  // No need for client-side date filtering — just use activities directly
+  const filteredActivitiesByDate = activities;
 
   // ─── Activity counts based on DATE-FILTERED activities (aggregated by account_reference_number) ───
   const activityCountMap = useMemo(() => {
@@ -797,87 +706,15 @@ function DashboardContent() {
   const withActivityCount = allActiveAccounts.filter((a) => accountsWithActivity.has(a.account_reference_number)).length;
   const withoutActivityCount = allActiveAccounts.length - withActivityCount;
 
-  // ─── DEBUG: Log counts for verification ───
-  useEffect(() => {
-    console.log("=== ACCOUNT-MANAGEMENT COVERAGE DEBUG ===");
-    console.log("Date Range:", dateCreatedFilterRange?.from ? `${dateCreatedFilterRange.from} to ${dateCreatedFilterRange.to || dateCreatedFilterRange.from}` : "ALL (no filter)");
-    console.log("Total Accounts (all):", accounts.length);
-    console.log("Active Accounts (raw):", activeAccounts.length);
-    console.log("Active Accounts (all):", allActiveAccounts.length);
-    console.log("Total Activities (all):", activities.length);
-    console.log("Filtered Activities (by date):", filteredActivitiesByDate.length);
-    console.log("Unique accounts with activity (Set size):", accountsWithActivity.size);
-    console.log("With Activity count:", withActivityCount);
-    console.log("No Activity count:", withoutActivityCount);
-    
-    // Detailed breakdown of all active accounts
-    console.log("=== DETAILED ACCOUNT BREAKDOWN ===");
-    const allAccountDetails = allActiveAccounts.map(account => {
-      const accRef = account.account_reference_number;
-      const hasActivity = accountsWithActivity.has(accRef);
-      const activityCount = activityCountMap[accRef] ?? 0;
-      return {
-        company_name: account.company_name,
-        account_reference_number: account.account_reference_number,
-        referenceid: account.referenceid,
-        status: account.status,
-        type_client: account.type_client,
-        hasActivity,
-        activityCount,
-        lastActivity: lastActivityDateMap[accRef]
-      };
-    });
-    
-    console.log("All unique active accounts:", allAccountDetails);
-    
-    const accountsWithoutActivityList = allAccountDetails.filter((a: typeof allAccountDetails[0]) => !a.hasActivity);
-    const accountsWithActivityList = allAccountDetails.filter((a: typeof allAccountDetails[0]) => a.hasActivity);
-    
-    console.log(`Accounts WITHOUT activity (${accountsWithoutActivityList.length}):`, accountsWithoutActivityList.map((a: typeof allAccountDetails[0]) => a.company_name));
-    console.log(`Accounts WITH activity (${accountsWithActivityList.length}):`, accountsWithActivityList.map((a: typeof allAccountDetails[0]) => ({ company: a.company_name, count: a.activityCount })));
-    
-    // Check for any data issues
-    console.log("=== DATA VALIDATION ===");
-    const duplicateCompanies = allActiveAccounts.filter((account, index, self) => 
-      self.findIndex(a => a.company_name.toLowerCase() === account.company_name.toLowerCase()) !== index
-    );
-    if (duplicateCompanies.length > 0) {
-      console.log("WARNING: Found duplicate company names:", duplicateCompanies.map(a => a.company_name));
-    }
-    
-    // Check activities for missing company names
-    const activitiesWithoutCompany = activities.filter(a => !a.company_name);
-    if (activitiesWithoutCompany.length > 0) {
-      console.log("WARNING: Found activities without company names:", activitiesWithoutCompany.length);
-    }
-    
-    // Check for activities with account_reference_number that don't match any account
-    const activityAccountsNotFound = Array.from(accountsWithActivity).filter(accRef => 
-      !allActiveAccounts.some(account => account.account_reference_number === accRef)
-    );
-    if (activityAccountsNotFound.length > 0) {
-      console.log("WARNING: Activity accounts not found in accounts:", activityAccountsNotFound);
-    }
-    
-    console.log("============================");
-  }, [accounts.length, activeAccounts.length, allActiveAccounts.length, activities.length, filteredActivitiesByDate.length, dateCreatedFilterRange?.from?.toString(), dateCreatedFilterRange?.to?.toString(), accountsWithActivity.size, withActivityCount, withoutActivityCount, activityCountMap, lastActivityDateMap]);
-
   const openHistory = (account: Account) => {
-    // Use the account directly for display
     setHistoryCompany(account.company_name);
     setHistoryAccount(account);
     setHistoryOpen(true);
     setLoadingHistory(true);
-    // Filter by account_reference_number AND date range (if selected)
-    const records = activities.filter((a) => {
-      const matchAccount = a.account_reference_number === account.account_reference_number;
-      if (!matchAccount) return false;
-      // Apply date filter if exists
-      if (!dateCreatedFilterRange?.from) return true; // No date filter
-      const dateToCheck = a.date_created;
-      if (!dateToCheck) return false;
-      return isDateInRange(dateToCheck, dateCreatedFilterRange);
-    });
+    // Activities are already server-side date filtered, just filter by account
+    const records = activities.filter((a) =>
+      a.account_reference_number === account.account_reference_number
+    );
     setHistoryRecords(records);
     setLoadingHistory(false);
   };
@@ -947,7 +784,7 @@ function DashboardContent() {
                     onClick={() => setActivityFilter(activityFilter === "with" ? "all" : "with")}
                     isActive={activityFilter === "with"}
                     showFraction={{ count: withActivityCount, total: allActiveAccounts.length }}
-                    sublabel={dateCreatedFilterRange?.from ? "in date range" : "all time"}
+                    sublabel={dateCreatedFilterRange?.from ? "in date range" : "today"}
                   />
                   <StatCard
                     label="No Activity"
@@ -957,7 +794,7 @@ function DashboardContent() {
                     isActive={activityFilter === "without"}
                     isNegative
                     showFraction={{ count: withoutActivityCount, total: allActiveAccounts.length }}
-                    sublabel={dateCreatedFilterRange?.from ? "in date range" : "all time"}
+                    sublabel={dateCreatedFilterRange?.from ? "in date range" : "today"}
                   />
                   {typeClientStats.map((stat, i) => (
                     <StatCard
