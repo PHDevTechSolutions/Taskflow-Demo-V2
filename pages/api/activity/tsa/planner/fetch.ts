@@ -2,10 +2,8 @@ import type { NextApiRequest, NextApiResponse } from "next";
 import { supabase } from "@/utils/supabase";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
-const BATCH_SIZE = 500;   // FIX: lowered from 1000 — smaller batches for memory efficiency
+const BATCH_SIZE = 1000;  // FIX: lowered from 5000 — avoids timeouts on large datasets
 const IN_CHUNK_SIZE = 500; // FIX: Supabase .in() is unreliable beyond ~500 values
-const DEFAULT_LIMIT = 500; // Default max records to return (prevents 4MB limit)
-const MAX_LIMIT = 2000;    // Hard cap for safety
 
 // ─────────────────────────────────────────────────────────────────────────────
 // FIX 1: Cursor does not advance when a partial batch is returned.
@@ -25,10 +23,8 @@ async function* fetchActivityBatches(
   referenceid: string,
   fromISO?: string,
   toISO?: string,
-  limit?: number,
 ) {
   let lastId: number | null = null;
-  let totalFetched = 0;
 
   while (true) {
     let query = supabase
@@ -50,10 +46,6 @@ async function* fetchActivityBatches(
     if (!data || data.length === 0) break;
 
     yield data;
-    totalFetched += data.length;
-
-    // Stop if we reached the overall limit
-    if (limit && totalFetched >= limit) break;
 
     // FIX 1: stop if partial batch — no more rows
     if (data.length < BATCH_SIZE) break;
@@ -112,17 +104,11 @@ export default async function handler(
   req: NextApiRequest,
   res: NextApiResponse,
 ) {
-  const { referenceid, from, to, limit } = req.query;
+  const { referenceid, from, to } = req.query;
 
   if (!referenceid || typeof referenceid !== "string") {
     return res.status(400).json({ message: "Missing or invalid referenceid" });
   }
-
-  // Parse limit with safeguards
-  const parsedLimit = Math.min(
-    parseInt(typeof limit === "string" ? limit : String(DEFAULT_LIMIT), 10) || DEFAULT_LIMIT,
-    MAX_LIMIT
-  );
 
   // Parse date range — filter is on date_created for this endpoint
   const fromISO =
@@ -144,15 +130,9 @@ export default async function handler(
     let firstActivity = true;
     const allActivityReferenceNumbers: string[] = [];
     let totalActivities = 0;
-    let hasMore = false;
 
-    for await (const batch of fetchActivityBatches(referenceid, fromISO, toISO, parsedLimit)) {
+    for await (const batch of fetchActivityBatches(referenceid, fromISO, toISO)) {
       for (const row of batch) {
-        if (totalActivities >= parsedLimit) {
-          hasMore = true;
-          break;
-        }
-
         if (row.activity_reference_number) {
           allActivityReferenceNumbers.push(row.activity_reference_number);
         }
@@ -162,7 +142,6 @@ export default async function handler(
         firstActivity = false;
         totalActivities++;
       }
-      if (hasMore) break;
     }
 
     res.write(`],"history":[`);
@@ -170,25 +149,17 @@ export default async function handler(
     let firstHistory = true;
     let totalHistory = 0;
 
-    // Limit history to match activities limit roughly
-    const historyLimit = parsedLimit * 2; // History usually has more rows
-    let historyCount = 0;
-
     for await (const batch of fetchHistoryBatches(allActivityReferenceNumbers)) {
       for (const row of batch) {
-        if (historyCount >= historyLimit) break;
-
         const json = JSON.stringify(row);
         res.write(firstHistory ? json : `,${json}`);
         firstHistory = false;
         totalHistory++;
-        historyCount++;
       }
-      if (historyCount >= historyLimit) break;
     }
 
     res.write(
-      `],"total_activities":${totalActivities},"total_history":${totalHistory},"has_more":${hasMore},"limit":${parsedLimit}}`,
+      `],"total_activities":${totalActivities},"total_history":${totalHistory}}`,
     );
     res.end();
   } catch (err: any) {
