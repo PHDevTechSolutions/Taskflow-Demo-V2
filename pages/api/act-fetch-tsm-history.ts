@@ -15,9 +15,10 @@ async function* fetchHistoryBatches(
 
   while (true) {
     let query = supabase
-      .from("history")
+      .from("activity")
       .select("*")
       .eq("tsm", tsm)
+      .eq("status", "Approval for TSM")
       .order("id", { ascending: true })
       .limit(BATCH_SIZE);
 
