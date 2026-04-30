@@ -44,6 +44,9 @@ export function ApprovalHistory({ history, dateCreatedFilterRange, onRefresh }: 
   const filteredHistory = useMemo(() => {
     let filtered = history;
 
+    // Filter for "Approval for TSM" status only
+    filtered = filtered.filter((h) => h.status === "Approval for TSM");
+
     if (dateCreatedFilterRange?.from && dateCreatedFilterRange?.to) {
       const start = new Date(dateCreatedFilterRange.from);
       start.setHours(0, 0, 0, 0);
@@ -223,7 +226,11 @@ export function ApprovalHistory({ history, dateCreatedFilterRange, onRefresh }: 
                 placeholder="Enter approval remarks..."
                 className="rounded-none text-xs resize-none"
                 rows={3}
+                maxLength={2000}
               />
+              <p className="text-[10px] text-gray-500 mt-1">
+                {remarks.length} / 2000 characters
+              </p>
             </div>
           </div>
           <DialogFooter>
