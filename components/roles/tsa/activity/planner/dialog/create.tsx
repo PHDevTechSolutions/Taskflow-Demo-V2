@@ -72,6 +72,7 @@ interface Activity {
     product_display_mode?: string;
     vat_type: string;
     delivery_fee: string;
+    delivery_address?: string;
     restocking_fee?: string;
     wht_type?: string;
     quotation_subject?: string;
@@ -228,6 +229,7 @@ export function CreateActivityDialog({
     const [productRowDisplayMode, setProductRowDisplayMode] = useState("");
     const [vatType, setVatType] = useState("");
     const [deliveryFee, setDeliveryFee] = useState("");
+    const [deliveryAddress, setDeliveryAddress] = useState("");
     const [restockingFee, setRestockingFee] = useState("");
     const [whtType, setWhtType] = useState("none");
     const [itemRemarks, setItemRemarks] = useState("");
@@ -1038,6 +1040,8 @@ export function CreateActivityDialog({
                                     setVatType={setVatType}
                                     deliveryFee={deliveryFee}
                                     setDeliveryFee={setDeliveryFee}
+                                    deliveryAddress={deliveryAddress}
+                                    setDeliveryAddress={setDeliveryAddress}
                                     restockingFee={restockingFee}
                                     setRestockingFee={setRestockingFee}
                                     itemRemarks={itemRemarks}

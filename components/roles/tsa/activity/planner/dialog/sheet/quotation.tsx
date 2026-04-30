@@ -90,6 +90,8 @@ interface Props {
   setWhtType: (value: string) => void;
   deliveryFee: string;
   setDeliveryFee: (value: string) => void;
+  deliveryAddress?: string;
+  setDeliveryAddress?: (value: string) => void;
   restockingFee: string;
   setRestockingFee: (value: string) => void;
   itemRemarks: string;
@@ -358,6 +360,7 @@ export function QuotationSheet(props: Props) {
     vatType, setVatType,
     whtType, setWhtType,       // Added Withholding Tax State
     deliveryFee, setDeliveryFee,
+    deliveryAddress, setDeliveryAddress,
     restockingFee, setRestockingFee,
     itemRemarks, setItemRemarks,
     quotationSubject, setQuotationSubject,
@@ -428,6 +431,7 @@ export function QuotationSheet(props: Props) {
   const [localContactPerson, setLocalContactPerson] = useState(contact_person || "");
   const [localContactNumber, setLocalContactNumber] = useState(contact_number || "");
   const [localEmailAddress, setLocalEmailAddress] = useState(email_address || "");
+  const [localDeliveryAddress, setLocalDeliveryAddress] = useState(deliveryAddress || "");
 
   const [productSource, setProductSource] = useState<
     "shopify" | "firebase_shopify" | "firebase_taskflow"
@@ -1267,6 +1271,10 @@ Procurement
     if (email_address !== undefined) setLocalEmailAddress(email_address);
   }, [email_address]);
 
+  useEffect(() => {
+    if (deliveryAddress !== undefined) setLocalDeliveryAddress(deliveryAddress);
+  }, [deliveryAddress]);
+
   // Pass local edits back to parent
   useEffect(() => {
     if (setContactPerson) setContactPerson(localContactPerson);
@@ -1279,6 +1287,10 @@ Procurement
   useEffect(() => {
     if (setEmailAddress) setEmailAddress(localEmailAddress);
   }, [localEmailAddress, setEmailAddress]);
+
+  useEffect(() => {
+    if (setDeliveryAddress) setDeliveryAddress(localDeliveryAddress);
+  }, [localDeliveryAddress, setDeliveryAddress]);
 
   useEffect(() => {
     const ids = selectedProducts.map((p) => p.id.toString());
@@ -4135,6 +4147,23 @@ ${spec.value}
                               placeholder="Email"
                               className="border border-gray-200 bg-white px-2 py-0.5 rounded text-[9px] w-32 shrink-0 focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-100 placeholder-gray-400"
                             />
+                          </div>
+                        </div>
+
+                        {/* Delivery Address */}
+                        <div className="flex items-center gap-2 px-3 py-2 border-b lg:border-b-0 lg:border-r border-gray-200 flex-1 min-w-[200px]">
+                          <span className="font-black uppercase text-green-600 tracking-wider shrink-0 text-[9px]">Delivery Address</span>
+                          <div className="flex items-center gap-1.5 flex-1 min-w-[120px] group">
+                            <input
+                              type="text"
+                              value={localDeliveryAddress}
+                              onChange={(e) => setLocalDeliveryAddress(e.target.value)}
+                              placeholder="Enter delivery address..."
+                              className="border border-gray-200 bg-white px-2 py-1 rounded text-[11px] font-bold uppercase flex-1 min-w-[100px] focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-100 placeholder-gray-400"
+                            />
+                            <svg className="w-3.5 h-3.5 text-gray-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                            </svg>
                           </div>
                         </div>
 
