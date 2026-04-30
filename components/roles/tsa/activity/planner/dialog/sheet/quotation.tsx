@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { createPortal } from "react-dom";
 import { Field, FieldContent, FieldDescription, FieldGroup, FieldLabel, FieldSet, FieldTitle, } from "@/components/ui/field";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
@@ -15,7 +15,17 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { sileo } from "sileo";
 import { Separator } from "@/components/ui/separator"
 import { Trash, Download, ImagePlus, Plus, RefreshCcw, Eye, EyeOff, ArrowLeft, ArrowRight, CheckCircle2Icon, XCircle, X, HelpCircle, PanelLeft, Info } from "lucide-react";
-import { getFirestore, collection, query, where, getDocs } from "firebase/firestore";
+import {
+  collection,
+  query,
+  where,
+  getDocs,
+  limit,
+  startAfter,
+  type DocumentData,
+  type QueryConstraint,
+  type QueryDocumentSnapshot,
+} from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { supabase } from "@/utils/supabase";
 import { toast } from "sonner";
@@ -90,6 +100,8 @@ interface Props {
   setWhtType: (value: string) => void;
   deliveryFee: string;
   setDeliveryFee: (value: string) => void;
+  deliveryAddress?: string;
+  setDeliveryAddress?: (value: string) => void;
   restockingFee: string;
   setRestockingFee: (value: string) => void;
   itemRemarks: string;
@@ -325,6 +337,30 @@ function getQuotationPrefix(type: string): string {
   return map[type.trim()] || "";
 }
 
+const SEARCH_PAGE_SIZE = 20;
+const SEARCH_CACHE_TTL_MS = 60_000;
+const SEARCH_DEBOUNCE_MS = 350;
+const SEARCH_SCAN_CHUNK_SIZE = 40;
+const SEARCH_SCAN_MAX_PAGES = 5;
+
+type SearchCacheEntry = {
+  timestamp: number;
+  results: Product[];
+  lastDoc: QueryDocumentSnapshot<DocumentData> | null;
+  hasMore: boolean;
+};
+
+const dedupeProductsById = (items: Product[]) => {
+  const map = new Map<string, Product>();
+  items.forEach((item) => {
+    map.set(String(item.id), item);
+  });
+  return Array.from(map.values());
+};
+
+const toSearchCacheKey = (source: string, term: string) =>
+  `${source}::${term.trim().toUpperCase()}`;
+
 export function QuotationSheet(props: Props) {
   const {
     step, setStep,
@@ -358,6 +394,7 @@ export function QuotationSheet(props: Props) {
     vatType, setVatType,
     whtType, setWhtType,       // Added Withholding Tax State
     deliveryFee, setDeliveryFee,
+    deliveryAddress, setDeliveryAddress,
     restockingFee, setRestockingFee,
     itemRemarks, setItemRemarks,
     quotationSubject, setQuotationSubject,
@@ -403,9 +440,17 @@ export function QuotationSheet(props: Props) {
   } = props;
 
   const [searchTerm, setSearchTerm] = useState("");
+  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState("");
   const [searchResults, setSearchResults] = useState<Product[]>([]);
   const [selectedProducts, setSelectedProducts] = useState<SelectedProduct[]>([]);
   const [isSearching, setIsSearching] = useState(false);
+  const [isLoadingMoreSearch, setIsLoadingMoreSearch] = useState(false);
+  const [hasMoreSearchResults, setHasMoreSearchResults] = useState(false);
+  const [searchLastDoc, setSearchLastDoc] = useState<QueryDocumentSnapshot<DocumentData> | null>(null);
+  const searchCacheRef = useRef<Map<string, SearchCacheEntry>>(new Map());
+  const activeSearchRequestRef = useRef(0);
+  const searchResultsRef = useRef<Product[]>([]);
+  const searchLastDocRef = useRef<QueryDocumentSnapshot<DocumentData> | null>(null);
   const [visibleDescriptions, setVisibleDescriptions] = useState<Record<string, boolean>>({});
   const [isManualEntry, setIsManualEntry] = useState(false);
   const [noProductsAvailable, setNoProductsAvailable] = useState(false);
@@ -428,6 +473,7 @@ export function QuotationSheet(props: Props) {
   const [localContactPerson, setLocalContactPerson] = useState(contact_person || "");
   const [localContactNumber, setLocalContactNumber] = useState(contact_number || "");
   const [localEmailAddress, setLocalEmailAddress] = useState(email_address || "");
+  const [localDeliveryAddress, setLocalDeliveryAddress] = useState(deliveryAddress || "");
 
   const [productSource, setProductSource] = useState<
     "shopify" | "firebase_shopify" | "firebase_taskflow"
@@ -861,6 +907,317 @@ export function QuotationSheet(props: Props) {
     );
   };
 
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setDebouncedSearchTerm(searchTerm.trim());
+    }, SEARCH_DEBOUNCE_MS);
+    return () => window.clearTimeout(timer);
+  }, [searchTerm]);
+
+  useEffect(() => {
+    searchResultsRef.current = searchResults;
+  }, [searchResults]);
+
+  useEffect(() => {
+    searchLastDocRef.current = searchLastDoc;
+  }, [searchLastDoc]);
+
+  const mapFirestoreProductDoc = useCallback(
+    (
+      docSnap: QueryDocumentSnapshot<DocumentData>,
+      isDbSource: boolean,
+      searchUpper: string
+    ): Product | null => {
+      const data = docSnap.data();
+      let specsHtml = `<p><strong>${data.shortDescription || ""}</strong></p>`;
+      let rawSpecsText = "";
+
+      if (Array.isArray(data.technicalSpecs)) {
+        data.technicalSpecs.forEach((group: any) => {
+          rawSpecsText += ` ${group.specGroup || ""}`;
+          specsHtml += `
+<div style="background:#121212;color:white;padding:4px 8px;font-weight:900;text-transform:uppercase;font-size:9px;margin-top:8px">
+${group.specGroup}
+</div>`;
+
+          specsHtml += `<table style="width:100%;border-collapse:collapse;font-size:11px;margin-bottom:4px">`;
+
+          group.specs?.forEach((spec: any) => {
+            rawSpecsText += ` ${spec?.name || ""} ${spec?.value || ""}`;
+            specsHtml += `
+<tr>
+<td style="border:1px solid #e5e7eb;padding:4px;background:#f9fafb;width:40%">
+<b>${spec.name}</b>
+</td>
+<td style="border:1px solid #e5e7eb;padding:4px">
+${spec.value}
+</td>
+</tr>`;
+          });
+
+          specsHtml += `</table>`;
+        });
+      }
+
+      const itemCodeVariants = normalizeItemCodeVariants(
+        data.itemCodes,
+        data.itemCode
+      );
+      const matchedCodeVariants = itemCodeVariants.filter((variant) =>
+        variant.code.toUpperCase().includes(searchUpper)
+      );
+      const matchesNameOrSpecs = `${data.name || ""} ${rawSpecsText}`
+        .toUpperCase()
+        .includes(searchUpper);
+
+      if (!matchesNameOrSpecs && matchedCodeVariants.length === 0) {
+        return null;
+      }
+
+      const variantsForResult =
+        isDbSource && matchedCodeVariants.length > 0
+          ? matchedCodeVariants
+          : itemCodeVariants;
+
+      const itemCodes = variantsForResult.reduce<Record<string, string>>(
+        (acc, variant) => {
+          acc[variant.label] = variant.code;
+          return acc;
+        },
+        {}
+      );
+
+      const requiresItemCodeSelection =
+        isDbSource && variantsForResult.length > 1;
+      const defaultSku = requiresItemCodeSelection
+        ? ""
+        : variantsForResult[0]?.code || "";
+
+      return {
+        id: docSnap.id,
+        title: data.name || "No Name",
+        price: data.regularPrice || 0,
+        regPrice: data.regularPrice || 0,
+        description: specsHtml,
+        images: data.mainImage ? [{ src: data.mainImage }] : [],
+        itemCodes,
+        itemCodeVariants: variantsForResult,
+        requiresItemCodeSelection,
+        skus: defaultSku ? [defaultSku] : [],
+        discount: 0,
+      };
+    },
+    []
+  );
+
+  const fetchFirebaseSearchPage = useCallback(
+    async ({ term, append }: { term: string; append: boolean }) => {
+      const normalizedTerm = term.trim();
+      if (normalizedTerm.length < 2) {
+        setSearchResults((prev) => (prev.length > 0 ? [] : prev));
+        setSearchLastDoc((prev) => (prev ? null : prev));
+        setHasMoreSearchResults((prev) => (prev ? false : prev));
+        return;
+      }
+
+      const requestId = ++activeSearchRequestRef.current;
+      const isDbSource = productSource === "firebase_taskflow";
+      const websiteFilter =
+        productSource === "firebase_shopify" ? "Shopify" : "Taskflow";
+      const cacheKey = toSearchCacheKey(productSource, normalizedTerm);
+      const now = Date.now();
+
+      if (!append) {
+        const cached = searchCacheRef.current.get(cacheKey);
+        if (cached && now - cached.timestamp <= SEARCH_CACHE_TTL_MS) {
+          setSearchResults(cached.results);
+          setSearchLastDoc(cached.lastDoc);
+          setHasMoreSearchResults(cached.hasMore);
+          return;
+        }
+      }
+
+      append ? setIsLoadingMoreSearch(true) : setIsSearching(true);
+
+      try {
+        const searchUpper = normalizedTerm.toUpperCase();
+        const existing = append ? searchResultsRef.current : [];
+        const matchedItems: Product[] = [];
+        let cursor = append ? searchLastDocRef.current : null;
+        let hasMore = true;
+        let pagesScanned = 0;
+
+        while (
+          pagesScanned < SEARCH_SCAN_MAX_PAGES &&
+          matchedItems.length < SEARCH_PAGE_SIZE &&
+          hasMore
+        ) {
+          const constraints: QueryConstraint[] = [
+            where("websites", "array-contains", websiteFilter),
+            limit(SEARCH_SCAN_CHUNK_SIZE),
+          ];
+
+          if (cursor) {
+            constraints.push(startAfter(cursor));
+          }
+
+          const snapshot = await getDocs(
+            query(collection(db, "products"), ...constraints)
+          );
+          if (requestId !== activeSearchRequestRef.current) return;
+
+          if (snapshot.docs.length === 0) {
+            hasMore = false;
+            break;
+          }
+
+          cursor = snapshot.docs[snapshot.docs.length - 1];
+
+          snapshot.docs.forEach((docSnap) => {
+            const mapped = mapFirestoreProductDoc(
+              docSnap,
+              isDbSource,
+              searchUpper
+            );
+            if (mapped) matchedItems.push(mapped);
+          });
+
+          if (snapshot.docs.length < SEARCH_SCAN_CHUNK_SIZE) {
+            hasMore = false;
+          }
+
+          pagesScanned += 1;
+        }
+
+        const pageResults = matchedItems.slice(0, SEARCH_PAGE_SIZE);
+        const merged = append
+          ? dedupeProductsById([...existing, ...pageResults])
+          : pageResults;
+        const lastDoc = cursor;
+
+        setSearchResults(merged);
+        setSearchLastDoc(lastDoc);
+        setHasMoreSearchResults(hasMore);
+
+        if (!append) {
+          searchCacheRef.current.set(cacheKey, {
+            timestamp: now,
+            results: merged,
+            lastDoc,
+            hasMore,
+          });
+        }
+      } catch (err) {
+        console.error("Search Protocol Failure:", err);
+        if (!append) {
+          setSearchResults([]);
+          setSearchLastDoc(null);
+          setHasMoreSearchResults(false);
+        }
+      } finally {
+        if (requestId !== activeSearchRequestRef.current) return;
+        append ? setIsLoadingMoreSearch(false) : setIsSearching(false);
+      }
+    },
+    [mapFirestoreProductDoc, productSource]
+  );
+
+  const fetchShopifyProducts = useCallback(
+    async (term: string) => {
+      const normalizedTerm = term.trim();
+      if (normalizedTerm.length < 2) {
+        setSearchResults([]);
+        return;
+      }
+
+      const cacheKey = toSearchCacheKey(productSource, normalizedTerm);
+      const cached = searchCacheRef.current.get(cacheKey);
+      const now = Date.now();
+
+      if (cached && now - cached.timestamp <= SEARCH_CACHE_TTL_MS) {
+        setSearchResults(cached.results);
+        return;
+      }
+
+      const requestId = ++activeSearchRequestRef.current;
+      setIsSearching(true);
+      try {
+        const res = await fetch(`/api/shopify/products?q=${normalizedTerm.toLowerCase()}`);
+        const data = await res.json();
+        if (requestId !== activeSearchRequestRef.current) return;
+        const products = data.products || [];
+        setSearchResults(products);
+        setHasMoreSearchResults(false);
+        setSearchLastDoc(null);
+        searchCacheRef.current.set(cacheKey, {
+          timestamp: now,
+          results: products,
+          lastDoc: null,
+          hasMore: false,
+        });
+      } catch (err) {
+        console.error("Search Protocol Failure:", err);
+        setSearchResults([]);
+      } finally {
+        if (requestId !== activeSearchRequestRef.current) return;
+        setIsSearching(false);
+      }
+    },
+    [productSource]
+  );
+
+  useEffect(() => {
+    if (isManualEntry || isSpfMode || isSpf1Mode) return;
+    if (debouncedSearchTerm.length < 2) {
+      setSearchResults((prev) => (prev.length > 0 ? [] : prev));
+      setSearchLastDoc((prev) => (prev ? null : prev));
+      setHasMoreSearchResults((prev) => (prev ? false : prev));
+      setIsSearching((prev) => (prev ? false : prev));
+      return;
+    }
+
+    if (productSource === "shopify") {
+      fetchShopifyProducts(debouncedSearchTerm);
+      return;
+    }
+
+    if (
+      productSource === "firebase_shopify" ||
+      productSource === "firebase_taskflow"
+    ) {
+      fetchFirebaseSearchPage({ term: debouncedSearchTerm, append: false });
+    }
+  }, [
+    debouncedSearchTerm,
+    fetchFirebaseSearchPage,
+    fetchShopifyProducts,
+    isManualEntry,
+    isSpf1Mode,
+    isSpfMode,
+    productSource,
+  ]);
+
+  const loadMoreSearchResults = useCallback(() => {
+    if (
+      productSource === "shopify" ||
+      !hasMoreSearchResults ||
+      isLoadingMoreSearch ||
+      isSearching ||
+      debouncedSearchTerm.length < 2
+    ) {
+      return;
+    }
+
+    fetchFirebaseSearchPage({ term: debouncedSearchTerm, append: true });
+  }, [
+    debouncedSearchTerm,
+    fetchFirebaseSearchPage,
+    hasMoreSearchResults,
+    isLoadingMoreSearch,
+    isSearching,
+    productSource,
+  ]);
+
   // ==================== USER PREFERENCES PERSISTENCE ====================
   // NOTE: Parent component (create.tsx) is now the single source of truth for PDF display options
   // The parent loads from localStorage, saves to localStorage, and passes values as props to this component
@@ -1267,6 +1624,10 @@ Procurement
     if (email_address !== undefined) setLocalEmailAddress(email_address);
   }, [email_address]);
 
+  useEffect(() => {
+    if (deliveryAddress !== undefined) setLocalDeliveryAddress(deliveryAddress);
+  }, [deliveryAddress]);
+
   // Pass local edits back to parent
   useEffect(() => {
     if (setContactPerson) setContactPerson(localContactPerson);
@@ -1279,6 +1640,10 @@ Procurement
   useEffect(() => {
     if (setEmailAddress) setEmailAddress(localEmailAddress);
   }, [localEmailAddress, setEmailAddress]);
+
+  useEffect(() => {
+    if (setDeliveryAddress) setDeliveryAddress(localDeliveryAddress);
+  }, [localDeliveryAddress, setDeliveryAddress]);
 
   useEffect(() => {
     const ids = selectedProducts.map((p) => p.id.toString());
@@ -3225,134 +3590,9 @@ Procurement
                               className="uppercase rounded-lg pl-10 pr-4 py-2.5 border-gray-200 focus:border-blue-400 focus:ring-2 focus:ring-blue-100 transition-all text-sm w-full"
                               placeholder="Type product name or SKU..."
                               value={searchTerm}
-                              onChange={async (e) => {
+                              onChange={(e) => {
                                 if (isManualEntry) return;
-                                const rawValue = e.target.value;
-                                setSearchTerm(rawValue);
-
-                                if (rawValue.length < 2) {
-                                  setSearchResults([]);
-                                  return;
-                                }
-
-                                setIsSearching(true);
-                                try {
-                                  if (productSource === 'shopify') {
-                                    const res = await fetch(`/api/shopify/products?q=${rawValue.toLowerCase()}`);
-                                    let data = await res.json();
-                                    setSearchResults(data.products || []);
-                                  } else if (
-                                    productSource === "firebase_shopify" ||
-                                    productSource === "firebase_taskflow"
-                                  ) {
-                                    const searchUpper = rawValue.toUpperCase();
-                                    const isDbSource = productSource === "firebase_taskflow";
-
-                                    const websiteFilter =
-                                      productSource === "firebase_shopify"
-                                        ? "Shopify"
-                                        : "Taskflow";
-
-                                    const q = query(
-                                      collection(db, "products"),
-                                      where("websites", "array-contains", websiteFilter)
-                                    );
-
-                                    const querySnapshot = await getDocs(q);
-
-                                    const firebaseResults = querySnapshot.docs
-                                      .map((doc): Product | null => {
-                                        const data = doc.data();
-
-                                        let specsHtml = `<p><strong>${data.shortDescription || ""}</strong></p>`;
-                                        let rawSpecsText = "";
-
-                                        if (Array.isArray(data.technicalSpecs)) {
-                                          data.technicalSpecs.forEach((group: any) => {
-                                            rawSpecsText += ` ${group.specGroup}`;
-
-                                            specsHtml += `
-<div style="background:#121212;color:white;padding:4px 8px;font-weight:900;text-transform:uppercase;font-size:9px;margin-top:8px">
-${group.specGroup}
-</div>`;
-
-                                            specsHtml += `<table style="width:100%;border-collapse:collapse;font-size:11px;margin-bottom:4px">`;
-
-                                            group.specs?.forEach((spec: any) => {
-                                              rawSpecsText += ` ${spec.name} ${spec.value}`;
-
-                                              specsHtml += `
-<tr>
-<td style="border:1px solid #e5e7eb;padding:4px;background:#f9fafb;width:40%">
-<b>${spec.name}</b>
-</td>
-<td style="border:1px solid #e5e7eb;padding:4px">
-${spec.value}
-</td>
-</tr>`;
-                                            });
-
-                                            specsHtml += `</table>`;
-                                          });
-                                        }
-
-                                        const itemCodeVariants = normalizeItemCodeVariants(
-                                          data.itemCodes,
-                                          data.itemCode
-                                        );
-                                        const matchedCodeVariants = itemCodeVariants.filter((variant) =>
-                                          variant.code.toUpperCase().includes(searchUpper)
-                                        );
-                                        const matchesNameOrSpecs = `${data.name || ""} ${rawSpecsText}`
-                                          .toUpperCase()
-                                          .includes(searchUpper);
-
-                                        if (!matchesNameOrSpecs && matchedCodeVariants.length === 0) {
-                                          return null;
-                                        }
-
-                                        const variantsForResult =
-                                          isDbSource && matchedCodeVariants.length > 0
-                                            ? matchedCodeVariants
-                                            : itemCodeVariants;
-
-                                        const itemCodes = variantsForResult.reduce<Record<string, string>>(
-                                          (acc, variant) => {
-                                            acc[variant.label] = variant.code;
-                                            return acc;
-                                          },
-                                          {}
-                                        );
-
-                                        const requiresItemCodeSelection =
-                                          isDbSource && variantsForResult.length > 1;
-                                        const defaultSku = requiresItemCodeSelection
-                                          ? ""
-                                          : variantsForResult[0]?.code || "";
-
-                                        return {
-                                          id: doc.id,
-                                          title: data.name || "No Name",
-                                          price: data.regularPrice || 0,
-                                          regPrice: data.regularPrice || 0,
-                                          description: specsHtml,
-                                          images: data.mainImage ? [{ src: data.mainImage }] : [],
-                                          itemCodes,
-                                          itemCodeVariants: variantsForResult,
-                                          requiresItemCodeSelection,
-                                          skus: defaultSku ? [defaultSku] : [],
-                                          discount: 0,
-                                        };
-                                      })
-                                      .filter((p): p is Product => Boolean(p));
-
-                                    setSearchResults(firebaseResults);
-                                  }
-                                } catch (err) {
-                                  console.error("Search Protocol Failure:", err);
-                                } finally {
-                                  setIsSearching(false);
-                                }
+                                setSearchTerm(e.target.value);
                               }}
                             />
                           </div>
@@ -3473,6 +3713,8 @@ ${spec.value}
                                           tabIndex={0}
                                           draggable
                                           onDragStart={(e) => {
+                                            // Prevent parent card drag handler from overriding variant payload
+                                            e.stopPropagation();
                                             const variantPayload: Product = {
                                               ...item,
                                               skus: [variant.code],
@@ -3526,6 +3768,19 @@ ${spec.value}
                         );
                       })}
                     </div>
+                    {productSource !== "shopify" && (
+                      <div className="pt-2">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={loadMoreSearchResults}
+                          disabled={!hasMoreSearchResults || isLoadingMoreSearch || isSearching}
+                          className="w-full text-[11px] uppercase tracking-wide"
+                        >
+                          {isLoadingMoreSearch ? "Loading more..." : hasMoreSearchResults ? "Load more results" : "No more results"}
+                        </Button>
+                      </div>
+                    )}
                   </>
                 )}
 
@@ -4135,6 +4390,23 @@ ${spec.value}
                               placeholder="Email"
                               className="border border-gray-200 bg-white px-2 py-0.5 rounded text-[9px] w-32 shrink-0 focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-100 placeholder-gray-400"
                             />
+                          </div>
+                        </div>
+
+                        {/* Delivery Address */}
+                        <div className="flex items-center gap-2 px-3 py-2 border-b lg:border-b-0 lg:border-r border-gray-200 flex-1 min-w-[200px]">
+                          <span className="font-black uppercase text-green-600 tracking-wider shrink-0 text-[9px]">Delivery Address</span>
+                          <div className="flex items-center gap-1.5 flex-1 min-w-[120px] group">
+                            <input
+                              type="text"
+                              value={localDeliveryAddress}
+                              onChange={(e) => setLocalDeliveryAddress(e.target.value)}
+                              placeholder="Enter delivery address..."
+                              className="border border-gray-200 bg-white px-2 py-1 rounded text-[11px] font-bold uppercase flex-1 min-w-[100px] focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-100 placeholder-gray-400"
+                            />
+                            <svg className="w-3.5 h-3.5 text-gray-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                            </svg>
                           </div>
                         </div>
 

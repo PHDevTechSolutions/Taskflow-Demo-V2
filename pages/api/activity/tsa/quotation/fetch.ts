@@ -2,8 +2,8 @@ import type { NextApiRequest, NextApiResponse } from "next";
 import { supabase } from "@/utils/supabase";
 
 const BATCH_SIZE = 500;
-const DEFAULT_LIMIT = 500;
-const MAX_LIMIT = 2000;
+const DEFAULT_LIMIT = 3000;
+const MAX_LIMIT = 3000;
 
 // Generator for history batches
 async function* fetchHistoryBatches(referenceid: string, fromDate?: string, toDate?: string, limit?: number) {
@@ -15,10 +15,10 @@ async function* fetchHistoryBatches(referenceid: string, fromDate?: string, toDa
       .from("history")
       .select("*")
       .eq("referenceid", referenceid)
-      .order("id", { ascending: true })
+      .order("id", { ascending: false })
       .limit(BATCH_SIZE);
 
-    if (lastId !== null) query = query.gt("id", lastId);
+    if (lastId !== null) query = query.lt("id", lastId);
     if (fromDate) query = query.gte("date_created", fromDate);
     if (toDate) query = query.lte("date_created", toDate);
 
@@ -45,10 +45,10 @@ async function* fetchRevisedQuotationsBatches(referenceid: string, fromDate?: st
       .from("revised_quotations")
       .select("*")
       .eq("referenceid", referenceid)
-      .order("id", { ascending: true })
+      .order("id", { ascending: false })
       .limit(BATCH_SIZE);
 
-    if (lastId !== null) query = query.gt("id", lastId);
+    if (lastId !== null) query = query.lt("id", lastId);
     if (fromDate) query = query.gte("date_created", fromDate);
     if (toDate) query = query.lte("date_created", toDate);
 
