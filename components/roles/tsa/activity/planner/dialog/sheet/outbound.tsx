@@ -131,7 +131,6 @@ export function OutboundSheet(props: OutboundSheetProps) {
 
     const [dialogOpen, setDialogOpen] = useState(false);
     const [dialogMessage, setDialogMessage] = useState("");
-    const isCSR = useMemo(() => typeClient === "CSR Client" || typeClient === "CSR Endorsement", [typeClient]);
     
     // Settings dialog states
     const [settingsOpen, setSettingsOpen] = useState(false);
@@ -588,12 +587,15 @@ export function OutboundSheet(props: OutboundSheetProps) {
         return options;
     }, [callType, callStatus]);
 
-    // Auto-set source for CSR - with proper dependencies to prevent loops
+    // Auto-set source based on CSR mode setting - with proper dependencies to prevent loops
     useEffect(() => {
-        if (isCSR && source !== "CSR Endorsement") {
-            props.setSource("CSR Endorsement");
+        if (settings.enableCSRMode && source !== "Outbound - Follow-up") {
+            props.setSource("Outbound - Follow-up");
+        } else if (!settings.enableCSRMode && source === "Outbound - Follow-up") {
+            // Clear source when CSR mode is disabled to force re-selection
+            props.setSource("");
         }
-    }, [isCSR, source]); // Proper dependencies
+    }, [settings.enableCSRMode, source]); // Proper dependencies
 
     return (
         <>
@@ -1319,7 +1321,7 @@ export function OutboundSheet(props: OutboundSheetProps) {
                                 onValueChange={props.setSource}
                                 className="space-y-4"
                             >
-                                {(isCSR ? STEP2_SOURCES_CSR : STEP2_SOURCES_NON_CSR).map((item) => (
+                                {(settings.enableCSRMode ? STEP2_SOURCES_CSR : STEP2_SOURCES_NON_CSR).map((item) => (
                                     <FieldLabel key={item.value}>
                                         <Field orientation="horizontal" className="w-full items-start">
                                             <FieldContent className="flex-1">
