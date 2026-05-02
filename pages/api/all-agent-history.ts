@@ -1,20 +1,16 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { supabase } from "@/utils/supabase";
 
-const BATCH_SIZE = 500;
-const DEFAULT_LIMIT = 500;
-const MAX_LIMIT = 2000;
+const BATCH_SIZE = 5000;
 
 // Async generator to fetch any table in batches
 async function* fetchTableBatches(
   table: string,
   tsm: string,
   from?: string,
-  to?: string,
-  limit?: number
+  to?: string
 ) {
   let lastId: number | null = null;
-  let totalFetched = 0;
 
   while (true) {
     let query = supabase
@@ -24,7 +20,7 @@ async function* fetchTableBatches(
       .order("id", { ascending: true })
       .limit(BATCH_SIZE);
 
-    if (lastId !== null) query = query.gt("id", lastId);
+    if (lastId) query = query.gt("id", lastId);
     if (from) query = query.gte("date_created", from);
     if (to) query = query.lte("date_created", to);
 
@@ -33,10 +29,6 @@ async function* fetchTableBatches(
     if (!data || data.length === 0) break;
 
     yield data;
-    totalFetched += data.length;
-
-    // Stop if we reached the limit
-    if (limit && totalFetched >= limit) break;
     lastId = data[data.length - 1].id;
   }
 }
@@ -58,17 +50,11 @@ function normalizeRecord(item: any, source: string) {
 }
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  const { referenceid, from, to, limit } = req.query;
+  const { referenceid, from, to } = req.query;
 
   if (!referenceid || typeof referenceid !== "string") {
     return res.status(400).json({ message: "referenceid (agent tsm) is required" });
   }
-
-  // Parse limit with safeguards
-  const parsedLimit = Math.min(
-    parseInt(typeof limit === "string" ? limit : String(DEFAULT_LIMIT), 10) || DEFAULT_LIMIT,
-    MAX_LIMIT
-  );
 
   const fromDate = typeof from === "string" ? from : undefined;
   const toDate = typeof to === "string" ? to : undefined;
@@ -76,33 +62,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   try {
     // Tables to fetch
     const tables = ["history", "documentation", "revised_quotations", "meetings"];
-    let allActivities: any[] = [];
-    let hasMore = false;
-
-    // Per-table limit to distribute load
-    const perTableLimit = Math.ceil(parsedLimit / tables.length);
+    const allActivities: any[] = [];
 
     for (const table of tables) {
-      if (allActivities.length >= parsedLimit) {
-        hasMore = true;
-        break;
-      }
-
-      for await (const batch of fetchTableBatches(table, referenceid, fromDate, toDate, perTableLimit)) {
-        const remaining = parsedLimit - allActivities.length;
-        if (remaining <= 0) {
-          hasMore = true;
-          break;
-        }
-
+      for await (const batch of fetchTableBatches(table, referenceid, fromDate, toDate)) {
         const normalizedBatch = batch.map((item) => normalizeRecord(item, table));
-        // Only take what we need
-        if (normalizedBatch.length > remaining) {
-          allActivities.push(...normalizedBatch.slice(0, remaining));
-          hasMore = true;
-        } else {
-          allActivities.push(...normalizedBatch);
-        }
+        allActivities.push(...normalizedBatch);
       }
     }
 
@@ -113,18 +78,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         new Date(a.date_created || a.start_date).getTime()
     );
 
-    return res.status(200).json({
-      activities: allActivities,
-      pagination: {
-        limit: parsedLimit,
-        returned: allActivities.length,
-        hasMore,
-      },
-      filters: {
-        from: fromDate || null,
-        to: toDate || null,
-      },
-    });
+    return res.status(200).json({ activities: allActivities });
   } catch (err: any) {
     console.error("Server error:", err);
     return res.status(500).json({ message: err.message || "Server error" });
