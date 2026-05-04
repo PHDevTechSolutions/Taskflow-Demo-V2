@@ -104,7 +104,10 @@ export const Preview: React.FC<PreviewProps> = ({
         : "/disruptive-banner.png";
 
     // ── Computed totals (use actual line item totals, not payload.totalPrice which may be stale) ──
-    const netSales = (payload.items || []).reduce((acc, item) => acc + (item.totalAmount !== undefined ? Number(item.totalAmount) : (Number(item.qty) || 0) * item.unitPrice), 0);
+    // Calculate gross total first (unitPrice * qty), then subtract discount to avoid double-discounting
+    const grossTotal = (payload.items || []).reduce((acc, item) => acc + ((Number(item.qty) || 0) * (item.unitPrice || 0)), 0);
+    const tradeDiscount = (payload.items || []).reduce((acc, item) => acc + ((item.discountAmount || 0) * (Number(item.qty) || 0)), 0);
+    const netSales = grossTotal - tradeDiscount;
     const totalInvoiceAmount = netSales + (Number(payload.deliveryFee) || 0) + (Number(payload.restockingFee) || 0);
 
     // ── QR Code Security ──────────────────────────────────────────────────────
