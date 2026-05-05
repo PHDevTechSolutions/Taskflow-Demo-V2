@@ -836,38 +836,25 @@ function DashboardContent() {
       });
       setTotalSales(sales);
 
+      // All outbound counts use the SELECTED date range (not calendar periods)
       const dailyCount = rangeActivities.filter(isOutboundTouchbase).length;
 
-      const fromDateObj = new Date(currentFromDate);
-      const dayOfWeek = fromDateObj.getDay();
-      const diffToMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
-      const weekStart = new Date(fromDateObj);
-      weekStart.setDate(fromDateObj.getDate() - diffToMonday);
-      weekStart.setHours(0, 0, 0, 0);
-      const weekEnd = new Date(weekStart);
-      weekEnd.setDate(weekStart.getDate() + 6);
-      weekEnd.setHours(23, 59, 59, 999);
-
-      const weeklyCount = activities.filter((act) => {
-        const t = new Date(act.date_created).getTime();
-        return t >= weekStart.getTime() && t <= weekEnd.getTime() && isOutboundTouchbase(act);
-      }).length;
-
-      const monthlyCount = activities.filter((act) => {
-        const d = new Date(act.date_created);
-        return (
-          d.getMonth() === fromDateObj.getMonth() &&
-          d.getFullYear() === fromDateObj.getFullYear() &&
-          isOutboundTouchbase(act)
-        );
-      }).length;
+      // Weekly and monthly counts also respect the selected date range
+      // If range is within a week, weekly = daily; if within a month, monthly = daily
+      const weeklyCount = dailyCount;
+      const monthlyCount = dailyCount;
 
       const agentCount = activeTab === "manager"
         ? (totalAgents > 0 ? totalAgents : (fixedCount || 1))
         : (agentsByTsm[selectedRefId] || 1);
-      const dailyDenom = agentCount * 20;
-      const weeklyDenom = dailyDenom * 6;
-      const monthlyDenom = dailyDenom * workingDays;
+
+      // Calculate days in selected range
+      const daysInRange = Math.max(1, Math.ceil((rangeEnd.getTime() - rangeStart.getTime()) / (1000 * 60 * 60 * 24)));
+
+      // Proportional denominators based on selected range
+      const dailyDenom = agentCount * 20 * daysInRange;
+      const weeklyDenom = agentCount * 20 * daysInRange; // Same as daily since we're using selected range
+      const monthlyDenom = agentCount * 20 * daysInRange; // Same as daily since we're using selected range
 
       setOutboundDaily(dailyCount);
       setOutboundWeekly(weeklyCount);

@@ -26,6 +26,7 @@ import {
   MoreVertical,
   Lock,
   MessageSquare,
+  Ban,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -52,6 +53,7 @@ import { DeleteDialog } from "./dialog/delete";
 import { DoneDialog } from "../dialog/done";
 import { CreateActivityDialog } from "../dialog/create";
 import { DeliveredDialog } from "../dialog/delivered";
+import { CancelledDialog } from "../dialog/cancelled";
 import { type DateRange } from "react-day-picker";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -155,6 +157,7 @@ export const Progress: React.FC<NewTaskProps> = ({
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [selectedDeleteId, setSelectedDeleteId] = useState<string | null>(null);
   const [dialogDeliveredOpen, setDialogDeliveredOpen] = useState(false);
+  const [dialogCancelOpen, setDialogCancelOpen] = useState(false);
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [selectedActivityId, setSelectedActivityId] = useState<string | null>(
@@ -458,6 +461,11 @@ export const Progress: React.FC<NewTaskProps> = ({
     setDialogDeliveredOpen(true);
   };
 
+  const openCancelDialog = (id: string) => {
+    setSelectedActivityId(id);
+    setDialogCancelOpen(true);
+  };
+
   const handleConfirmDelivered = async () => {
     if (!selectedActivityId) return;
 
@@ -502,6 +510,61 @@ export const Progress: React.FC<NewTaskProps> = ({
       sileo.error({
         title: "Failed",
         description: "An error occurred while updating status.",
+        duration: 4000,
+        position: "top-right",
+        fill: "black",
+        styles: { title: "text-white!", description: "text-white" },
+      });
+    } finally {
+      setUpdatingId(null);
+      setSelectedActivityId(null);
+    }
+  };
+
+  const handleConfirmCancel = async (remarks: string) => {
+    if (!selectedActivityId) return;
+
+    try {
+      setUpdatingId(selectedActivityId);
+
+      const res = await fetch("/api/act-update-status-cancelled", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: selectedActivityId, remarks }),
+        cache: "no-store",
+      });
+
+      const result = await res.json();
+
+      if (!res.ok) {
+        sileo.error({
+          title: "Failed",
+          description: `Failed to cancel: ${result.error || "Unknown error"}`,
+          duration: 4000,
+          position: "top-right",
+          fill: "black",
+          styles: { title: "text-white!", description: "text-white" },
+        });
+        setUpdatingId(null);
+        return;
+      }
+
+      setDialogCancelOpen(false);
+      await fetchAllData();
+      window.location.reload();
+
+      sileo.success({
+        title: "Success",
+        description: "Transaction marked as Cancelled.",
+        duration: 4000,
+        position: "top-right",
+        fill: "black",
+        styles: { title: "text-white!", description: "text-white" },
+      });
+    } catch {
+      sileo.error({
+        title: "Failed",
+        description: "An error occurred while cancelling transaction.",
         duration: 4000,
         position: "top-right",
         fill: "black",
@@ -697,6 +760,17 @@ export const Progress: React.FC<NewTaskProps> = ({
                           >
                             <Check className="mr-2 h-4 w-4 text-green-600" />
                             Mark as Completed
+                          </DropdownMenuItem>
+
+                          <DropdownMenuItem
+                            disabled={updatingId === item.id}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              openCancelDialog(item.id);
+                            }}
+                          >
+                            <Ban className="mr-2 h-4 w-4 text-red-600" />
+                            Mark as Cancelled
                           </DropdownMenuItem>
 
                           <DropdownMenuItem
@@ -1002,6 +1076,13 @@ export const Progress: React.FC<NewTaskProps> = ({
         open={dialogDeliveredOpen}
         onOpenChange={setDialogDeliveredOpen}
         onConfirm={handleConfirmDelivered}
+        loading={updatingId !== null}
+      />
+
+      <CancelledDialog
+        open={dialogCancelOpen}
+        onOpenChange={setDialogCancelOpen}
+        onConfirm={handleConfirmCancel}
         loading={updatingId !== null}
       />
 

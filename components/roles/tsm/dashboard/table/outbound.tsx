@@ -113,15 +113,23 @@ export function OutboundCallsTableCard({
     return map;
   }, [history]);
 
-  /* ---- OB target days ---- */
+  /* ---- OB target days (excluding Sundays) ---- */
   const daysCount = useMemo(() => {
     if (dateCreatedFilterRange?.from && dateCreatedFilterRange?.to) {
-      const diff =
-        dateCreatedFilterRange.to.getTime() -
-        dateCreatedFilterRange.from.getTime();
-      return Math.floor(diff / (1000 * 60 * 60 * 24)) + 1;
+      const start = new Date(dateCreatedFilterRange.from);
+      const end = new Date(dateCreatedFilterRange.to);
+      let count = 0;
+      const current = new Date(start);
+      while (current <= end) {
+        // 0 = Sunday, exclude it
+        if (current.getDay() !== 0) {
+          count++;
+        }
+        current.setDate(current.getDate() + 1);
+      }
+      return count || 1; // At least 1 day to avoid division by zero
     }
-    return 26;
+    return 22; // Default working days per month (excluding Sundays)
   }, [dateCreatedFilterRange]);
 
   const obTarget = 20 * daysCount;
@@ -553,7 +561,7 @@ export function OutboundCallsTableCard({
           <div className="mt-3 p-4 rounded-xl border border-blue-100 bg-blue-50 text-xs text-blue-900 space-y-1.5">
             <p className="font-semibold text-blue-800 mb-1">Computation Details</p>
             <p><strong>Base data:</strong> All records where <code>source = "Outbound - Touchbase"</code> AND <code>call_status = "Successful"</code> (date filter applied here).</p>
-            <p><strong>OB Target:</strong> 20 × number of days in selected range (default: 26 days = 520).</p>
+            <p><strong>OB Target:</strong> 20 × number of days in selected range <em>(Sundays excluded)</em> (default: 22 working days = 440).</p>
             <p><strong>Achievement:</strong> (Successful Calls ÷ OB Target) × 100%</p>
             <p><strong>Calls → Quote %:</strong> Count of unique <code>activity_reference_number</code>s (from OB calls) that have ANY activity with <code>status = "Quote - Done"</code> in the full history ÷ Successful Calls</p>
             <p><strong>Quote → SO %:</strong> Count of unique refs with <code>status = "SO-Done"</code> ÷ Count of Quoted refs</p>
