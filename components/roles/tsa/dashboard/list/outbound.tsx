@@ -264,11 +264,11 @@ export function OutboundCallsCard({
                 <TableCell className="text-center">
                   {stats.callsToQuote}
                 </TableCell>
-                <TableCell className="text-center">
-                  {convBadge(stats.numSO)}
-                </TableCell>
                 <TableCell className="text-center font-semibold text-green-600">
                   ₱{stats.quoteAmount.toLocaleString()}
+                </TableCell>
+                <TableCell className="text-center">
+                  {convBadge(stats.numSO)}
                 </TableCell>
                 <TableCell className="text-center">
                   {stats.quoteToSO}
