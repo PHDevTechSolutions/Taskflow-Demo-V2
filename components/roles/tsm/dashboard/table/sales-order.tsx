@@ -426,15 +426,17 @@ export function SalesOrderTableCard({
 
   /* ── Footer totals ── */
   const totals = useMemo(() => {
-    const totalSODoneCount = statsByAgent.reduce((s, a) => s + a.totalSODoneCount, 0);
-    const totalSOAmount = statsByAgent.reduce((s, a) => s + a.totalSOAmount, 0);
-    const totalDeliveredCount = statsByAgent.reduce((s, a) => s + a.totalDeliveredCount, 0);
-    const totalSalesInvoice = statsByAgent.reduce((s, a) => s + a.totalSalesInvoice, 0);
+    // Only include agents with name info in totals
+    const visibleAgents = statsByAgent.filter((a) => agentMap.has(a.agentID));
+    const totalSODoneCount = visibleAgents.reduce((s, a) => s + a.totalSODoneCount, 0);
+    const totalSOAmount = visibleAgents.reduce((s, a) => s + a.totalSOAmount, 0);
+    const totalDeliveredCount = visibleAgents.reduce((s, a) => s + a.totalDeliveredCount, 0);
+    const totalSalesInvoice = visibleAgents.reduce((s, a) => s + a.totalSalesInvoice, 0);
     const soToSIVal = soToSIMode === "count"
       ? pctVal(totalDeliveredCount, totalSODoneCount)
       : pctVal(totalSalesInvoice, totalSOAmount);
     return { totalSODoneCount, totalSOAmount, totalDeliveredCount, totalSalesInvoice, soToSIVal };
-  }, [statsByAgent, soToSIMode]);
+  }, [statsByAgent, soToSIMode, agentMap]);
 
   /* ── Excel Export ── */
   const exportToExcel = async () => {
@@ -464,13 +466,14 @@ export function SalesOrderTableCard({
       };
       headerRow.alignment = { vertical: 'middle', horizontal: 'center' };
 
-      // Add Data
-      statsByAgent.forEach((stat) => {
-        const info = agentMap.get(stat.agentID);
+      // Add Data (only agents with name info)
+      const filteredStats = statsByAgent.filter((stat) => agentMap.has(stat.agentID));
+      filteredStats.forEach((stat) => {
+        const info = agentMap.get(stat.agentID)!;
         const soToSIVal = getSoToSIVal(stat);
 
         worksheet.addRow({
-          agent: info?.name ?? stat.agentID,
+          agent: info.name,
           soCount: stat.totalSODoneCount,
           soAmount: stat.totalSOAmount,
           siAmount: stat.totalSalesInvoice,
@@ -623,8 +626,10 @@ export function SalesOrderTableCard({
               </TableHeader>
 
               <TableBody>
-                {statsByAgent.map((stat) => {
-                  const info = agentMap.get(stat.agentID);
+                {statsByAgent
+                  .filter((stat) => agentMap.has(stat.agentID)) // Only show agents with name info
+                  .map((stat) => {
+                  const info = agentMap.get(stat.agentID)!;
                   const soToSIVal = getSoToSIVal(stat);
 
                   return (
@@ -640,10 +645,10 @@ export function SalesOrderTableCard({
                             />
                           ) : (
                             <div className="w-7 h-7 rounded-full bg-gray-100 flex items-center justify-center text-xs text-gray-400 flex-shrink-0">
-                              {info?.name?.[0] ?? "?"}
+                              {info.name[0]}
                             </div>
                           )}
-                          <span className="capitalize text-gray-700">{info?.name ?? stat.agentID}</span>
+                          <span className="capitalize text-gray-700">{info.name}</span>
                         </div>
                       </TableCell>
 
