@@ -244,13 +244,15 @@ export function OutboundCallsTableCard({
 
   /* ── Footer totals ── */
   const totals = useMemo(() => {
-    const totalCalls = statsByAgent.reduce((s, a) => s + a.totalCalls, 0);
-    const numQuotes = statsByAgent.reduce((s, a) => s + a.numQuotes, 0);
-    const numSO = statsByAgent.reduce((s, a) => s + a.numSO, 0);
-    const numSI = statsByAgent.reduce((s, a) => s + a.numSI, 0);
-    const totalQuoteAmount = statsByAgent.reduce((s, a) => s + a.quoteAmount, 0);
-    const totalSoAmount = statsByAgent.reduce((s, a) => s + a.soAmount, 0);
-    const totalActualSales = statsByAgent.reduce((s, a) => s + a.actualSales, 0);
+    // Only include agents with name info in totals
+    const visibleAgents = statsByAgent.filter((a) => agentMap.has(a.agentId));
+    const totalCalls = visibleAgents.reduce((s, a) => s + a.totalCalls, 0);
+    const numQuotes = visibleAgents.reduce((s, a) => s + a.numQuotes, 0);
+    const numSO = visibleAgents.reduce((s, a) => s + a.numSO, 0);
+    const numSI = visibleAgents.reduce((s, a) => s + a.numSI, 0);
+    const totalQuoteAmount = visibleAgents.reduce((s, a) => s + a.quoteAmount, 0);
+    const totalSoAmount = visibleAgents.reduce((s, a) => s + a.soAmount, 0);
+    const totalActualSales = visibleAgents.reduce((s, a) => s + a.actualSales, 0);
     return {
       totalCalls,
       numQuotes,
@@ -259,12 +261,12 @@ export function OutboundCallsTableCard({
       totalQuoteAmount,
       totalSoAmount,
       totalActualSales,
-      achievement: pct(totalCalls, obTarget * statsByAgent.length || 1),
+      achievement: pct(totalCalls, obTarget * visibleAgents.length || 1),
       callsToQuote: pct(numQuotes, totalCalls),
       quoteToSO: pct(numSO, numQuotes),
       soToSI: pct(numSI, numSO),
     };
-  }, [statsByAgent, obTarget]);
+  }, [statsByAgent, obTarget, agentMap]);
 
   /* ── Excel Export ── */
   const exportToExcel = async () => {
@@ -301,9 +303,10 @@ export function OutboundCallsTableCard({
       };
       headerRow.alignment = { vertical: 'middle', horizontal: 'center' };
 
-      // Add Data
-      statsByAgent.forEach((stat) => {
-        const agentName = agentMap.get(stat.agentId)?.name ?? stat.agentId;
+      // Add Data (only agents with name info)
+      const filteredStats = statsByAgent.filter((stat) => agentMap.has(stat.agentId));
+      filteredStats.forEach((stat) => {
+        const agentName = agentMap.get(stat.agentId)!.name;
         worksheet.addRow({
           agent: agentName,
           target: obTarget,
@@ -324,7 +327,7 @@ export function OutboundCallsTableCard({
       // Add Totals Row
       const totalRow = worksheet.addRow({
         agent: "TOTAL",
-        target: obTarget * statsByAgent.length,
+        target: obTarget * filteredStats.length,
         calls: totals.totalCalls,
         achievement: parseFloat(totals.achievement) / 100,
         quotes: totals.numQuotes,
@@ -442,8 +445,10 @@ export function OutboundCallsTableCard({
               </TableHeader>
 
               <TableBody>
-                {statsByAgent.map((stat) => {
-                  const info = agentMap.get(stat.agentId);
+                {statsByAgent
+                  .filter((stat) => agentMap.has(stat.agentId)) // Only show agents with name info
+                  .map((stat) => {
+                  const info = agentMap.get(stat.agentId)!;
                   return (
                     <TableRow key={stat.agentId} className="text-xs hover:bg-gray-50/50 font-mono">
                       {/* Agent */}
@@ -457,10 +462,10 @@ export function OutboundCallsTableCard({
                             />
                           ) : (
                             <div className="w-7 h-7 rounded-full bg-gray-100 flex items-center justify-center text-xs text-gray-400 flex-shrink-0">
-                              {info?.name?.[0] ?? "?"}
+                              {info.name[0]}
                             </div>
                           )}
-                          <span className="capitalize text-gray-700">{info?.name ?? stat.agentId}</span>
+                          <span className="capitalize text-gray-700">{info.name}</span>
                         </div>
                       </TableCell>
 
@@ -530,7 +535,7 @@ export function OutboundCallsTableCard({
               <TableFooter>
                 <TableRow className="bg-gray-50 text-xs font-semibold font-mono">
                   <TableCell className="text-gray-700">Total</TableCell>
-                  <TableCell className="text-center text-gray-600">{obTarget * statsByAgent.length}</TableCell>
+                  <TableCell className="text-center text-gray-600">{obTarget * statsByAgent.filter((s) => agentMap.has(s.agentId)).length}</TableCell>
                   <TableCell className="text-center text-gray-800">{totals.totalCalls}</TableCell>
                   <TableCell className="text-center text-gray-700">{totals.achievement}</TableCell>
                   <TableCell className="text-center">{convBadge(totals.numQuotes)}</TableCell>

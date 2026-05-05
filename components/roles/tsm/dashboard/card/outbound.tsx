@@ -132,6 +132,8 @@ export function OutboundCard({ history, agents }: OutboundCardProps) {
 
   /* ---- Grand totals ---- */
   const grandTotals = useMemo(() => {
+    // Only include agents with name info in totals
+    const visibleAgents = statsByAgent.filter((s) => agentMap.has(s.agentID));
     const t = {
       touchbaseCount: 0,
       touchbaseSuccessful: 0,
@@ -140,7 +142,7 @@ export function OutboundCard({ history, agents }: OutboundCardProps) {
       followupSuccessful: 0,
       followupUnsuccessful: 0,
     };
-    statsByAgent.forEach((s) => {
+    visibleAgents.forEach((s) => {
       t.touchbaseCount += s.touchbaseCount;
       t.touchbaseSuccessful += s.touchbaseSuccessful;
       t.touchbaseUnsuccessful += s.touchbaseUnsuccessful;
@@ -149,7 +151,7 @@ export function OutboundCard({ history, agents }: OutboundCardProps) {
       t.followupUnsuccessful += s.followupUnsuccessful;
     });
     return { ...t, subtotal: t.touchbaseCount + t.followupCount };
-  }, [statsByAgent]);
+  }, [statsByAgent, agentMap]);
 
   /* ── Excel Export ── */
   const exportToExcel = async () => {
@@ -181,13 +183,14 @@ export function OutboundCard({ history, agents }: OutboundCardProps) {
       };
       headerRow.alignment = { vertical: 'middle', horizontal: 'center' };
 
-      // Add Data
-      statsByAgent.forEach((stat) => {
-        const info = agentMap.get(stat.agentID);
+      // Add Data (only agents with name info)
+      const filteredStats = statsByAgent.filter((stat) => agentMap.has(stat.agentID));
+      filteredStats.forEach((stat) => {
+        const info = agentMap.get(stat.agentID)!;
         const subtotal = stat.touchbaseCount + stat.followupCount;
 
         worksheet.addRow({
-          agent: info?.name ?? stat.agentID,
+          agent: info.name,
           tbTotal: stat.touchbaseCount,
           tbSuccess: stat.touchbaseSuccessful,
           tbFail: stat.touchbaseUnsuccessful,
@@ -300,8 +303,10 @@ export function OutboundCard({ history, agents }: OutboundCardProps) {
               </TableHeader>
 
               <TableBody>
-                {statsByAgent.map((stat) => {
-                  const info = agentMap.get(stat.agentID);
+                {statsByAgent
+                  .filter((stat) => agentMap.has(stat.agentID)) // Only show agents with name info
+                  .map((stat) => {
+                  const info = agentMap.get(stat.agentID)!;
                   const subtotal = stat.touchbaseCount + stat.followupCount;
 
                   return (
@@ -317,10 +322,10 @@ export function OutboundCard({ history, agents }: OutboundCardProps) {
                             />
                           ) : (
                             <div className="w-7 h-7 rounded-full bg-gray-100 flex items-center justify-center text-xs text-gray-400 flex-shrink-0">
-                              {info?.name?.[0] ?? "?"}
+                              {info.name[0]}
                             </div>
                           )}
-                          <span className="capitalize text-gray-700">{info?.name ?? stat.agentID}</span>
+                          <span className="capitalize text-gray-700">{info.name}</span>
                         </div>
                       </TableCell>
 
