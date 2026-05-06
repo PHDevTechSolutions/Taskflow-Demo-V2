@@ -230,35 +230,39 @@ export function ApproveTransferDialog() {
           <DialogHeader>
             <DialogTitle>New Company for Transfer</DialogTitle>
             <DialogDescription>
-              {deletions.length > 0 ? (
-                <>
-                  <div>
-                    {deletions.length} {deletions.length === 1 ? "company has" : "companies have"} been transfer by your tsa for another tsa:
-                  </div>
-                  <div className="max-h-[300px] overflow-y-auto mt-2">
-                    <ul className="list-disc pl-5 space-y-4">
-                      {deletions.map((t, i) => {
-                        const agentName = agentMap[t.referenceid?.toLowerCase() ?? ""] || "-";
-                        const tsaName = agentMap[t.transfer_to?.toLowerCase() ?? ""] || "-";
-                        return (
-                          <li key={i}>
-                            <strong>{t.company_name}</strong>
-                            <div>
-                              Agent: {agentName} <br />
-                              Transfering To: {tsaName} <br />
-                              Date of Transfer: {formatDate(t.date_transferred)} <br />
-                            </div>
-                          </li>
-                        );
-                      })}
-                    </ul>
-                  </div>
-                </>
-              ) : null}
+              {deletions.length > 0
+                ? `Review and approve ${deletions.length} ${deletions.length === 1 ? "company" : "companies"} transferred by your TSA.`
+                : "No new company transfers at this time."
+              }
             </DialogDescription>
           </DialogHeader>
+          {deletions.length > 0 && (
+            <div className="mt-4">
+              <div className="text-sm text-muted-foreground mb-2">
+                {deletions.length} {deletions.length === 1 ? "company has" : "companies have"} been transfer by your tsa for another tsa:
+              </div>
+              <div className="max-h-[300px] overflow-y-auto">
+                <ul className="list-disc pl-5 space-y-4">
+                  {deletions.map((t, i) => {
+                    const agentName = agentMap[t.referenceid?.toLowerCase() ?? ""] || "-";
+                    const tsaName = agentMap[t.transfer_to?.toLowerCase() ?? ""] || "-";
+                    return (
+                      <li key={i} className="text-sm">
+                        <strong>{t.company_name}</strong>
+                        <div className="text-muted-foreground">
+                          Agent: {agentName} <br />
+                          Transfering To: {tsaName} <br />
+                          Date of Transfer: {formatDate(t.date_transferred)} <br />
+                        </div>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+            </div>
+          )}
           <DialogFooter>
-            <Button onClick={handleDismiss} className="rounded-none p-6">Dismiss</Button>
+            <Button variant="outline" onClick={handleDismiss} className="rounded-none p-6">Dismiss</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

@@ -26,6 +26,7 @@ interface HistoryItem {
   tsm_approved_status?: string;
   date_created: string;
   referenceid: string;
+  remarks: string;
 }
 
 interface ApprovalHistoryProps {
@@ -216,9 +217,17 @@ export function ApprovalHistory({ history, dateCreatedFilterRange, onRefresh }: 
               <p><strong>Company:</strong> {selectedItem?.company_name || "N/A"}</p>
               <p><strong>Contact:</strong> {selectedItem?.contact_person || "N/A"}</p>
             </div>
+            {selectedItem?.remarks && selectedItem.remarks !== "-" && (
+              <div className="bg-amber-50 border border-amber-200 p-3 rounded-none">
+                <label className="text-xs font-bold uppercase text-amber-700 block mb-1">
+                  Agent Remarks
+                </label>
+                <p className="text-xs text-gray-700 italic">{selectedItem.remarks}</p>
+              </div>
+            )}
             <div>
               <label className="text-xs font-bold uppercase text-gray-700 block mb-1">
-                Remarks (Optional)
+                TSM Remarks (Optional)
               </label>
               <Textarea
                 value={remarks}

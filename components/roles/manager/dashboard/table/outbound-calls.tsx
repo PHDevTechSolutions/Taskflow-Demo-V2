@@ -346,12 +346,12 @@ export function OutboundCallsTableCard({
       worksheet.eachRow((row, rowNumber) => {
         row.eachCell((cell, colNumber) => {
           if (rowNumber > 1) {
-            // Percentages: Achievement (4), Calls→Quote (6), Quote→SO (9), SO→SI (12)
-            if ([4, 6, 9, 12].includes(colNumber)) {
+            // Percentages: Achievement (4), Calls→Quote (6), Quote→SO (10), SO→SI (13)
+            if ([4, 6, 10, 13].includes(colNumber)) {
               cell.numFmt = '0.00%';
             }
-            // Currency: Quote Amount (7), SO Amount (8), Actual Sales (11)
-            if ([7, 8, 11].includes(colNumber)) {
+            // Currency: Quote Amount (7), SO Amount (9), Actual Sales (12)
+            if ([7, 9, 12].includes(colNumber)) {
               cell.numFmt = '₱#,##0.00';
             }
           }

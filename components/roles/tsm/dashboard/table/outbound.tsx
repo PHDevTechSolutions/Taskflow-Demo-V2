@@ -288,14 +288,14 @@ export function OutboundCallsTableCard({
         { header: "OB Target", key: "target", width: 12 },
         { header: "Successful Calls", key: "calls", width: 15 },
         { header: "Achievement (%)", key: "achievement", width: 15 },
-        { header: "Quotes (Based on OB)", key: "quotes", width: 20 },
+        { header: "Quote Based on OB Successful", key: "quotes", width: 25 },
         { header: "Calls → Quote (%)", key: "callsToQuote", width: 15 },
         { header: "Quote Amount", key: "quoteAmount", width: 18 },
-        { header: "SO (Based on OB)", key: "so", width: 20 },
+        { header: "SO Based on OB Successful", key: "so", width: 25 },
         { header: "SO Amount", key: "soAmount", width: 18 },
         { header: "Quote → SO (%)", key: "quoteToSO", width: 15 },
-        { header: "SI (Based on OB)", key: "si", width: 20 },
-        { header: "Actual Sales", key: "actualSales", width: 18 },
+        { header: "SI Based on OB Successful", key: "si", width: 25 },
+        { header: "SI Amount", key: "actualSales", width: 18 },
         { header: "SO → SI (%)", key: "soToSI", width: 15 },
       ];
 

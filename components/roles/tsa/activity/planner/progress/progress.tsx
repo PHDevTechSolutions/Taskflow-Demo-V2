@@ -107,6 +107,7 @@ interface HistoryItem {
   call_status?: string;
   type_activity: string;
   tsm_approved_status: string;
+  tsm_approved_remarks?: string | null;
   quotation_status: string;
   status?: string; // Added for delivery/completion check
 }
@@ -719,6 +720,15 @@ export const Progress: React.FC<NewTaskProps> = ({
                                         )}
                                         {h.call_type && h.call_type !== "-" && (
                                           <div><span className="font-medium">Call Type:</span> {h.call_type}</div>
+                                        )}
+                                        {h.tsm_approved_remarks && h.tsm_approved_remarks !== "-" && (
+                                          <div className="mt-2 p-2 bg-blue-50 rounded border border-blue-100">
+                                            <div className="flex items-center gap-1 text-blue-600 font-medium mb-1">
+                                              <MessageSquare className="h-3 w-3" />
+                                              Remarks:
+                                            </div>
+                                            <div className="text-gray-700 italic">{h.tsm_approved_remarks}</div>
+                                          </div>
                                         )}
                                       </div>
                                     </div>

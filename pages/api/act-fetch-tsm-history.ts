@@ -39,7 +39,35 @@ async function* fetchHistoryBatches(
 
     if (!data || data.length === 0) break;
 
-    yield data;
+    // Fetch remarks from history table for each activity
+    const activityRefs = data.map((a: any) => a.activity_reference_number);
+    const { data: historyData, error: historyError } = await supabase
+      .from("history")
+      .select("activity_reference_number, remarks")
+      .in("activity_reference_number", activityRefs)
+      .order("date_created", { ascending: false });
+
+    if (historyError) {
+      console.error("Error fetching history:", historyError);
+    }
+
+    // Create a map of activity_ref -> remarks (first non-empty remark)
+    const remarksMap: Record<string, string> = {};
+    if (historyData) {
+      for (const h of historyData) {
+        if (h.remarks && h.remarks !== "-" && !remarksMap[h.activity_reference_number]) {
+          remarksMap[h.activity_reference_number] = h.remarks;
+        }
+      }
+    }
+
+    // Add remarks to activity data
+    const dataWithRemarks = data.map((a: any) => ({
+      ...a,
+      remarks: remarksMap[a.activity_reference_number] || "-",
+    }));
+
+    yield dataWithRemarks;
     totalFetched += data.length;
 
     // Stop if we reached the limit
