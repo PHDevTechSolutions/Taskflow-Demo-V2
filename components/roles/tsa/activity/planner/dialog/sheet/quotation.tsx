@@ -20,15 +20,18 @@ import {
   query,
   where,
   getDocs,
-  limit,
-  startAfter,
   type DocumentData,
   type QueryConstraint,
-  type QueryDocumentSnapshot,
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { supabase } from "@/utils/supabase";
 import { toast } from "sonner";
+import {
+  buildSearchContext,
+  executeSingleQuery,
+  matchesSearchText,
+  resolveVariantSelection,
+} from "./quotation-search-utils";
 
 interface SupervisorDetails {
   firstname: string | null;
@@ -337,17 +340,12 @@ function getQuotationPrefix(type: string): string {
   return map[type.trim()] || "";
 }
 
-const SEARCH_PAGE_SIZE = 20;
 const SEARCH_CACHE_TTL_MS = 60_000;
 const SEARCH_DEBOUNCE_MS = 350;
-const SEARCH_SCAN_CHUNK_SIZE = 40;
-const SEARCH_SCAN_MAX_PAGES = 5;
 
 type SearchCacheEntry = {
   timestamp: number;
   results: Product[];
-  lastDoc: QueryDocumentSnapshot<DocumentData> | null;
-  hasMore: boolean;
 };
 
 const dedupeProductsById = (items: Product[]) => {
@@ -444,13 +442,9 @@ export function QuotationSheet(props: Props) {
   const [searchResults, setSearchResults] = useState<Product[]>([]);
   const [selectedProducts, setSelectedProducts] = useState<SelectedProduct[]>([]);
   const [isSearching, setIsSearching] = useState(false);
-  const [isLoadingMoreSearch, setIsLoadingMoreSearch] = useState(false);
-  const [hasMoreSearchResults, setHasMoreSearchResults] = useState(false);
-  const [searchLastDoc, setSearchLastDoc] = useState<QueryDocumentSnapshot<DocumentData> | null>(null);
+  const [searchError, setSearchError] = useState<string | null>(null);
   const searchCacheRef = useRef<Map<string, SearchCacheEntry>>(new Map());
   const activeSearchRequestRef = useRef(0);
-  const searchResultsRef = useRef<Product[]>([]);
-  const searchLastDocRef = useRef<QueryDocumentSnapshot<DocumentData> | null>(null);
   const [visibleDescriptions, setVisibleDescriptions] = useState<Record<string, boolean>>({});
   const [isManualEntry, setIsManualEntry] = useState(false);
   const [noProductsAvailable, setNoProductsAvailable] = useState(false);
@@ -914,19 +908,11 @@ export function QuotationSheet(props: Props) {
     return () => window.clearTimeout(timer);
   }, [searchTerm]);
 
-  useEffect(() => {
-    searchResultsRef.current = searchResults;
-  }, [searchResults]);
-
-  useEffect(() => {
-    searchLastDocRef.current = searchLastDoc;
-  }, [searchLastDoc]);
-
   const mapFirestoreProductDoc = useCallback(
     (
-      docSnap: QueryDocumentSnapshot<DocumentData>,
+      docSnap: { id: string; data: () => DocumentData },
       isDbSource: boolean,
-      searchUpper: string
+      searchContext: ReturnType<typeof buildSearchContext>
     ): Product | null => {
       const data = docSnap.data();
       let specsHtml = `<p><strong>${data.shortDescription || ""}</strong></p>`;
@@ -963,20 +949,24 @@ ${spec.value}
         data.itemCodes,
         data.itemCode
       );
-      const matchedCodeVariants = itemCodeVariants.filter((variant) =>
-        variant.code.toUpperCase().includes(searchUpper)
+      const variantSelection = resolveVariantSelection(
+        itemCodeVariants,
+        searchContext.phraseUpper,
+        searchContext.codeTokensUpper
       );
-      const matchesNameOrSpecs = `${data.name || ""} ${rawSpecsText}`
-        .toUpperCase()
-        .includes(searchUpper);
+      const matchesNameOrSpecs = matchesSearchText(
+        `${data.name || ""} ${rawSpecsText}`.toUpperCase(),
+        searchContext.phraseUpper,
+        searchContext.tokensUpper
+      );
 
-      if (!matchesNameOrSpecs && matchedCodeVariants.length === 0) {
+      if (!matchesNameOrSpecs && variantSelection.matchedVariants.length === 0) {
         return null;
       }
 
       const variantsForResult =
-        isDbSource && matchedCodeVariants.length > 0
-          ? matchedCodeVariants
+        isDbSource && variantSelection.matchedVariants.length > 0
+          ? variantSelection.matchedVariants
           : itemCodeVariants;
 
       const itemCodes = variantsForResult.reduce<Record<string, string>>(
@@ -987,11 +977,14 @@ ${spec.value}
         {}
       );
 
+      const shouldAutoSelectSku = isDbSource
+        ? variantSelection.autoSelectedVariant
+        : null;
       const requiresItemCodeSelection =
-        isDbSource && variantsForResult.length > 1;
+        isDbSource && variantsForResult.length > 1 && !shouldAutoSelectSku;
       const defaultSku = requiresItemCodeSelection
         ? ""
-        : variantsForResult[0]?.code || "";
+        : shouldAutoSelectSku?.code || variantsForResult[0]?.code || "";
 
       return {
         id: docSnap.id,
@@ -1010,13 +1003,12 @@ ${spec.value}
     []
   );
 
-  const fetchFirebaseSearchPage = useCallback(
-    async ({ term, append }: { term: string; append: boolean }) => {
+  const fetchFirebaseSearchResults = useCallback(
+    async (term: string) => {
       const normalizedTerm = term.trim();
       if (normalizedTerm.length < 2) {
         setSearchResults((prev) => (prev.length > 0 ? [] : prev));
-        setSearchLastDoc((prev) => (prev ? null : prev));
-        setHasMoreSearchResults((prev) => (prev ? false : prev));
+        setSearchError((prev) => (prev ? null : prev));
         return;
       }
 
@@ -1026,97 +1018,48 @@ ${spec.value}
         productSource === "firebase_shopify" ? "Shopify" : "Taskflow";
       const cacheKey = toSearchCacheKey(productSource, normalizedTerm);
       const now = Date.now();
+      const searchContext = buildSearchContext(normalizedTerm);
 
-      if (!append) {
-        const cached = searchCacheRef.current.get(cacheKey);
-        if (cached && now - cached.timestamp <= SEARCH_CACHE_TTL_MS) {
-          setSearchResults(cached.results);
-          setSearchLastDoc(cached.lastDoc);
-          setHasMoreSearchResults(cached.hasMore);
-          return;
-        }
+      const cached = searchCacheRef.current.get(cacheKey);
+      if (cached && now - cached.timestamp <= SEARCH_CACHE_TTL_MS) {
+        setSearchResults(cached.results);
+        setSearchError(null);
+        return;
       }
 
-      append ? setIsLoadingMoreSearch(true) : setIsSearching(true);
+      setIsSearching(true);
+      setSearchError(null);
 
       try {
-        const searchUpper = normalizedTerm.toUpperCase();
-        const existing = append ? searchResultsRef.current : [];
-        const matchedItems: Product[] = [];
-        let cursor = append ? searchLastDocRef.current : null;
-        let hasMore = true;
-        let pagesScanned = 0;
+        // Query the full website-scoped product set so every DB product remains searchable.
+        const constraints: QueryConstraint[] = [
+          where("websites", "array-contains", websiteFilter),
+        ];
+        const snapshot = await executeSingleQuery(
+          () => getDocs(query(collection(db, "products"), ...constraints)),
+          (querySnapshot) => querySnapshot
+        );
+        if (requestId !== activeSearchRequestRef.current) return;
 
-        while (
-          pagesScanned < SEARCH_SCAN_MAX_PAGES &&
-          matchedItems.length < SEARCH_PAGE_SIZE &&
-          hasMore
-        ) {
-          const constraints: QueryConstraint[] = [
-            where("websites", "array-contains", websiteFilter),
-            limit(SEARCH_SCAN_CHUNK_SIZE),
-          ];
+        const matchedItems = snapshot.docs
+          .map((docSnap) =>
+            mapFirestoreProductDoc(docSnap, isDbSource, searchContext)
+          )
+          .filter((item): item is Product => Boolean(item));
+        const deduped = dedupeProductsById(matchedItems);
 
-          if (cursor) {
-            constraints.push(startAfter(cursor));
-          }
-
-          const snapshot = await getDocs(
-            query(collection(db, "products"), ...constraints)
-          );
-          if (requestId !== activeSearchRequestRef.current) return;
-
-          if (snapshot.docs.length === 0) {
-            hasMore = false;
-            break;
-          }
-
-          cursor = snapshot.docs[snapshot.docs.length - 1];
-
-          snapshot.docs.forEach((docSnap) => {
-            const mapped = mapFirestoreProductDoc(
-              docSnap,
-              isDbSource,
-              searchUpper
-            );
-            if (mapped) matchedItems.push(mapped);
-          });
-
-          if (snapshot.docs.length < SEARCH_SCAN_CHUNK_SIZE) {
-            hasMore = false;
-          }
-
-          pagesScanned += 1;
-        }
-
-        const pageResults = matchedItems.slice(0, SEARCH_PAGE_SIZE);
-        const merged = append
-          ? dedupeProductsById([...existing, ...pageResults])
-          : pageResults;
-        const lastDoc = cursor;
-
-        setSearchResults(merged);
-        setSearchLastDoc(lastDoc);
-        setHasMoreSearchResults(hasMore);
-
-        if (!append) {
-          searchCacheRef.current.set(cacheKey, {
-            timestamp: now,
-            results: merged,
-            lastDoc,
-            hasMore,
-          });
-        }
+        setSearchResults(deduped);
+        searchCacheRef.current.set(cacheKey, {
+          timestamp: now,
+          results: deduped,
+        });
       } catch (err) {
         console.error("Search Protocol Failure:", err);
-        if (!append) {
-          setSearchResults([]);
-          setSearchLastDoc(null);
-          setHasMoreSearchResults(false);
-        }
+        setSearchResults([]);
+        setSearchError("Unable to search products right now. Please try again.");
       } finally {
         if (requestId !== activeSearchRequestRef.current) return;
-        append ? setIsLoadingMoreSearch(false) : setIsSearching(false);
+        setIsSearching(false);
       }
     },
     [mapFirestoreProductDoc, productSource]
@@ -1127,6 +1070,7 @@ ${spec.value}
       const normalizedTerm = term.trim();
       if (normalizedTerm.length < 2) {
         setSearchResults([]);
+        setSearchError(null);
         return;
       }
 
@@ -1136,28 +1080,27 @@ ${spec.value}
 
       if (cached && now - cached.timestamp <= SEARCH_CACHE_TTL_MS) {
         setSearchResults(cached.results);
+        setSearchError(null);
         return;
       }
 
       const requestId = ++activeSearchRequestRef.current;
       setIsSearching(true);
+      setSearchError(null);
       try {
         const res = await fetch(`/api/shopify/products?q=${normalizedTerm.toLowerCase()}`);
         const data = await res.json();
         if (requestId !== activeSearchRequestRef.current) return;
         const products = data.products || [];
         setSearchResults(products);
-        setHasMoreSearchResults(false);
-        setSearchLastDoc(null);
         searchCacheRef.current.set(cacheKey, {
           timestamp: now,
           results: products,
-          lastDoc: null,
-          hasMore: false,
         });
       } catch (err) {
         console.error("Search Protocol Failure:", err);
         setSearchResults([]);
+        setSearchError("Unable to search products right now. Please try again.");
       } finally {
         if (requestId !== activeSearchRequestRef.current) return;
         setIsSearching(false);
@@ -1170,9 +1113,8 @@ ${spec.value}
     if (isManualEntry || isSpfMode || isSpf1Mode) return;
     if (debouncedSearchTerm.length < 2) {
       setSearchResults((prev) => (prev.length > 0 ? [] : prev));
-      setSearchLastDoc((prev) => (prev ? null : prev));
-      setHasMoreSearchResults((prev) => (prev ? false : prev));
       setIsSearching((prev) => (prev ? false : prev));
+      setSearchError((prev) => (prev ? null : prev));
       return;
     }
 
@@ -1185,36 +1127,15 @@ ${spec.value}
       productSource === "firebase_shopify" ||
       productSource === "firebase_taskflow"
     ) {
-      fetchFirebaseSearchPage({ term: debouncedSearchTerm, append: false });
+      fetchFirebaseSearchResults(debouncedSearchTerm);
     }
   }, [
     debouncedSearchTerm,
-    fetchFirebaseSearchPage,
+    fetchFirebaseSearchResults,
     fetchShopifyProducts,
     isManualEntry,
     isSpf1Mode,
     isSpfMode,
-    productSource,
-  ]);
-
-  const loadMoreSearchResults = useCallback(() => {
-    if (
-      productSource === "shopify" ||
-      !hasMoreSearchResults ||
-      isLoadingMoreSearch ||
-      isSearching ||
-      debouncedSearchTerm.length < 2
-    ) {
-      return;
-    }
-
-    fetchFirebaseSearchPage({ term: debouncedSearchTerm, append: true });
-  }, [
-    debouncedSearchTerm,
-    fetchFirebaseSearchPage,
-    hasMoreSearchResults,
-    isLoadingMoreSearch,
-    isSearching,
     productSource,
   ]);
 
@@ -3210,7 +3131,7 @@ Procurement
                   <div className="flex items-center gap-1 p-1 bg-gray-100 rounded-lg">
                     <button
                       type="button"
-                      onClick={() => { setProductSource("shopify"); setSearchTerm(""); setSearchResults([]); setIsSpfMode(false); setIsSpf1Mode(false); }}
+                      onClick={() => { setProductSource("shopify"); setSearchTerm(""); setSearchResults([]); setSearchError(null); setIsSpfMode(false); setIsSpf1Mode(false); }}
                       className={`flex-1 flex items-center justify-center gap-1.5 py-2 px-2 text-[10px] font-bold rounded-md transition-all ${productSource === "shopify" && !isSpfMode && !isSpf1Mode ? "bg-white text-[#121212] shadow-sm" : "text-gray-500 hover:text-gray-700"}`}
                     >
                       <span>🛍️</span>
@@ -3218,7 +3139,7 @@ Procurement
                     </button>
                     <button
                       type="button"
-                      onClick={() => { setProductSource("firebase_taskflow"); setSearchTerm(""); setSearchResults([]); setIsSpfMode(false); setIsSpf1Mode(false); }}
+                      onClick={() => { setProductSource("firebase_taskflow"); setSearchTerm(""); setSearchResults([]); setSearchError(null); setIsSpfMode(false); setIsSpf1Mode(false); }}
                       className={`flex-1 flex items-center justify-center gap-1.5 py-2 px-2 text-[10px] font-bold rounded-md transition-all ${productSource === "firebase_taskflow" && !isSpfMode && !isSpf1Mode ? "bg-white text-[#121212] shadow-sm" : "text-gray-500 hover:text-gray-700"}`}
                     >
                       <span>🗄️</span>
@@ -3227,7 +3148,7 @@ Procurement
                     <div className="w-px h-6 bg-gray-300"></div>
                     <button
                       type="button"
-                      onClick={() => { setIsSpf1Mode(false); setIsSpfMode(true); setSearchTerm(""); setSearchResults([]); }}
+                      onClick={() => { setIsSpf1Mode(false); setIsSpfMode(true); setSearchTerm(""); setSearchResults([]); setSearchError(null); }}
                       className={`flex items-center justify-center gap-1.5 py-2 px-2 text-[10px] font-bold rounded-md transition-all ${isSpfMode ? "bg-green-500 text-white shadow-sm" : "text-gray-500 hover:text-green-600"}`}
                       title="Service Request Form"
                     >
@@ -3236,7 +3157,7 @@ Procurement
                     </button>
                     <button
                       type="button"
-                      onClick={() => { setIsSpf1Mode(true); setIsSpfMode(false); setSearchTerm(""); setSearchResults([]); }}
+                      onClick={() => { setIsSpf1Mode(true); setIsSpfMode(false); setSearchTerm(""); setSearchResults([]); setSearchError(null); }}
                       className={`flex items-center justify-center gap-1.5 py-2 px-2 text-[10px] font-bold rounded-md transition-all ${isSpf1Mode ? "bg-red-500 text-white shadow-sm" : "text-gray-500 hover:text-red-600"}`}
                       title="Special Price Form"
                     >
@@ -3593,6 +3514,7 @@ Procurement
                               onChange={(e) => {
                                 if (isManualEntry) return;
                                 setSearchTerm(e.target.value);
+                                if (searchError) setSearchError(null);
                               }}
                             />
                           </div>
@@ -3621,6 +3543,9 @@ Procurement
                           </div>
                         </div>
                         {isSearching && <p className="text-[10px] animate-pulse">Searching...</p>}
+                        {searchError && !isSearching && (
+                          <p className="text-[10px] text-red-500">{searchError}</p>
+                        )}
                       </>
                     )
                   )}
@@ -3768,19 +3693,6 @@ Procurement
                         );
                       })}
                     </div>
-                    {productSource !== "shopify" && (
-                      <div className="pt-2">
-                        <Button
-                          type="button"
-                          variant="outline"
-                          onClick={loadMoreSearchResults}
-                          disabled={!hasMoreSearchResults || isLoadingMoreSearch || isSearching}
-                          className="w-full text-[11px] uppercase tracking-wide"
-                        >
-                          {isLoadingMoreSearch ? "Loading more..." : hasMoreSearchResults ? "Load more results" : "No more results"}
-                        </Button>
-                      </div>
-                    )}
                   </>
                 )}
 
