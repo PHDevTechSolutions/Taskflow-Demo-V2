@@ -480,8 +480,10 @@ function DashboardContent() {
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [loadingNoActivity, setLoadingNoActivity] = useState(false);
   const [noActivitySearch, setNoActivitySearch] = useState("");
-  const NO_ACTIVITY_BATCH_SIZE = 15;
+  const NO_ACTIVITY_BATCH_SIZE = 5;
+  const LAST_TOUCH_BATCH_SIZE = 5;
   const [displayedNoActivityCount, setDisplayedNoActivityCount] = useState(NO_ACTIVITY_BATCH_SIZE);
+  const [displayedLastTouchCount, setDisplayedLastTouchCount] = useState(LAST_TOUCH_BATCH_SIZE);
 
   const queryUserId = searchParams?.get("id") ?? "";
 
@@ -728,10 +730,20 @@ function DashboardContent() {
   }, [accounts, lastActivityDateMap, noActivitySearch]);
 
   const displayedNoActivityAccounts = React.useMemo(() => {
-    return filteredNoActivityAccounts.slice(0, displayedNoActivityCount);
-  }, [filteredNoActivityAccounts, displayedNoActivityCount]);
+    const noTouch = filteredNoActivityAccounts.filter((a) => !a.hasActivity);
+    const lastTouch = filteredNoActivityAccounts.filter((a) => a.hasActivity);
+    
+    const displayedNoTouch = noTouch.slice(0, displayedNoActivityCount);
+    const displayedLastTouch = lastTouch.slice(0, displayedLastTouchCount);
+    
+    return [...displayedNoTouch, ...displayedLastTouch];
+  }, [filteredNoActivityAccounts, displayedNoActivityCount, displayedLastTouchCount]);
 
-  const hasMoreNoActivity = filteredNoActivityAccounts.length > displayedNoActivityCount;
+  // Calculate remaining items count for load more button
+  const allNoTouchForCount = filteredNoActivityAccounts.filter((a) => !a.hasActivity);
+  const allLastTouchForCount = filteredNoActivityAccounts.filter((a) => a.hasActivity);
+  const remainingItemsCount = (allNoTouchForCount.length - displayedNoActivityCount) + (allLastTouchForCount.length - displayedLastTouchCount);
+  const hasMoreNoActivity = remainingItemsCount > 0;
 
   // ── Shared props builder ──────────────────────────────────────────────────
   const sharedProps = {
@@ -825,6 +837,7 @@ function DashboardContent() {
                         onChange={(e) => {
                           setNoActivitySearch(e.target.value);
                           setDisplayedNoActivityCount(NO_ACTIVITY_BATCH_SIZE);
+                          setDisplayedLastTouchCount(LAST_TOUCH_BATCH_SIZE);
                         }}
                       />
                     </div>
@@ -838,13 +851,17 @@ function DashboardContent() {
                       ) : (
                         <>
                           {(() => {
-                            const noTouch = displayedNoActivityAccounts.filter((a) => !a.hasActivity);
-                            const lastTouch = displayedNoActivityAccounts.filter((a) => a.hasActivity);
-                            const showDivider = noTouch.length > 0 && lastTouch.length > 0;
+                            const allNoTouch = filteredNoActivityAccounts.filter((a) => !a.hasActivity);
+                            const allLastTouch = filteredNoActivityAccounts.filter((a) => a.hasActivity);
+                            
+                            const displayedNoTouch = allNoTouch.slice(0, displayedNoActivityCount);
+                            const displayedLastTouch = allLastTouch.slice(0, displayedLastTouchCount);
+                            
+                            const showDivider = displayedNoTouch.length > 0 && displayedLastTouch.length > 0;
 
                             return (
                               <>
-                                {noTouch.map((account) => (
+                                {displayedNoTouch.map((account) => (
                                   <div
                                     key={account.id}
                                     className="p-2 bg-red-50 border border-red-200 rounded-none text-xs hover:bg-red-100 transition-colors cursor-pointer"
@@ -882,7 +899,7 @@ function DashboardContent() {
                                   </div>
                                 )}
 
-                                {lastTouch.map((account) => (
+                                {displayedLastTouch.map((account) => (
                                   <div
                                     key={account.id}
                                     className="p-2 bg-amber-50/60 border border-amber-200/70 rounded-none text-xs hover:bg-amber-100 transition-colors cursor-pointer"
@@ -919,9 +936,22 @@ function DashboardContent() {
                           {hasMoreNoActivity && (
                             <button
                               className="w-full py-2 text-[10px] text-amber-700 bg-amber-50 border border-amber-200 rounded-none hover:bg-amber-100 transition-colors"
-                              onClick={() => setDisplayedNoActivityCount(prev => prev + NO_ACTIVITY_BATCH_SIZE)}
+                              onClick={() => {
+                                const allNoTouch = filteredNoActivityAccounts.filter((a) => !a.hasActivity);
+                                const allLastTouch = filteredNoActivityAccounts.filter((a) => a.hasActivity);
+                                
+                                const remainingNoTouch = allNoTouch.length - displayedNoActivityCount;
+                                const remainingLastTouch = allLastTouch.length - displayedLastTouchCount;
+                                
+                                if (remainingNoTouch > 0) {
+                                  setDisplayedNoActivityCount(prev => Math.min(prev + Math.min(NO_ACTIVITY_BATCH_SIZE, remainingNoTouch), allNoTouch.length));
+                                }
+                                if (remainingLastTouch > 0) {
+                                  setDisplayedLastTouchCount(prev => Math.min(prev + Math.min(LAST_TOUCH_BATCH_SIZE, remainingLastTouch), allLastTouch.length));
+                                }
+                              }}
                             >
-                              Load more ({filteredNoActivityAccounts.length - displayedNoActivityCount} remaining)
+                              Load more ({remainingItemsCount} remaining)
                             </button>
                           )}
                         </>

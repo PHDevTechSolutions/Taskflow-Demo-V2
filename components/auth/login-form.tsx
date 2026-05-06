@@ -322,7 +322,7 @@ export function LoginForm({ className, ...props }: React.ComponentProps<"div">) 
 
     switch (result.Role) {
       case "Territory Sales Manager":
-        router.push(`/roles/tsm/agent?id=${result.userId}`); break;
+        router.push(`/roles/tsm/dashboard?id=${result.userId}`); break;
       case "Manager":
         router.push(`/roles/manager/dashboard?id=${result.userId}`); break;
       case "Staff":

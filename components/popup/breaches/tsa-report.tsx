@@ -109,8 +109,8 @@ export default function TSAReports() {
   const queryUserId = searchParams?.get("id") ?? "";
 
   const today = new Date().toISOString().split("T")[0];
-  const [fromDate, setFromDate] = useState<string>(today);
-  const [toDate, setToDate] = useState<string>(today);
+  const [startDate, setStartDate] = useState<string>(today);
+  const [endDate, setEndDate] = useState<string>(today);
 
   const [managerDetails, setManagerDetails] = useState({
     referenceid: "", firstname: "", lastname: "", role: "",
@@ -273,7 +273,7 @@ export default function TSAReports() {
     }
   }, []);
 
-  const fetchCsrMetrics = useCallback(async (refId: string, from: string, to: string) => {
+  const fetchCsrMetrics = useCallback(async (refId: string, start: string, end: string) => {
     if (!refId) return;
     setLoadingCsrMetrics(true);
     try {
@@ -288,9 +288,9 @@ export default function TSAReports() {
         "Threats/Extortion/Intimidation", "Prank Call",
       ];
 
-      const fromTs = new Date(from).getTime();
-      const toDateObj = new Date(to); toDateObj.setHours(23, 59, 59, 999);
-      const toTs = toDateObj.getTime();
+      const startTs = new Date(start).getTime();
+      const endDateObj = new Date(end); endDateObj.setHours(23, 59, 59, 999);
+      const endTs = endDateObj.getTime();
 
       let rtTotal = 0, rtCount = 0;
       let nqTotal = 0, nqCount = 0;
@@ -300,7 +300,7 @@ export default function TSAReports() {
       data.forEach((row) => {
         if (row.status !== "Closed" && row.status !== "Converted into Sales") return;
         const created = new Date(row.date_created).getTime();
-        if (isNaN(created) || created < fromTs || created > toTs) return;
+        if (isNaN(created) || created < startTs || created > endTs) return;
         if (excluded.includes(row.wrap_up)) return;
 
         const tsaAck = new Date(row.tsa_acknowledge_date).getTime();
@@ -351,8 +351,8 @@ export default function TSAReports() {
     fetchClusterData(selectedRefId);
     fetchActivities(selectedRefId);
     fetchOverdue(selectedRefId);
-    fetchCsrMetrics(selectedRefId, fromDate, toDate);
-  }, [selectedRefId, fromDate, toDate, fetchClusterData, fetchActivities, fetchOverdue, fetchCsrMetrics]);
+    fetchCsrMetrics(selectedRefId, startDate, endDate);
+  }, [selectedRefId, startDate, endDate, fetchClusterData, fetchActivities, fetchOverdue, fetchCsrMetrics]);
 
   // ── Compute outbound + time metrics ───────────────────────────────────────
 
@@ -366,32 +366,35 @@ export default function TSAReports() {
 
     setLoadingTime(true);
     try {
-      const targetDate = new Date(fromDate);
-      const startOfDay = new Date(targetDate); startOfDay.setHours(0, 0, 0, 0);
-      const endOfDay = new Date(targetDate); endOfDay.setHours(23, 59, 59, 999);
+      const startRange = new Date(startDate);
+      startRange.setHours(0, 0, 0, 0);
+      const endRange = new Date(endDate);
+      endRange.setHours(23, 59, 59, 999);
 
-      const dailyActivities = activities.filter((act) => {
+      // Filter activities within the selected date range
+      const rangeActivities = activities.filter((act) => {
         const t = new Date(act.date_created).getTime();
-        return t >= startOfDay.getTime() && t <= endOfDay.getTime();
+        return t >= startRange.getTime() && t <= endRange.getTime();
       });
 
-      const grouped = computeTimeByActivity(dailyActivities);
+      const grouped = computeTimeByActivity(rangeActivities);
       setTimeByActivity(grouped);
       setTimeConsumedMs(Object.values(grouped).reduce((s, ms) => s + ms, 0));
 
       let sales = 0;
-      dailyActivities.forEach((act) => {
+      rangeActivities.forEach((act) => {
         if (act.status === "Delivered") sales += Number(act.actual_sales) || 0;
       });
       setTotalSales(sales);
 
-      // Outbound count — source === "Outbound - Touchbase" only
-      const dailyCount = dailyActivities.filter(isOutboundTouchbase).length;
+      // Outbound count based ONLY on source === "Outbound - Touchbase" within date range
+      const dailyCount = rangeActivities.filter(isOutboundTouchbase).length;
 
-      const dayOfWeek = targetDate.getDay();
+      // Weekly: Calculate based on the date range (from startDate to endDate)
+      const weekStart = new Date(startRange);
+      const dayOfWeek = weekStart.getDay();
       const diffToMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
-      const weekStart = new Date(targetDate);
-      weekStart.setDate(targetDate.getDate() - diffToMonday);
+      weekStart.setDate(weekStart.getDate() - diffToMonday);
       weekStart.setHours(0, 0, 0, 0);
       const weekEnd = new Date(weekStart);
       weekEnd.setDate(weekStart.getDate() + 6);
@@ -402,13 +405,13 @@ export default function TSAReports() {
         return t >= weekStart.getTime() && t <= weekEnd.getTime() && isOutboundTouchbase(act);
       }).length;
 
+      // Monthly: Fixed to the full month of startDate
+      const monthStart = new Date(startRange.getFullYear(), startRange.getMonth(), 1, 0, 0, 0, 0);
+      const monthEnd = new Date(startRange.getFullYear(), startRange.getMonth() + 1, 0, 23, 59, 59, 999);
+
       const monthlyCount = activities.filter((act) => {
-        const d = new Date(act.date_created);
-        return (
-          d.getMonth() === targetDate.getMonth() &&
-          d.getFullYear() === targetDate.getFullYear() &&
-          isOutboundTouchbase(act)
-        );
+        const t = new Date(act.date_created).getTime();
+        return t >= monthStart.getTime() && t <= monthEnd.getTime() && isOutboundTouchbase(act);
       }).length;
 
       setOutboundDaily(dailyCount);
@@ -430,11 +433,11 @@ export default function TSAReports() {
     } finally {
       setLoadingTime(false);
     }
-  }, [activities, fromDate]);
+  }, [activities, startDate, endDate]);
 
   // ── Territory coverage ────────────────────────────────────────────────────
   //
-  // Scope: the FULL calendar month of fromDate (month start → month end).
+  // Scope: the FULL calendar month of startDate (month start → month end).
   // - "Covered"     = cluster accounts whose company_name appears in ANY
   //                   activity within that month range
   // - "Not Reached" = the rest
@@ -452,10 +455,10 @@ export default function TSAReports() {
       return;
     }
 
-    // Explicit month bounds from fromDate
-    const fromDateObj = new Date(fromDate);
-    const monthStart  = new Date(fromDateObj.getFullYear(), fromDateObj.getMonth(), 1, 0, 0, 0, 0).getTime();
-    const monthEnd    = new Date(fromDateObj.getFullYear(), fromDateObj.getMonth() + 1, 0, 23, 59, 59, 999).getTime();
+    // Explicit month bounds from startDate
+    const startDateObj = new Date(startDate);
+    const monthStart  = new Date(startDateObj.getFullYear(), startDateObj.getMonth(), 1, 0, 0, 0, 0).getTime();
+    const monthEnd    = new Date(startDateObj.getFullYear(), startDateObj.getMonth() + 1, 0, 23, 59, 59, 999).getTime();
 
     // Step 1 — account_reference_numbers with ANY activity within the calendar month
     const touchedAccountRefs = new Set<string>();
@@ -500,18 +503,19 @@ export default function TSAReports() {
 
     setUniqueClientReach(covered.length);
     setClientSegments({ ...seg, outbound: covered.length });
-  }, [activities, clusterAccounts, fromDate]);
+  }, [activities, clusterAccounts, startDate]);
 
   // ── New clients ───────────────────────────────────────────────────────────
 
   useEffect(() => {
-    if (!activities.length || !fromDate) {
+    if (!activities.length || !startDate) {
       setNewClientByCompany({}); setNewClientCount(0); return;
     }
 
-    const targetDate = new Date(fromDate);
-    const startOfDay = new Date(targetDate); startOfDay.setHours(0, 0, 0, 0);
-    const endOfDay = new Date(targetDate); endOfDay.setHours(23, 59, 59, 999);
+    const startRange = new Date(startDate);
+    startRange.setHours(0, 0, 0, 0);
+    const endRange = new Date(endDate);
+    endRange.setHours(23, 59, 59, 999);
     const allowed = ["Assisted", "Quote-Done", "SO-Done", "Delivered"];
 
     const grouped: Record<string, number> = {};
@@ -519,7 +523,7 @@ export default function TSAReports() {
 
     activities.forEach((act) => {
       const t = new Date(act.date_created).getTime();
-      if (allowed.includes(act.status) && act.type_client === "New Client" && t >= startOfDay.getTime() && t <= endOfDay.getTime()) {
+      if (allowed.includes(act.status) && act.type_client === "New Client" && t >= startRange.getTime() && t <= endRange.getTime()) {
         const company = act.company_name || "Unknown";
         grouped[company] = (grouped[company] || 0) + 1;
         total++;
@@ -528,7 +532,7 @@ export default function TSAReports() {
 
     setNewClientByCompany(grouped);
     setNewClientCount(total);
-  }, [activities, fromDate]);
+  }, [activities, startDate, endDate]);
 
   // ── Derived ───────────────────────────────────────────────────────────────
 
@@ -548,7 +552,7 @@ export default function TSAReports() {
     fetchClusterData(selectedRefId);
     fetchActivities(selectedRefId);
     fetchOverdue(selectedRefId);
-    fetchCsrMetrics(selectedRefId, fromDate, toDate);
+    fetchCsrMetrics(selectedRefId, startDate, endDate);
     sileo.success({
       title: "Syncing",
       description: `Refreshing data for ${selectedAgent?.Lastname ?? ""}, ${selectedAgent?.Firstname ?? ""}`,
@@ -602,16 +606,30 @@ export default function TSAReports() {
             )}
           </div>
 
-          <div>
-            <label className="text-[9px] font-semibold uppercase text-gray-400 block mb-1">
-              Target Date
-            </label>
-            <Input
-              type="date"
-              className="h-7 text-[11px] rounded-none bg-white border-gray-200"
-              value={fromDate}
-              onChange={(e) => { setFromDate(e.target.value); setToDate(e.target.value); }}
-            />
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-[9px] font-semibold uppercase text-gray-400 block mb-1">
+                Start Date
+              </label>
+              <Input
+                type="date"
+                className="h-7 text-[11px] rounded-none bg-white border-gray-200"
+                value={startDate}
+                onChange={(e) => setStartDate(e.target.value)}
+              />
+            </div>
+
+            <div>
+              <label className="text-[9px] font-semibold uppercase text-gray-400 block mb-1">
+                End Date
+              </label>
+              <Input
+                type="date"
+                className="h-7 text-[11px] rounded-none bg-white border-gray-200"
+                value={endDate}
+                onChange={(e) => setEndDate(e.target.value)}
+              />
+            </div>
           </div>
         </div>
 
