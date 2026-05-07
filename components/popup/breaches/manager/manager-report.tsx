@@ -909,9 +909,7 @@ export default function TSMReports() {
             <div className="space-y-1">
               {[
                 { label: "Pending Client Approval", value: pendingClientApprovalCount },
-                { label: "SPF — Pending Client", value: spfPendingClientApproval },
-                { label: "SPF — Pending Procurement", value: spfPendingProcurement },
-                { label: "SPF — Pending PD", value: spfPendingPD },
+                
               ].map(({ label, value }) => (
                 <div key={label} className="flex justify-between items-center px-2 py-1.5 border-b border-gray-50 last:border-b-0">
                   <span className="text-[10px] text-red-500 font-medium">{label}</span>
