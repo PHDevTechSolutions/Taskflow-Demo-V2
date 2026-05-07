@@ -701,134 +701,6 @@ export const Scheduled: React.FC<ScheduledProps> = ({
       <p className="text-[10px] text-muted-foreground mb-1 px-1">{activeDateLabel}</p>
 
       <div className="max-h-[70vh] overflow-auto space-y-6 custom-scrollbar">
-        {/* ─── OB Calls Account for Today (Cluster Series) ───────────────── */}
-        {totalTodayCount > 0 && firstTodayCluster && (
-          <section>
-            <h2 className="text-xs font-bold mb-4">OB Calls Account for Today ({groupedToday[firstTodayCluster].length})</h2>
-
-            <Alert className="font-mono rounded-xl shadow-lg mb-2">
-              <CheckCircle2 />
-              <AlertTitle className="text-xs font-bold">CLUSTER SERIES: {firstTodayCluster.toUpperCase()}</AlertTitle>
-              <AlertDescription className="text-xs italic">
-                {groupedToday[firstTodayCluster].length} account{groupedToday[firstTodayCluster].length !== 1 ? "s" : ""} scheduled for today
-              </AlertDescription>
-            </Alert>
-
-            <Accordion type="single" collapsible className="w-full">
-              {groupedToday[firstTodayCluster].map((account) => (
-                <AccordionItem key={account.id} value={account.id} className="border border-green-300 rounded-sm mb-2 uppercase">
-                  <div className="flex justify-between items-center p-2 select-none">
-                    <AccordionTrigger className="flex-1 text-xs font-semibold font-mono">
-                      {account.company_name}
-                    </AccordionTrigger>
-                    <div className="flex gap-2 ml-4">
-                      <CreateActivityDialog
-                        firstname={firstname}
-                        lastname={lastname}
-                        target_quota={target_quota}
-                        email={email}
-                        contact={contact}
-                        tsmname={tsmname}
-                        managername={managername}
-                        referenceid={referenceid}
-                        tsm={account.tsm}
-                        manager={account.manager}
-                        type_client={account.type_client}
-                        contact_number={account.contact_number}
-                        email_address={account.email_address}
-                        activityReferenceNumber={generateActivityRef(account.company_name, account.region || "NCR")}
-                        ticket_reference_number="-"
-                        agent={`${firstname} ${lastname}`}
-                        company_name={account.company_name}
-                        contact_person={account.contact_person}
-                        address={account.address}
-                        accountReferenceNumber={account.account_reference_number}
-                        onCreated={createActivityHandler(account)}
-                        managerDetails={managerDetails ?? null}
-                        tsmDetails={tsmDetails ?? null}
-                        signature={signature}
-                      />
-                    </div>
-                  </div>
-
-                  <AccordionContent className="flex flex-col gap-2 p-3 text-xs">
-                    <p><strong>Contact:</strong> {account.contact_number}</p>
-                    <p><strong>Email:</strong> {account.email_address}</p>
-                    <p><strong>Client Type:</strong> {account.type_client}</p>
-                    <p><strong>Address:</strong> {account.address}</p>
-                    <p className="text-[8px]">{account.account_reference_number}</p>
-                  </AccordionContent>
-                </AccordionItem>
-              ))}
-            </Accordion>
-          </section>
-        )}
-
-        {/* ─── Available OB Calls ───────────────────────────────────────── */}
-        {totalAvailableCount > 0 && firstAvailableCluster && (
-          <section>
-            <h2 className="text-xs font-bold mb-4">Available OB Calls ({groupedNull[firstAvailableCluster].length})</h2>
-
-            <Alert className="font-mono rounded-xl shadow-lg mb-2">
-              <CheckCircle2 />
-              <AlertTitle className="text-xs font-bold">CLUSTER SERIES: {firstAvailableCluster.toUpperCase()}</AlertTitle>
-              <AlertDescription className="text-xs italic">
-                Available accounts ready for scheduling
-              </AlertDescription>
-            </Alert>
-
-            <Accordion type="single" collapsible className="w-full border rounded-none shadow-sm border-blue-200 uppercase">
-              {groupedNull[firstAvailableCluster].map((account) => (
-                <AccordionItem key={account.id} value={account.id}>
-                  <div className="flex justify-between items-center p-2 select-none">
-                    <AccordionTrigger className="flex-1 text-xs font-semibold font-mono">
-                      {account.company_name}
-                    </AccordionTrigger>
-                    <div className="flex gap-2 ml-4">
-                      <CreateActivityDialog
-                        firstname={firstname}
-                        lastname={lastname}
-                        target_quota={target_quota}
-                        email={email}
-                        contact={contact}
-                        tsmname={tsmname}
-                        managername={managername}
-                        referenceid={referenceid}
-                        tsm={account.tsm}
-                        manager={account.manager}
-                        type_client={account.type_client}
-                        contact_number={account.contact_number}
-                        email_address={account.email_address}
-                        activityReferenceNumber={generateActivityRef(account.company_name, account.region || "NCR")}
-                        ticket_reference_number="-"
-                        agent={`${firstname} ${lastname}`}
-                        company_name={account.company_name}
-                        contact_person={account.contact_person}
-                        address={account.address}
-                        accountReferenceNumber={account.account_reference_number}
-                        onCreated={createActivityHandler(account)}
-                        managerDetails={managerDetails ?? null}
-                        tsmDetails={tsmDetails ?? null}
-                        signature={signature}
-                      />
-                    </div>
-                  </div>
-
-                  <AccordionContent className="flex flex-col gap-2 p-3 text-xs">
-                    <p><strong>Contact:</strong> {account.contact_number}</p>
-                    <p><strong>Email:</strong> {account.email_address}</p>
-                    <p><strong>Client Type:</strong> {account.type_client}</p>
-                    <p><strong>Address:</strong> {account.address}</p>
-                    <p className="text-[8px]">{account.account_reference_number}</p>
-                  </AccordionContent>
-                </AccordionItem>
-              ))}
-            </Accordion>
-          </section>
-        )}
-
-        <Separator className="my-4" />
-
         {/* ─── Scheduled Activities ──────────────────────────────────────── */}
         <section>
           <h2 className="text-xs font-bold mb-4">Scheduled Activities ({filteredActivities.length})</h2>
@@ -1083,6 +955,134 @@ export const Scheduled: React.FC<ScheduledProps> = ({
             </>
           )}
         </section>
+
+        <Separator className="my-4" />
+
+        {/* ─── OB Calls Account for Today (Cluster Series) ───────────────── */}
+        {totalTodayCount > 0 && firstTodayCluster && (
+          <section>
+            <h2 className="text-xs font-bold mb-4">OB Calls Account for Today ({groupedToday[firstTodayCluster].length})</h2>
+
+            <Alert className="font-mono rounded-xl shadow-lg mb-2">
+              <CheckCircle2 />
+              <AlertTitle className="text-xs font-bold">CLUSTER SERIES: {firstTodayCluster.toUpperCase()}</AlertTitle>
+              <AlertDescription className="text-xs italic">
+                {groupedToday[firstTodayCluster].length} account{groupedToday[firstTodayCluster].length !== 1 ? "s" : ""} scheduled for today
+              </AlertDescription>
+            </Alert>
+
+            <Accordion type="single" collapsible className="w-full">
+              {groupedToday[firstTodayCluster].map((account) => (
+                <AccordionItem key={account.id} value={account.id} className="border border-green-300 rounded-sm mb-2 uppercase">
+                  <div className="flex justify-between items-center p-2 select-none">
+                    <AccordionTrigger className="flex-1 text-xs font-semibold font-mono">
+                      {account.company_name}
+                    </AccordionTrigger>
+                    <div className="flex gap-2 ml-4">
+                      <CreateActivityDialog
+                        firstname={firstname}
+                        lastname={lastname}
+                        target_quota={target_quota}
+                        email={email}
+                        contact={contact}
+                        tsmname={tsmname}
+                        managername={managername}
+                        referenceid={referenceid}
+                        tsm={account.tsm}
+                        manager={account.manager}
+                        type_client={account.type_client}
+                        contact_number={account.contact_number}
+                        email_address={account.email_address}
+                        activityReferenceNumber={generateActivityRef(account.company_name, account.region || "NCR")}
+                        ticket_reference_number="-"
+                        agent={`${firstname} ${lastname}`}
+                        company_name={account.company_name}
+                        contact_person={account.contact_person}
+                        address={account.address}
+                        accountReferenceNumber={account.account_reference_number}
+                        onCreated={createActivityHandler(account)}
+                        managerDetails={managerDetails ?? null}
+                        tsmDetails={tsmDetails ?? null}
+                        signature={signature}
+                      />
+                    </div>
+                  </div>
+
+                  <AccordionContent className="flex flex-col gap-2 p-3 text-xs">
+                    <p><strong>Contact:</strong> {account.contact_number}</p>
+                    <p><strong>Email:</strong> {account.email_address}</p>
+                    <p><strong>Client Type:</strong> {account.type_client}</p>
+                    <p><strong>Address:</strong> {account.address}</p>
+                    <p className="text-[8px]">{account.account_reference_number}</p>
+                  </AccordionContent>
+                </AccordionItem>
+              ))}
+            </Accordion>
+          </section>
+        )}
+
+        {/* ─── Available OB Calls ───────────────────────────────────────── */}
+        {totalAvailableCount > 0 && firstAvailableCluster && (
+          <section>
+            <h2 className="text-xs font-bold mb-4">Available OB Calls ({groupedNull[firstAvailableCluster].length})</h2>
+
+            <Alert className="font-mono rounded-xl shadow-lg mb-2">
+              <CheckCircle2 />
+              <AlertTitle className="text-xs font-bold">CLUSTER SERIES: {firstAvailableCluster.toUpperCase()}</AlertTitle>
+              <AlertDescription className="text-xs italic">
+                Available accounts ready for scheduling
+              </AlertDescription>
+            </Alert>
+
+            <Accordion type="single" collapsible className="w-full border rounded-none shadow-sm border-blue-200 uppercase">
+              {groupedNull[firstAvailableCluster].map((account) => (
+                <AccordionItem key={account.id} value={account.id}>
+                  <div className="flex justify-between items-center p-2 select-none">
+                    <AccordionTrigger className="flex-1 text-xs font-semibold font-mono">
+                      {account.company_name}
+                    </AccordionTrigger>
+                    <div className="flex gap-2 ml-4">
+                      <CreateActivityDialog
+                        firstname={firstname}
+                        lastname={lastname}
+                        target_quota={target_quota}
+                        email={email}
+                        contact={contact}
+                        tsmname={tsmname}
+                        managername={managername}
+                        referenceid={referenceid}
+                        tsm={account.tsm}
+                        manager={account.manager}
+                        type_client={account.type_client}
+                        contact_number={account.contact_number}
+                        email_address={account.email_address}
+                        activityReferenceNumber={generateActivityRef(account.company_name, account.region || "NCR")}
+                        ticket_reference_number="-"
+                        agent={`${firstname} ${lastname}`}
+                        company_name={account.company_name}
+                        contact_person={account.contact_person}
+                        address={account.address}
+                        accountReferenceNumber={account.account_reference_number}
+                        onCreated={createActivityHandler(account)}
+                        managerDetails={managerDetails ?? null}
+                        tsmDetails={tsmDetails ?? null}
+                        signature={signature}
+                      />
+                    </div>
+                  </div>
+
+                  <AccordionContent className="flex flex-col gap-2 p-3 text-xs">
+                    <p><strong>Contact:</strong> {account.contact_number}</p>
+                    <p><strong>Email:</strong> {account.email_address}</p>
+                    <p><strong>Client Type:</strong> {account.type_client}</p>
+                    <p><strong>Address:</strong> {account.address}</p>
+                    <p className="text-[8px]">{account.account_reference_number}</p>
+                  </AccordionContent>
+                </AccordionItem>
+              ))}
+            </Accordion>
+          </section>
+        )}
       </div>
 
       <DoneDialog open={dialogDoneOpen} onOpenChange={setDialogDoneOpen} onConfirm={async () => {}} loading={updatingId !== null} />
