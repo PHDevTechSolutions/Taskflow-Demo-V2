@@ -12,15 +12,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 
 // Static data - defined outside component to prevent re-creation on every render
-const STEP2_SOURCES_CSR = [
-    {
-        value: "Outbound - Follow-up",
-        title: "Outbound - Follow-up",
-        desc: "Follow-up call for progress or requirements.",
-    },
-];
-
-const STEP2_SOURCES_NON_CSR = [
+const STEP2_SOURCES = [
     {
         value: "Outbound - Touchbase",
         title: "Outbound - Touchbase",
@@ -131,7 +123,6 @@ export function OutboundSheet(props: OutboundSheetProps) {
 
     const [dialogOpen, setDialogOpen] = useState(false);
     const [dialogMessage, setDialogMessage] = useState("");
-    const isCSR = useMemo(() => typeClient === "CSR Client" || typeClient === "CSR Endorsement", [typeClient]);
     
     // Settings dialog states
     const [settingsOpen, setSettingsOpen] = useState(false);
@@ -208,10 +199,6 @@ export function OutboundSheet(props: OutboundSheetProps) {
         enableNotifications: true,
         soundOnSave: false,
         showSuccessToast: true,
-        
-        // Source Settings
-        enableCSRMode: true,
-        defaultSource: "",
         
         // Remarks Templates
         remarksTemplates: [
@@ -334,8 +321,6 @@ export function OutboundSheet(props: OutboundSheetProps) {
             enableNotifications: true,
             soundOnSave: false,
             showSuccessToast: true,
-            enableCSRMode: true,
-            defaultSource: "",
             remarksTemplates: [
                 "Client has no immediate requirements.",
                 "Follow up needed for next quarter.",
@@ -588,12 +573,6 @@ export function OutboundSheet(props: OutboundSheetProps) {
         return options;
     }, [callType, callStatus]);
 
-    // Auto-set source for CSR - with proper dependencies to prevent loops
-    useEffect(() => {
-        if (isCSR && source !== "CSR Endorsement") {
-            props.setSource("CSR Endorsement");
-        }
-    }, [isCSR, source]); // Proper dependencies
 
     return (
         <>
@@ -783,21 +762,6 @@ export function OutboundSheet(props: OutboundSheetProps) {
                                     </label>
                                 </div>
                                 
-                                <div className="p-4 bg-gray-50 rounded">
-                                    <h4 className="font-medium mb-3 flex items-center gap-2">
-                                        <Clock className="w-4 h-4" />
-                                        Default Source Settings
-                                    </h4>
-                                    <label className="flex items-center gap-3">
-                                        <input
-                                            type="checkbox"
-                                            checked={settings.enableCSRMode}
-                                            onChange={(e) => updateSetting("enableCSRMode", e.target.checked)}
-                                            className="w-4 h-4"
-                                        />
-                                        <span>Enable CSR Auto-Detection</span>
-                                    </label>
-                                </div>
                             </div>
                         )}
                         
@@ -1319,7 +1283,7 @@ export function OutboundSheet(props: OutboundSheetProps) {
                                 onValueChange={props.setSource}
                                 className="space-y-4"
                             >
-                                {(isCSR ? STEP2_SOURCES_CSR : STEP2_SOURCES_NON_CSR).map((item) => (
+                                {STEP2_SOURCES.map((item) => (
                                     <FieldLabel key={item.value}>
                                         <Field orientation="horizontal" className="w-full items-start">
                                             <FieldContent className="flex-1">

@@ -6,38 +6,34 @@ const BATCH_SIZE = 1000;  // FIX: lowered from 5000 — avoids timeouts on large
 const IN_CHUNK_SIZE = 500; // FIX: Supabase .in() is unreliable beyond ~500 values
 
 // ─────────────────────────────────────────────────────────────────────────────
-// FIX 1: Cursor does not advance when a partial batch is returned.
-//   Old code: always set lastId = last row's id, even on partial batches,
-//   which caused an extra empty round-trip and potential row skipping when
-//   date filters were combined with cursor.
-//
-// FIX 2: Date filter applied correctly with cursor.
-//   Old code: date filter only applied when BOTH fromISO and toISO exist.
-//   New code: each param is applied independently so a from-only or to-only
-//   filter works correctly.
-//
-// FIX 3: `if (lastId)` was falsy when lastId = 0 (first row id).
-//   New code: `if (lastId !== null)` is an explicit null check.
+// SORT: Orders by date_updated DESC (latest first) to get most recent activities
+// LIMIT: Defaults to 500 max records per request to reduce payload size
 // ─────────────────────────────────────────────────────────────────────────────
 async function* fetchActivityBatches(
   referenceid: string,
   fromISO?: string,
   toISO?: string,
+  maxRecords?: number | null,
 ) {
-  let lastId: number | null = null;
+  let totalFetched = 0;
 
   while (true) {
+    // Calculate remaining batch size
+    const remaining = maxRecords ? maxRecords - totalFetched : null;
+    const batchSize = remaining !== null && remaining < BATCH_SIZE
+      ? remaining
+      : BATCH_SIZE;
+
+    if (remaining !== null && remaining <= 0) break;
+
     let query = supabase
       .from("activity")
       .select("*")
       .eq("referenceid", referenceid)
-      .order("id", { ascending: true })
-      .limit(BATCH_SIZE);
+      .order("date_updated", { ascending: false })
+      .limit(batchSize);
 
-    // FIX 3: was `if (lastId)` — fails when lastId is 0
-    if (lastId !== null) query = query.gt("id", lastId);
-
-    // FIX 2: apply each date bound independently
+    // Apply date filters independently
     if (fromISO) query = query.gte("date_created", fromISO);
     if (toISO)   query = query.lt("date_created", toISO);
 
@@ -46,10 +42,13 @@ async function* fetchActivityBatches(
     if (!data || data.length === 0) break;
 
     yield data;
+    totalFetched += data.length;
 
-    // FIX 1: stop if partial batch — no more rows
-    if (data.length < BATCH_SIZE) break;
-    lastId = data[data.length - 1].id;
+    // Stop if we reached maxRecords
+    if (maxRecords && totalFetched >= maxRecords) break;
+
+    // Stop if partial batch — no more rows
+    if (data.length < batchSize) break;
   }
 }
 
@@ -104,11 +103,14 @@ export default async function handler(
   req: NextApiRequest,
   res: NextApiResponse,
 ) {
-  const { referenceid, from, to } = req.query;
+  const { referenceid, from, to, limit } = req.query;
 
   if (!referenceid || typeof referenceid !== "string") {
     return res.status(400).json({ message: "Missing or invalid referenceid" });
   }
+
+  // Parse pagination params - default to 500 max records
+  const parsedLimit = limit ? parseInt(String(limit), 10) : 500;
 
   // Parse date range — filter is on date_created for this endpoint
   const fromISO =
@@ -130,8 +132,9 @@ export default async function handler(
     let firstActivity = true;
     const allActivityReferenceNumbers: string[] = [];
     let totalActivities = 0;
+    let hasMore = false;
 
-    for await (const batch of fetchActivityBatches(referenceid, fromISO, toISO)) {
+    for await (const batch of fetchActivityBatches(referenceid, fromISO, toISO, parsedLimit)) {
       for (const row of batch) {
         if (row.activity_reference_number) {
           allActivityReferenceNumbers.push(row.activity_reference_number);
@@ -142,6 +145,11 @@ export default async function handler(
         firstActivity = false;
         totalActivities++;
       }
+    }
+
+    // Check if there might be more records (only when limit is applied)
+    if (parsedLimit && totalActivities >= parsedLimit) {
+      hasMore = true;
     }
 
     res.write(`],"history":[`);
@@ -159,7 +167,7 @@ export default async function handler(
     }
 
     res.write(
-      `],"total_activities":${totalActivities},"total_history":${totalHistory}}`,
+      `],"total_activities":${totalActivities},"total_history":${totalHistory},"has_more":${hasMore}}`,
     );
     res.end();
   } catch (err: any) {

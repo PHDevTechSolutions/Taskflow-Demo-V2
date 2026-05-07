@@ -164,8 +164,19 @@ export const Scheduled: React.FC<ScheduledProps> = ({
 
   const [selectedActivityId, setSelectedActivityId] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
+  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("All");
   const [tsmFeedbackOpen, setTsmFeedbackOpen] = useState<string | null>(null);
+  const SCHEDULED_BATCH_SIZE = 10; // Show 10 initially, load more +10
+  const [displayedScheduledCount, setDisplayedScheduledCount] = useState(SCHEDULED_BATCH_SIZE);
+
+  // Debounce search term to avoid excessive API calls
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearchTerm(searchTerm);
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [searchTerm]);
 
   const todayStr = toLocalDateString(new Date());
 
@@ -189,8 +200,22 @@ export const Scheduled: React.FC<ScheduledProps> = ({
     setActivitiesLoading(true);
     setHistoryLoading(true);
 
-    const url = new URL("/api/activity/tsa/planner/fetch", window.location.origin);
+    // Use search API when debouncedSearchTerm is present, otherwise use regular fetch
+    const isSearching = debouncedSearchTerm.trim().length > 0;
+    const url = new URL(
+      isSearching
+        ? "/api/activity/tsa/planner/search"
+        : "/api/activity/tsa/planner/fetch",
+      window.location.origin,
+    );
     url.searchParams.append("referenceid", referenceid);
+
+    if (isSearching) {
+      url.searchParams.append("search", debouncedSearchTerm);
+    } else {
+      // Only apply limit for regular fetch (not search)
+      url.searchParams.append("limit", "500");
+    }
 
     fetch(url.toString())
       .then(async (res) => {
@@ -206,7 +231,7 @@ export const Scheduled: React.FC<ScheduledProps> = ({
         setActivitiesLoading(false);
         setHistoryLoading(false);
       });
-  }, [referenceid]);
+  }, [referenceid, debouncedSearchTerm]);
 
   // Fetch accounts for cluster series
   const fetchAccounts = useCallback(async () => {
@@ -264,6 +289,13 @@ export const Scheduled: React.FC<ScheduledProps> = ({
       supabase.removeChannel(historyChannel);
     };
   }, [referenceid, fetchAllData, fetchAccounts]);
+
+  // Trigger fetch when debounced search term changes
+  useEffect(() => {
+    if (referenceid) {
+      fetchAllData();
+    }
+  }, [debouncedSearchTerm, referenceid, fetchAllData]);
 
   // Normalize date string
   const normalizeDate = (dateStr?: string | null): string | null => {
@@ -376,25 +408,7 @@ export const Scheduled: React.FC<ScheduledProps> = ({
       .filter((item) => {
         const itemScheduledDate = toLocalDateString(item.scheduled_date);
 
-        if (searchTerm.trim() !== "") {
-          const termLower = searchTerm.toLowerCase();
-          const activityValues = Object.values(item)
-            .map((v) => (v != null ? v.toString() : ""))
-            .join(" ")
-            .toLowerCase();
-          const historyValues = item.relatedHistoryItems
-            .map((h) =>
-              Object.values(h)
-                .map((v) => (v != null ? v.toString() : ""))
-                .join(" ")
-                .toLowerCase()
-            )
-            .join(" ");
-          const matchesSearch = activityValues.includes(termLower) || historyValues.includes(termLower);
-          if (!matchesSearch) return false;
-          return true;
-        }
-
+        // Search is now server-side, no client-side filtering needed
         if (dateCreatedFilterRange?.from) {
           const fromDate = toLocalDateString(dateCreatedFilterRange.from);
           const toDate = dateCreatedFilterRange.to ? toLocalDateString(dateCreatedFilterRange.to) : fromDate;
@@ -408,7 +422,16 @@ export const Scheduled: React.FC<ScheduledProps> = ({
         return true;
       })
       .sort((a, b) => new Date(b.date_updated).getTime() - new Date(a.date_updated).getTime());
-  }, [mergedActivities, dateCreatedFilterRange, todayStr, statusFilter, searchTerm]);
+  }, [mergedActivities, dateCreatedFilterRange, todayStr, statusFilter]);
+
+  // Paginated data for lazy loading
+  const displayedScheduledData = filteredActivities.slice(0, displayedScheduledCount);
+  const hasMoreScheduled = filteredActivities.length > displayedScheduledCount;
+
+  // Reset pagination when search or filter changes
+  useEffect(() => {
+    setDisplayedScheduledCount(SCHEDULED_BATCH_SIZE);
+  }, [debouncedSearchTerm, statusFilter]);
 
   useEffect(() => {
     onCountChange?.(filteredActivities.length);
@@ -817,8 +840,9 @@ export const Scheduled: React.FC<ScheduledProps> = ({
           ) : filteredActivities.length === 0 ? (
             <p className="text-muted-foreground text-xs px-2">No scheduled activities found.</p>
           ) : (
+            <>
             <Accordion type="single" collapsible className="w-full">
-              {filteredActivities.map((item) => {
+              {displayedScheduledData.map((item) => {
                 const itemDate = toLocalDateString(item.scheduled_date);
                 const isFutureDate = itemDate > todayStr;
                 const badgeProps = getBadgeProps(item.status, isFutureDate);
@@ -1043,6 +1067,20 @@ export const Scheduled: React.FC<ScheduledProps> = ({
                 );
               })}
             </Accordion>
+
+            {/* ─── Lazy Loading: Load More Button ─── */}
+            {hasMoreScheduled && (
+              <div className="flex justify-center py-4 mt-4">
+                <Button
+                  variant="outline"
+                  className="rounded-none text-xs"
+                  onClick={() => setDisplayedScheduledCount(prev => prev + SCHEDULED_BATCH_SIZE)}
+                >
+                  Load More ({filteredActivities.length - displayedScheduledCount} remaining)
+                </Button>
+              </div>
+            )}
+            </>
           )}
         </section>
       </div>

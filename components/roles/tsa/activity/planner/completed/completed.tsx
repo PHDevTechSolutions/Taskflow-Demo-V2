@@ -107,9 +107,18 @@ export const Completed: React.FC<NewTaskProps> = ({
   const [history, setHistory] = useState<HistoryItem[]>([]);
 
   const [searchTerm, setSearchTerm] = useState("");
+  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState("");
   const [tsmFeedbackOpen, setTsmFeedbackOpen] = useState<string | null>(null);
-  const COMPLETED_BATCH_SIZE = 20;
+  const COMPLETED_BATCH_SIZE = 10; // Show 10 initially, load more +10
   const [displayedCompletedCount, setDisplayedCompletedCount] = useState(COMPLETED_BATCH_SIZE);
+
+  // Debounce search term to avoid excessive API calls
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearchTerm(searchTerm);
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [searchTerm]);
 
   const fetchAllData = useCallback(() => {
     if (!referenceid) {
@@ -129,11 +138,23 @@ export const Completed: React.FC<NewTaskProps> = ({
       ? new Date(dateCreatedFilterRange.to).toISOString().slice(0, 10)
       : null;
 
+    // Use search API when debouncedSearchTerm is present, otherwise use regular fetch
+    const isSearching = debouncedSearchTerm.trim().length > 0;
     const url = new URL(
-      "/api/activity/tsa/planner/fetch",
+      isSearching
+        ? "/api/activity/tsa/planner/search"
+        : "/api/activity/tsa/planner/fetch",
       window.location.origin,
     );
     url.searchParams.append("referenceid", referenceid);
+
+    if (isSearching) {
+      url.searchParams.append("search", debouncedSearchTerm);
+    } else {
+      // Only apply limit for regular fetch (not search)
+      url.searchParams.append("limit", "500");
+    }
+
     if (from && to) {
       url.searchParams.append("from", from);
       url.searchParams.append("to", to);
@@ -153,7 +174,7 @@ export const Completed: React.FC<NewTaskProps> = ({
         setActivitiesLoading(false);
         setHistoryLoading(false);
       });
-  }, [referenceid, dateCreatedFilterRange]);
+  }, [referenceid, dateCreatedFilterRange, debouncedSearchTerm]);
 
   useEffect(() => {
     if (!referenceid) return;
@@ -206,6 +227,13 @@ export const Completed: React.FC<NewTaskProps> = ({
     };
   }, [referenceid, fetchAllData]);
 
+  // Trigger fetch when debounced search term changes
+  useEffect(() => {
+    if (referenceid) {
+      fetchAllData();
+    }
+  }, [debouncedSearchTerm, referenceid, fetchAllData]);
+
   const isDateInRange = (
     dateStr: string,
     range: DateRange | undefined,
@@ -241,17 +269,8 @@ export const Completed: React.FC<NewTaskProps> = ({
     );
 
   const filteredData = mergedData.filter((item) => {
-    const lowerSearch = searchTerm.toLowerCase();
-    return (
-      (item.company_name?.toLowerCase() ?? "").includes(lowerSearch) ||
-      (item.ticket_reference_number?.toLowerCase().includes(lowerSearch) ??
-        false) ||
-      item.relatedHistoryItems.some(
-        (h) =>
-          (h.quotation_number?.toLowerCase().includes(lowerSearch) ?? false) ||
-          (h.so_number?.toLowerCase().includes(lowerSearch) ?? false),
-      )
-    );
+    // Search is now server-side, no client-side filtering needed
+    return true;
   });
 
   // Paginated data for lazy loading
@@ -265,7 +284,7 @@ export const Completed: React.FC<NewTaskProps> = ({
   // Reset pagination when search changes
   useEffect(() => {
     setDisplayedCompletedCount(COMPLETED_BATCH_SIZE);
-  }, [searchTerm]);
+  }, [debouncedSearchTerm]);
 
   if (error) {
     return (

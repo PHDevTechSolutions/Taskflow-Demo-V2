@@ -2127,8 +2127,8 @@ export default function TaskListEditDialog({
       const _total = Number(payload.totalPrice) || 0;
 
       // ✅ Calculations (rounded properly) - Match preview.tsx logic exactly
-      // Gross Sales = sum of item.totalAmount (already discounted per item)
-      const _grossSales = round2((payload.items || []).reduce((acc, item) => acc + (item.totalAmount !== undefined ? Number(item.totalAmount) : ((Number(item.qty) || 0) * item.unitPrice)), 0));
+      // Gross Sales = sum of (unitPrice * qty) - undiscounted gross amount
+      const _grossSales = round2((payload.items || []).reduce((acc, item) => acc + ((Number(item.qty) || 0) * (item.unitPrice || 0)), 0));
       // Total Trade Discount = sum of (discountAmount * qty) for all items
       const _totalDiscount = round2((payload.items || []).reduce((acc, item) => {
         const disc = item.discountAmount ?? 0;

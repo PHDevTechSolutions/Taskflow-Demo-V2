@@ -102,6 +102,13 @@ export const Progress: React.FC<NewTaskProps> = ({
     const [searchTerm, setSearchTerm] = useState("");
     const [agents, setAgents] = useState<any[]>([]);
 
+    // Server-side pagination state
+    const BATCH_SIZE = 10;
+    const [allActivities, setAllActivities] = useState<Activity[]>([]); // Accumulated activities
+    const [lastActivityId, setLastActivityId] = useState<number | null>(null);
+    const [hasMoreActivities, setHasMoreActivities] = useState(true);
+    const [isLoadingMore, setIsLoadingMore] = useState(false);
+
     // Fetch companies with no cache
     useEffect(() => {
         setLoadingCompanies(true);
@@ -130,13 +137,28 @@ export const Progress: React.FC<NewTaskProps> = ({
             });
     }, []); // Removed referenceid dependency here
 
-    // Fetch activities with no cache via API route
-    const fetchActivities = useCallback(async () => {
-        setLoadingActivities(true);
+    // Fetch activities with server-side pagination
+    const fetchActivities = useCallback(async (loadMore: boolean = false) => {
+        if (loadMore) {
+            setIsLoadingMore(true);
+        } else {
+            setLoadingActivities(true);
+            // Reset pagination on fresh fetch
+            setLastActivityId(null);
+            setHasMoreActivities(true);
+            setAllActivities([]);
+        }
         setErrorActivities(null);
 
         try {
-            const res = await fetch(`/api/act-fetch-admin-activity`, {
+            // Build URL with pagination params
+            const params = new URLSearchParams();
+            params.append("limit", String(BATCH_SIZE));
+            if (loadMore && lastActivityId !== null) {
+                params.append("lastId", String(lastActivityId));
+            }
+
+            const res = await fetch(`/api/act-fetch-admin-activity?${params.toString()}`, {
                 cache: "no-store",
                 headers: {
                     "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
@@ -151,13 +173,30 @@ export const Progress: React.FC<NewTaskProps> = ({
             }
 
             const json = await res.json();
-            setActivities(json.data || []);
+            const newActivities = json.data || [];
+
+            // Check if we got a full batch (means there might be more)
+            setHasMoreActivities(newActivities.length === BATCH_SIZE);
+
+            // Track last ID for next pagination
+            if (newActivities.length > 0) {
+                const lastId = newActivities[newActivities.length - 1].id;
+                setLastActivityId(lastId);
+            }
+
+            // Accumulate or replace activities
+            if (loadMore) {
+                setAllActivities(prev => [...prev, ...newActivities]);
+            } else {
+                setAllActivities(newActivities);
+            }
         } catch (error: any) {
             setErrorActivities(error.message || "Error fetching activities");
         } finally {
             setLoadingActivities(false);
+            setIsLoadingMore(false);
         }
-    }, []);
+    }, [lastActivityId]);
 
     const fetchHistory = useCallback(async () => {
         setLoadingHistory(true);
@@ -182,8 +221,8 @@ export const Progress: React.FC<NewTaskProps> = ({
 
     // Initial fetch + realtime subscription to keep UI fresh
     useEffect(() => {
-        // Initial fetches
-        fetchActivities();
+        // Initial fetches - first batch only
+        fetchActivities(false);
         fetchHistory();
 
         // Subscribe realtime for activities (no referenceid filtering)
@@ -245,7 +284,7 @@ export const Progress: React.FC<NewTaskProps> = ({
 
     const allowedStatuses = ["On-Progress", "Assisted", "Quote-Done", "SO-Done", "Not Assisted", "Cancelled"];
 
-    const mergedData = activities
+    const mergedData = allActivities
         .filter((a) => allowedStatuses.includes(a.status))
         .filter((a) => isDateInRange(a.date_created, dateCreatedFilterRange))
         .filter((a) => !a.scheduled_date || a.scheduled_date === "")
@@ -266,20 +305,36 @@ export const Progress: React.FC<NewTaskProps> = ({
         })
         .sort((a, b) => new Date(b.date_updated).getTime() - new Date(a.date_updated).getTime());
 
-    const filteredData = mergedData.filter((item) => {
-        const lowerSearch = searchTerm.toLowerCase();
-        return (
-            item.company_name.toLowerCase().includes(lowerSearch) ||
-            (item.ticket_reference_number?.toLowerCase().includes(lowerSearch) ?? false) ||
-            item.relatedHistoryItems.some((h) =>
-                (h.quotation_number?.toLowerCase().includes(lowerSearch) ?? false) ||
-                (h.so_number?.toLowerCase().includes(lowerSearch) ?? false)
-            )
-        );
-    });
+    // Filter all data first (search works on complete dataset)
+    const filteredData = useMemo(() => {
+        return mergedData.filter((item) => {
+            const lowerSearch = searchTerm.toLowerCase();
+            return (
+                item.company_name.toLowerCase().includes(lowerSearch) ||
+                (item.ticket_reference_number?.toLowerCase().includes(lowerSearch) ?? false) ||
+                item.relatedHistoryItems.some((h) =>
+                    (h.quotation_number?.toLowerCase().includes(lowerSearch) ?? false) ||
+                    (h.so_number?.toLowerCase().includes(lowerSearch) ?? false)
+                )
+            );
+        });
+    }, [mergedData, searchTerm]);
 
-    const isLoading = loadingCompanies || loadingActivities;
+    // Search works on all loaded data
+    const displayedData = filteredData;
+
+    // hasMore comes from server response
+    const hasMore = hasMoreActivities;
+
+    const isLoading = loadingCompanies || (loadingActivities && !isLoadingMore);
     const error = errorCompanies || errorActivities;
+
+    // Handle Load More click
+    const handleLoadMore = () => {
+        if (!isLoadingMore && hasMoreActivities) {
+            fetchActivities(true); // Load more from server
+        }
+    };
 
     const openDoneDialog = (id: string) => {
         setSelectedActivityId(id);
@@ -349,13 +404,25 @@ export const Progress: React.FC<NewTaskProps> = ({
         fetchAgents();
     }, []);
 
-    if (isLoading) {
-        return (
-            <div className="flex justify-center items-center h-40">
-                <Spinner className="size-8" />
+    // Show skeleton loading while data is being fetched (initial load only)
+    const showSkeletonLoading = (loadingCompanies || loadingActivities || loadingHistory) && displayedData.length === 0 && !isLoadingMore;
+
+    // Skeleton component for loading state
+    const SkeletonItem = () => (
+        <div className="w-full border rounded-sm shadow-sm mt-2 border-gray-200 p-2 animate-pulse">
+            <div className="flex justify-between items-center mb-2">
+                <div className="flex items-center gap-2 flex-1">
+                    <div className="w-8 h-8 bg-gray-200 rounded-sm"></div>
+                    <div className="h-4 bg-gray-200 rounded w-48"></div>
+                </div>
+                <div className="w-16 h-8 bg-gray-200 rounded"></div>
             </div>
-        );
-    }
+            <div className="flex gap-1">
+                <div className="h-6 bg-gray-200 rounded w-20"></div>
+                <div className="h-6 bg-gray-200 rounded w-16"></div>
+            </div>
+        </div>
+    );
 
     if (error) {
         return (
@@ -394,14 +461,42 @@ export const Progress: React.FC<NewTaskProps> = ({
                 aria-label="Search accounts"
             />
 
-            <div className="mb-2 text-xs font-bold">
-                Total On-Progress Activities: {mergedData.length}
+            <div className="mb-2 text-xs font-bold flex items-center justify-between">
+                <span>
+                    Total On-Progress Activities: {filteredData.length}
+                    {showSkeletonLoading && (
+                        <span className="ml-2 text-muted-foreground font-normal">(Loading...)</span>
+                    )}
+                </span>
+                {(loadingActivities || loadingHistory || loadingCompanies || isLoadingMore) && (
+                    <span className="flex items-center gap-1 text-muted-foreground font-normal animate-pulse">
+                        <Spinner className="size-3" /> 
+                        {showSkeletonLoading ? "Fetching data..." : isLoadingMore ? "Loading more..." : "Updating..."}
+                    </span>
+                )}
             </div>
 
             <div className="max-h-[70vh] overflow-auto space-y-8 custom-scrollbar">
                 <Accordion type="single" collapsible className="w-full">
 
-                    {filteredData.map((item) => {
+                    {/* Skeleton loading when no data yet */}
+                    {showSkeletonLoading && (
+                        <>
+                            <SkeletonItem />
+                            <SkeletonItem />
+                            <SkeletonItem />
+                            <SkeletonItem />
+                            <SkeletonItem />
+                            <SkeletonItem />
+                            <SkeletonItem />
+                            <SkeletonItem />
+                            <SkeletonItem />
+                            <SkeletonItem />
+                        </>
+                    )}
+
+                    {/* Show data when available */}
+                    {!showSkeletonLoading && displayedData.map((item) => {
                         // Define bg colors base sa status
                         let badgeClass = "bg-gray-200 text-gray-800"; // default light gray
 
@@ -632,7 +727,41 @@ export const Progress: React.FC<NewTaskProps> = ({
                             </AccordionItem>
                         );
                     })}
+
+                    {/* Show empty state when no data and not loading */}
+                    {!showSkeletonLoading && displayedData.length === 0 && (
+                        <div className="text-center py-8 text-muted-foreground text-xs">
+                            {searchTerm ? "No matching activities found." : "No activities available."}
+                        </div>
+                    )}
                 </Accordion>
+
+                {/* Loading progress bar for background fetches */}
+                {(loadingActivities || loadingHistory || loadingCompanies || isLoadingMore) && !showSkeletonLoading && (
+                    <div className="w-full bg-gray-100 h-1 mt-2 overflow-hidden rounded-none">
+                        <div className="bg-blue-500 h-full animate-pulse w-full"></div>
+                    </div>
+                )}
+
+                {/* Load More Button - fetches from server */}
+                {hasMore && !showSkeletonLoading && (
+                    <div className="flex justify-center py-4 mt-4">
+                        <Button
+                            variant="outline"
+                            className="rounded-none text-xs"
+                            onClick={handleLoadMore}
+                            disabled={isLoadingMore || loadingActivities || loadingHistory || loadingCompanies}
+                        >
+                            {isLoadingMore ? (
+                                <span className="flex items-center gap-2">
+                                    <Spinner className="size-3" /> Loading more from server...
+                                </span>
+                            ) : (
+                                `Load More (showing ${displayedData.length} of ${allActivities.length}+)` 
+                            )}
+                        </Button>
+                    </div>
+                )}
             </div>
 
             <DoneDialog
