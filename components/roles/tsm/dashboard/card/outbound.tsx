@@ -9,15 +9,15 @@ import {
   TableHeader, TableRow, TableFooter,
 } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
-import { Info, Download } from "lucide-react";
+import { Info, Download, Settings2, X, Eye, EyeOff, Tag, Columns3, Users } from "lucide-react";
 import ExcelJS from "exceljs";
 
 /* ================= TYPES ================= */
 
 interface HistoryItem {
   referenceid: string;
-  source: string; // "Outbound - Touchbase" | "Outbound - Follow-up"
-  call_status: string; // "Successful" | "Unsuccessful"
+  source: string;
+  call_status: string;
   type_activity: string;
   start_date: string;
   end_date: string;
@@ -36,6 +36,20 @@ interface OutboundCardProps {
   agents: Agent[];
 }
 
+/* ================= CONSTANTS ================= */
+
+const ALL_COLUMNS = [
+  { key: "tbTotal",   label: "Touchbase Total",   group: "touchbase" },
+  { key: "tbSuccess", label: "Touchbase Success",  group: "touchbase" },
+  { key: "tbFail",    label: "Touchbase Fail",     group: "touchbase" },
+  { key: "fuTotal",   label: "Follow-up Total",    group: "followup"  },
+  { key: "fuSuccess", label: "Follow-up Success",  group: "followup"  },
+  { key: "fuFail",    label: "Follow-up Fail",     group: "followup"  },
+  { key: "subtotal",  label: "Subtotal",           group: "misc"      },
+] as const;
+
+type ColKey = typeof ALL_COLUMNS[number]["key"];
+
 /* ================= HELPERS ================= */
 
 function formatDurationMs(ms: number) {
@@ -51,10 +65,184 @@ function formatDurationMs(ms: number) {
   return parts.join(" ") || "0s";
 }
 
-/* ================= COMPONENT ================= */
+/* ================= SETTINGS PANEL ================= */
+
+interface SettingsPanelProps {
+  onClose: () => void;
+
+  // Agent visibility
+  agentList: { id: string; name: string }[];
+  hiddenAgents: Set<string>;
+  onToggleAgent: (id: string) => void;
+  onShowAllAgents: () => void;
+  onHideAllAgents: () => void;
+
+  // Source labels
+  touchbaseLabel: string;
+  followupLabel: string;
+  onTouchbaseLabel: (v: string) => void;
+  onFollowupLabel: (v: string) => void;
+
+  // Status labels
+  successLabel: string;
+  failLabel: string;
+  onSuccessLabel: (v: string) => void;
+  onFailLabel: (v: string) => void;
+
+  // Column visibility
+  hiddenCols: Set<ColKey>;
+  onToggleCol: (k: ColKey) => void;
+}
+
+function SettingsPanel({
+  onClose,
+  agentList, hiddenAgents, onToggleAgent, onShowAllAgents, onHideAllAgents,
+  touchbaseLabel, followupLabel, onTouchbaseLabel, onFollowupLabel,
+  successLabel, failLabel, onSuccessLabel, onFailLabel,
+  hiddenCols, onToggleCol,
+}: SettingsPanelProps) {
+
+  const Section = ({ icon, title, children }: { icon: React.ReactNode; title: string; children: React.ReactNode }) => (
+    <div className="space-y-2">
+      <div className="flex items-center gap-1.5 text-xs font-semibold text-gray-600 uppercase tracking-wider">
+        {icon}
+        <span>{title}</span>
+      </div>
+      {children}
+    </div>
+  );
+
+  const LabelField = ({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) => (
+    <div className="flex items-center gap-2">
+      <span className="w-24 text-xs text-gray-500 flex-shrink-0">{label}</span>
+      <input
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="flex-1 text-xs border border-gray-200 rounded-md px-2 py-1 bg-white focus:outline-none focus:ring-1 focus:ring-blue-300"
+      />
+    </div>
+  );
+
+  return (
+    <div className="absolute top-0 right-0 z-20 w-72 h-full bg-white border-l border-gray-200 shadow-xl rounded-r-xl flex flex-col overflow-hidden">
+      {/* Panel Header */}
+      <div className="flex items-center justify-between px-4 py-3 border-b bg-gray-50">
+        <div className="flex items-center gap-1.5">
+          <Settings2 className="w-3.5 h-3.5 text-gray-500" />
+          <span className="text-xs font-semibold text-gray-700">Customize View</span>
+        </div>
+        <button onClick={onClose} className="p-1 rounded hover:bg-gray-200 transition-colors">
+          <X className="w-3.5 h-3.5 text-gray-500" />
+        </button>
+      </div>
+
+      <div className="flex-1 overflow-y-auto px-4 py-4 space-y-5">
+
+        {/* 1. Agent Visibility */}
+        <Section icon={<Users className="w-3.5 h-3.5" />} title="Agent Visibility">
+          <div className="flex gap-1.5 mb-2">
+            <button
+              onClick={onShowAllAgents}
+              className="text-[10px] px-2 py-0.5 rounded border border-gray-200 hover:bg-gray-50 text-gray-500"
+            >
+              Show All
+            </button>
+            <button
+              onClick={onHideAllAgents}
+              className="text-[10px] px-2 py-0.5 rounded border border-gray-200 hover:bg-gray-50 text-gray-500"
+            >
+              Hide All
+            </button>
+          </div>
+          <div className="space-y-1 max-h-40 overflow-y-auto pr-1">
+            {agentList.map(({ id, name }) => {
+              const hidden = hiddenAgents.has(id);
+              return (
+                <button
+                  key={id}
+                  onClick={() => onToggleAgent(id)}
+                  className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs transition-colors ${
+                    hidden
+                      ? "bg-gray-100 text-gray-400"
+                      : "bg-white border border-gray-200 text-gray-700 hover:bg-gray-50"
+                  }`}
+                >
+                  <span className="capitalize truncate">{name}</span>
+                  {hidden ? (
+                    <EyeOff className="w-3 h-3 flex-shrink-0 text-gray-400" />
+                  ) : (
+                    <Eye className="w-3 h-3 flex-shrink-0 text-blue-400" />
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        </Section>
+
+        <hr className="border-gray-100" />
+
+        {/* 2. Source Labels */}
+        <Section icon={<Tag className="w-3.5 h-3.5" />} title="Source Labels">
+          <LabelField label="Touchbase" value={touchbaseLabel} onChange={onTouchbaseLabel} />
+          <LabelField label="Follow-up"  value={followupLabel}  onChange={onFollowupLabel}  />
+        </Section>
+
+        <hr className="border-gray-100" />
+
+        {/* 3. Status Labels */}
+        <Section icon={<Tag className="w-3.5 h-3.5" />} title="Status Labels">
+          <LabelField label="✓ Success" value={successLabel} onChange={onSuccessLabel} />
+          <LabelField label="✗ Fail"    value={failLabel}    onChange={onFailLabel}    />
+        </Section>
+
+        <hr className="border-gray-100" />
+
+        {/* 4. Column Visibility */}
+        <Section icon={<Columns3 className="w-3.5 h-3.5" />} title="Column Visibility">
+          <div className="space-y-1">
+            {ALL_COLUMNS.map(({ key, label, group }) => {
+              const visible = !hiddenCols.has(key);
+              const accent =
+                group === "touchbase" ? "bg-amber-50 border-amber-200 text-amber-700"
+                : group === "followup" ? "bg-blue-50 border-blue-200 text-blue-700"
+                : "bg-gray-50 border-gray-200 text-gray-600";
+              return (
+                <button
+                  key={key}
+                  onClick={() => onToggleCol(key)}
+                  className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs border transition-colors ${
+                    visible ? accent : "bg-gray-100 border-gray-100 text-gray-400"
+                  }`}
+                >
+                  <span>{label}</span>
+                  {visible ? (
+                    <Eye className="w-3 h-3 flex-shrink-0" />
+                  ) : (
+                    <EyeOff className="w-3 h-3 flex-shrink-0 text-gray-400" />
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        </Section>
+      </div>
+    </div>
+  );
+}
+
+/* ================= MAIN COMPONENT ================= */
 
 export function OutboundCard({ history, agents }: OutboundCardProps) {
   const [showComputation, setShowComputation] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
+
+  // --- Customization state ---
+  const [hiddenAgents, setHiddenAgents] = useState<Set<string>>(new Set());
+  const [touchbaseLabel, setTouchbaseLabel] = useState("Touchbase");
+  const [followupLabel,  setFollowupLabel]  = useState("Follow-up");
+  const [successLabel,   setSuccessLabel]   = useState("Success");
+  const [failLabel,      setFailLabel]      = useState("Fail");
+  const [hiddenCols, setHiddenCols] = useState<Set<ColKey>>(new Set());
 
   /* ---- Agent map ---- */
   const agentMap = useMemo(() => {
@@ -114,7 +302,21 @@ export function OutboundCard({ history, agents }: OutboundCardProps) {
     return Array.from(map.values());
   }, [history]);
 
-  /* ---- Outbound calls duration ---- */
+  /* ---- Visible agents list (for settings panel + table) ---- */
+  const agentList = useMemo(
+    () =>
+      statsByAgent
+        .filter((s) => agentMap.has(s.agentID))
+        .map((s) => ({ id: s.agentID, name: agentMap.get(s.agentID)!.name })),
+    [statsByAgent, agentMap]
+  );
+
+  const visibleStats = useMemo(
+    () => statsByAgent.filter((s) => agentMap.has(s.agentID) && !hiddenAgents.has(s.agentID)),
+    [statsByAgent, agentMap, hiddenAgents]
+  );
+
+  /* ---- Duration ---- */
   const outboundCalls = useMemo(
     () => history.filter((item) => item.type_activity === "Outbound Calls"),
     [history]
@@ -124,16 +326,14 @@ export function OutboundCard({ history, agents }: OutboundCardProps) {
     return outboundCalls.reduce((total, item) => {
       if (!item.start_date || !item.end_date) return total;
       const start = new Date(item.start_date.replace(" ", "T")).getTime();
-      const end = new Date(item.end_date.replace(" ", "T")).getTime();
+      const end   = new Date(item.end_date.replace(" ", "T")).getTime();
       if (!isNaN(start) && !isNaN(end) && end > start) return total + (end - start);
       return total;
     }, 0);
   }, [outboundCalls]);
 
-  /* ---- Grand totals ---- */
+  /* ---- Grand totals (visible agents only) ---- */
   const grandTotals = useMemo(() => {
-    // Only include agents with name info in totals
-    const visibleAgents = statsByAgent.filter((s) => agentMap.has(s.agentID));
     const t = {
       touchbaseCount: 0,
       touchbaseSuccessful: 0,
@@ -142,97 +342,100 @@ export function OutboundCard({ history, agents }: OutboundCardProps) {
       followupSuccessful: 0,
       followupUnsuccessful: 0,
     };
-    visibleAgents.forEach((s) => {
-      t.touchbaseCount += s.touchbaseCount;
-      t.touchbaseSuccessful += s.touchbaseSuccessful;
+    visibleStats.forEach((s) => {
+      t.touchbaseCount        += s.touchbaseCount;
+      t.touchbaseSuccessful   += s.touchbaseSuccessful;
       t.touchbaseUnsuccessful += s.touchbaseUnsuccessful;
-      t.followupCount += s.followupCount;
-      t.followupSuccessful += s.followupSuccessful;
-      t.followupUnsuccessful += s.followupUnsuccessful;
+      t.followupCount         += s.followupCount;
+      t.followupSuccessful    += s.followupSuccessful;
+      t.followupUnsuccessful  += s.followupUnsuccessful;
     });
     return { ...t, subtotal: t.touchbaseCount + t.followupCount };
-  }, [statsByAgent, agentMap]);
+  }, [visibleStats]);
 
-  /* ── Excel Export ── */
+  /* ---- Helpers ---- */
+  const colVisible = (k: ColKey) => !hiddenCols.has(k);
+
+  const toggleAgent  = (id: string)  => setHiddenAgents((prev) => { const next = new Set(prev); next.has(id) ? next.delete(id) : next.add(id); return next; });
+  const showAllAgents = ()            => setHiddenAgents(new Set());
+  const hideAllAgents = ()            => setHiddenAgents(new Set(agentList.map((a) => a.id)));
+  const toggleCol    = (k: ColKey)   => setHiddenCols((prev)   => { const next = new Set(prev); next.has(k) ? next.delete(k) : next.add(k); return next; });
+
+  /* ---- Export ---- */
   const exportToExcel = async () => {
-    if (statsByAgent.length === 0) return;
-
+    if (visibleStats.length === 0) return;
     try {
-      const workbook = new ExcelJS.Workbook();
+      const workbook  = new ExcelJS.Workbook();
       const worksheet = workbook.addWorksheet("Outbound History");
 
-      // Headers
-      worksheet.columns = [
-        { header: "Agent", key: "agent", width: 25 },
-        { header: "Touchbase Total", key: "tbTotal", width: 15 },
-        { header: "Touchbase Success", key: "tbSuccess", width: 18 },
-        { header: "Touchbase Fail", key: "tbFail", width: 15 },
-        { header: "Follow-up Total", key: "fuTotal", width: 15 },
-        { header: "Follow-up Success", key: "fuSuccess", width: 18 },
-        { header: "Follow-up Fail", key: "fuFail", width: 15 },
-        { header: "Subtotal", key: "subtotal", width: 15 },
+      const cols = [
+        { header: "Agent",                       key: "agent",     width: 25 },
+        ...(colVisible("tbTotal")   ? [{ header: `${touchbaseLabel} Total`,   key: "tbTotal",   width: 18 }] : []),
+        ...(colVisible("tbSuccess") ? [{ header: `${touchbaseLabel} ${successLabel}`, key: "tbSuccess", width: 20 }] : []),
+        ...(colVisible("tbFail")    ? [{ header: `${touchbaseLabel} ${failLabel}`,    key: "tbFail",    width: 18 }] : []),
+        ...(colVisible("fuTotal")   ? [{ header: `${followupLabel} Total`,    key: "fuTotal",   width: 18 }] : []),
+        ...(colVisible("fuSuccess") ? [{ header: `${followupLabel} ${successLabel}`, key: "fuSuccess", width: 20 }] : []),
+        ...(colVisible("fuFail")    ? [{ header: `${followupLabel} ${failLabel}`,    key: "fuFail",    width: 18 }] : []),
+        ...(colVisible("subtotal")  ? [{ header: "Subtotal",                  key: "subtotal",  width: 15 }] : []),
       ];
+      worksheet.columns = cols;
 
-      // Style Header
       const headerRow = worksheet.getRow(1);
-      headerRow.font = { bold: true };
-      headerRow.fill = {
-        type: 'pattern',
-        pattern: 'solid',
-        fgColor: { argb: 'FFE0E0E0' }
-      };
-      headerRow.alignment = { vertical: 'middle', horizontal: 'center' };
+      headerRow.font      = { bold: true };
+      headerRow.fill      = { type: "pattern", pattern: "solid", fgColor: { argb: "FFE0E0E0" } };
+      headerRow.alignment = { vertical: "middle", horizontal: "center" };
 
-      // Add Data (only agents with name info)
-      const filteredStats = statsByAgent.filter((stat) => agentMap.has(stat.agentID));
-      filteredStats.forEach((stat) => {
-        const info = agentMap.get(stat.agentID)!;
+      visibleStats.forEach((stat) => {
+        const info     = agentMap.get(stat.agentID)!;
         const subtotal = stat.touchbaseCount + stat.followupCount;
-
-        worksheet.addRow({
-          agent: info.name,
-          tbTotal: stat.touchbaseCount,
-          tbSuccess: stat.touchbaseSuccessful,
-          tbFail: stat.touchbaseUnsuccessful,
-          fuTotal: stat.followupCount,
-          fuSuccess: stat.followupSuccessful,
-          fuFail: stat.followupUnsuccessful,
-          subtotal: subtotal,
-        });
+        const row: Record<string, unknown> = { agent: info.name };
+        if (colVisible("tbTotal"))   row.tbTotal   = stat.touchbaseCount;
+        if (colVisible("tbSuccess")) row.tbSuccess = stat.touchbaseSuccessful;
+        if (colVisible("tbFail"))    row.tbFail    = stat.touchbaseUnsuccessful;
+        if (colVisible("fuTotal"))   row.fuTotal   = stat.followupCount;
+        if (colVisible("fuSuccess")) row.fuSuccess = stat.followupSuccessful;
+        if (colVisible("fuFail"))    row.fuFail    = stat.followupUnsuccessful;
+        if (colVisible("subtotal"))  row.subtotal  = subtotal;
+        worksheet.addRow(row);
       });
 
-      // Add Totals Row
       const totalRow = worksheet.addRow({
         agent: "TOTAL",
-        tbTotal: grandTotals.touchbaseCount,
-        tbSuccess: grandTotals.touchbaseSuccessful,
-        tbFail: grandTotals.touchbaseUnsuccessful,
-        fuTotal: grandTotals.followupCount,
-        fuSuccess: grandTotals.followupSuccessful,
-        fuFail: grandTotals.followupUnsuccessful,
-        subtotal: grandTotals.subtotal,
+        ...(colVisible("tbTotal")   ? { tbTotal:   grandTotals.touchbaseCount }        : {}),
+        ...(colVisible("tbSuccess") ? { tbSuccess: grandTotals.touchbaseSuccessful }   : {}),
+        ...(colVisible("tbFail")    ? { tbFail:    grandTotals.touchbaseUnsuccessful } : {}),
+        ...(colVisible("fuTotal")   ? { fuTotal:   grandTotals.followupCount }         : {}),
+        ...(colVisible("fuSuccess") ? { fuSuccess: grandTotals.followupSuccessful }    : {}),
+        ...(colVisible("fuFail")    ? { fuFail:    grandTotals.followupUnsuccessful }  : {}),
+        ...(colVisible("subtotal")  ? { subtotal:  grandTotals.subtotal }              : {}),
       });
       totalRow.font = { bold: true };
 
-      const filename = `TSM_Outbound_History_${new Date().toISOString().split('T')[0]}.xlsx`;
-
       const buffer = await workbook.xlsx.writeBuffer();
-      const blob = new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
-      const url = window.URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = filename;
+      const blob   = new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+      const url    = window.URL.createObjectURL(blob);
+      const link   = document.createElement("a");
+      link.href    = url;
+      link.download = `TSM_Outbound_History_${new Date().toISOString().split("T")[0]}.xlsx`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
       window.URL.revokeObjectURL(url);
-
     } catch (err) {
       console.error("Export failed:", err);
     }
   };
 
   if (outboundCalls.length === 0) return null;
+
+  /* ---- Active customizations badge count ---- */
+  const activeCustomizations =
+    hiddenAgents.size +
+    hiddenCols.size +
+    (touchbaseLabel !== "Touchbase" ? 1 : 0) +
+    (followupLabel  !== "Follow-up" ? 1 : 0) +
+    (successLabel   !== "Success"   ? 1 : 0) +
+    (failLabel      !== "Fail"      ? 1 : 0);
 
   return (
     <Card className="rounded-xl border shadow-sm">
@@ -242,8 +445,8 @@ export function OutboundCard({ history, agents }: OutboundCardProps) {
           <div>
             <h2 className="text-sm font-semibold text-gray-800">Outbound History</h2>
             <p className="text-xs text-gray-400 mt-0.5">
-              <span className="font-medium text-gray-500">Touchbase</span> and{" "}
-              <span className="font-medium text-gray-500">Follow-up</span> outbound calls
+              <span className="font-medium text-gray-500">{touchbaseLabel}</span> and{" "}
+              <span className="font-medium text-gray-500">{followupLabel}</span> outbound calls
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -251,7 +454,7 @@ export function OutboundCard({ history, agents }: OutboundCardProps) {
               variant="outline"
               size="sm"
               onClick={exportToExcel}
-              disabled={statsByAgent.length === 0}
+              disabled={visibleStats.length === 0}
               className="flex items-center gap-1.5 text-xs text-green-600 hover:text-green-800 border-green-200 bg-green-50/50 hover:bg-green-50"
             >
               <Download className="w-3.5 h-3.5" />
@@ -266,14 +469,58 @@ export function OutboundCard({ history, agents }: OutboundCardProps) {
               <Info className="w-3.5 h-3.5" />
               {showComputation ? "Hide" : "Details"}
             </Button>
+            {/* Settings button with badge */}
+            <Button
+              variant={showSettings ? "default" : "outline"}
+              size="sm"
+              onClick={() => setShowSettings(!showSettings)}
+              className={`relative flex items-center gap-1.5 text-xs ${
+                showSettings
+                  ? "bg-gray-800 text-white hover:bg-gray-700"
+                  : "text-gray-600 hover:text-gray-800"
+              }`}
+            >
+              <Settings2 className="w-3.5 h-3.5" />
+              Customize
+              {activeCustomizations > 0 && (
+                <span className="absolute -top-1.5 -right-1.5 bg-blue-500 text-white text-[9px] font-bold rounded-full w-4 h-4 flex items-center justify-center">
+                  {activeCustomizations}
+                </span>
+              )}
+            </Button>
           </div>
         </div>
       </CardHeader>
 
-      <CardContent className="p-4">
-        {statsByAgent.length === 0 ? (
+      {/* Body — relative so the settings panel overlays correctly */}
+      <CardContent className="p-4 relative">
+        {/* Settings Slide-in Panel */}
+        {showSettings && (
+          <SettingsPanel
+            onClose={() => setShowSettings(false)}
+            agentList={agentList}
+            hiddenAgents={hiddenAgents}
+            onToggleAgent={toggleAgent}
+            onShowAllAgents={showAllAgents}
+            onHideAllAgents={hideAllAgents}
+            touchbaseLabel={touchbaseLabel}
+            followupLabel={followupLabel}
+            onTouchbaseLabel={setTouchbaseLabel}
+            onFollowupLabel={setFollowupLabel}
+            successLabel={successLabel}
+            failLabel={failLabel}
+            onSuccessLabel={setSuccessLabel}
+            onFailLabel={setFailLabel}
+            hiddenCols={hiddenCols}
+            onToggleCol={toggleCol}
+          />
+        )}
+
+        {visibleStats.length === 0 ? (
           <div className="flex items-center justify-center py-10 text-xs text-gray-400">
-            No outbound records found.
+            {statsByAgent.length === 0
+              ? "No outbound records found."
+              : "All agents are hidden. Show agents in Customize → Agent Visibility."}
           </div>
         ) : (
           <div className="overflow-x-auto rounded-xl border border-gray-100">
@@ -282,36 +529,55 @@ export function OutboundCard({ history, agents }: OutboundCardProps) {
                 {/* Group row */}
                 <TableRow className="bg-gray-50 text-[11px] border-b-0">
                   <TableHead className="text-gray-500" rowSpan={2}>Agent</TableHead>
-                  <TableHead className="text-center text-amber-600 bg-amber-50 border-l" colSpan={3}>
-                    Touchbase
-                  </TableHead>
-                  <TableHead className="text-center text-blue-600 bg-blue-50 border-l" colSpan={3}>
-                    Follow-up
-                  </TableHead>
-                  <TableHead className="text-center text-gray-500 bg-gray-100 border-l" rowSpan={2}>
-                    Subtotal
-                  </TableHead>
+
+                  {/* Touchbase group — only render if at least one TB col is visible */}
+                  {(colVisible("tbTotal") || colVisible("tbSuccess") || colVisible("tbFail")) && (
+                    <TableHead
+                      className="text-center text-amber-600 bg-amber-50 border-l"
+                      colSpan={
+                        [colVisible("tbTotal"), colVisible("tbSuccess"), colVisible("tbFail")].filter(Boolean).length
+                      }
+                    >
+                      {touchbaseLabel}
+                    </TableHead>
+                  )}
+
+                  {/* Follow-up group */}
+                  {(colVisible("fuTotal") || colVisible("fuSuccess") || colVisible("fuFail")) && (
+                    <TableHead
+                      className="text-center text-blue-600 bg-blue-50 border-l"
+                      colSpan={
+                        [colVisible("fuTotal"), colVisible("fuSuccess"), colVisible("fuFail")].filter(Boolean).length
+                      }
+                    >
+                      {followupLabel}
+                    </TableHead>
+                  )}
+
+                  {colVisible("subtotal") && (
+                    <TableHead className="text-center text-gray-500 bg-gray-100 border-l" rowSpan={2}>
+                      Subtotal
+                    </TableHead>
+                  )}
                 </TableRow>
+
                 <TableRow className="bg-gray-50 text-[11px]">
-                  <TableHead className="text-center text-gray-500 bg-amber-50 border-l">Total</TableHead>
-                  <TableHead className="text-center text-green-600 bg-amber-50">✓ Success</TableHead>
-                  <TableHead className="text-center text-red-500 bg-amber-50">✗ Fail</TableHead>
-                  <TableHead className="text-center text-gray-500 bg-blue-50 border-l">Total</TableHead>
-                  <TableHead className="text-center text-green-600 bg-blue-50">✓ Success</TableHead>
-                  <TableHead className="text-center text-red-500 bg-blue-50">✗ Fail</TableHead>
+                  {colVisible("tbTotal")   && <TableHead className="text-center text-gray-500 bg-amber-50 border-l">Total</TableHead>}
+                  {colVisible("tbSuccess") && <TableHead className="text-center text-green-600 bg-amber-50">✓ {successLabel}</TableHead>}
+                  {colVisible("tbFail")    && <TableHead className="text-center text-red-500 bg-amber-50">✗ {failLabel}</TableHead>}
+                  {colVisible("fuTotal")   && <TableHead className="text-center text-gray-500 bg-blue-50 border-l">Total</TableHead>}
+                  {colVisible("fuSuccess") && <TableHead className="text-center text-green-600 bg-blue-50">✓ {successLabel}</TableHead>}
+                  {colVisible("fuFail")    && <TableHead className="text-center text-red-500 bg-blue-50">✗ {failLabel}</TableHead>}
                 </TableRow>
               </TableHeader>
 
               <TableBody>
-                {statsByAgent
-                  .filter((stat) => agentMap.has(stat.agentID)) // Only show agents with name info
-                  .map((stat) => {
-                  const info = agentMap.get(stat.agentID)!;
+                {visibleStats.map((stat) => {
+                  const info     = agentMap.get(stat.agentID)!;
                   const subtotal = stat.touchbaseCount + stat.followupCount;
 
                   return (
                     <TableRow key={stat.agentID} className="text-xs hover:bg-gray-50/50 font-mono">
-                      {/* Agent */}
                       <TableCell>
                         <div className="flex items-center gap-2">
                           {info?.picture ? (
@@ -329,41 +595,35 @@ export function OutboundCard({ history, agents }: OutboundCardProps) {
                         </div>
                       </TableCell>
 
-                      {/* Touchbase */}
-                      <TableCell className="text-center font-semibold text-amber-700 bg-amber-50/40 border-l">{stat.touchbaseCount}</TableCell>
-                      <TableCell className="text-center text-green-600 font-semibold bg-amber-50/40">{stat.touchbaseSuccessful}</TableCell>
-                      <TableCell className="text-center text-red-500 font-semibold bg-amber-50/40">{stat.touchbaseUnsuccessful}</TableCell>
-
-                      {/* Follow-up */}
-                      <TableCell className="text-center font-semibold text-blue-700 bg-blue-50/40 border-l">{stat.followupCount}</TableCell>
-                      <TableCell className="text-center text-green-600 font-semibold bg-blue-50/40">{stat.followupSuccessful}</TableCell>
-                      <TableCell className="text-center text-red-500 font-semibold bg-blue-50/40">{stat.followupUnsuccessful}</TableCell>
-
-                      {/* Subtotal */}
-                      <TableCell className="text-center font-bold text-gray-800 bg-gray-50 border-l">{subtotal}</TableCell>
+                      {colVisible("tbTotal")   && <TableCell className="text-center font-semibold text-amber-700 bg-amber-50/40 border-l">{stat.touchbaseCount}</TableCell>}
+                      {colVisible("tbSuccess") && <TableCell className="text-center text-green-600 font-semibold bg-amber-50/40">{stat.touchbaseSuccessful}</TableCell>}
+                      {colVisible("tbFail")    && <TableCell className="text-center text-red-500 font-semibold bg-amber-50/40">{stat.touchbaseUnsuccessful}</TableCell>}
+                      {colVisible("fuTotal")   && <TableCell className="text-center font-semibold text-blue-700 bg-blue-50/40 border-l">{stat.followupCount}</TableCell>}
+                      {colVisible("fuSuccess") && <TableCell className="text-center text-green-600 font-semibold bg-blue-50/40">{stat.followupSuccessful}</TableCell>}
+                      {colVisible("fuFail")    && <TableCell className="text-center text-red-500 font-semibold bg-blue-50/40">{stat.followupUnsuccessful}</TableCell>}
+                      {colVisible("subtotal")  && <TableCell className="text-center font-bold text-gray-800 bg-gray-50 border-l">{subtotal}</TableCell>}
                     </TableRow>
                   );
                 })}
               </TableBody>
 
-              {/* Footer totals */}
               <TableFooter>
                 <TableRow className="text-xs font-semibold font-mono">
                   <TableCell className="text-gray-700">Total</TableCell>
-                  <TableCell className="text-center text-amber-700 bg-amber-50 border-l">{grandTotals.touchbaseCount}</TableCell>
-                  <TableCell className="text-center text-green-600 bg-amber-50">{grandTotals.touchbaseSuccessful}</TableCell>
-                  <TableCell className="text-center text-red-500 bg-amber-50">{grandTotals.touchbaseUnsuccessful}</TableCell>
-                  <TableCell className="text-center text-blue-700 bg-blue-50 border-l">{grandTotals.followupCount}</TableCell>
-                  <TableCell className="text-center text-green-600 bg-blue-50">{grandTotals.followupSuccessful}</TableCell>
-                  <TableCell className="text-center text-red-500 bg-blue-50">{grandTotals.followupUnsuccessful}</TableCell>
-                  <TableCell className="text-center font-bold text-gray-800 bg-gray-100 border-l">{grandTotals.subtotal}</TableCell>
+                  {colVisible("tbTotal")   && <TableCell className="text-center text-amber-700 bg-amber-50 border-l">{grandTotals.touchbaseCount}</TableCell>}
+                  {colVisible("tbSuccess") && <TableCell className="text-center text-green-600 bg-amber-50">{grandTotals.touchbaseSuccessful}</TableCell>}
+                  {colVisible("tbFail")    && <TableCell className="text-center text-red-500 bg-amber-50">{grandTotals.touchbaseUnsuccessful}</TableCell>}
+                  {colVisible("fuTotal")   && <TableCell className="text-center text-blue-700 bg-blue-50 border-l">{grandTotals.followupCount}</TableCell>}
+                  {colVisible("fuSuccess") && <TableCell className="text-center text-green-600 bg-blue-50">{grandTotals.followupSuccessful}</TableCell>}
+                  {colVisible("fuFail")    && <TableCell className="text-center text-red-500 bg-blue-50">{grandTotals.followupUnsuccessful}</TableCell>}
+                  {colVisible("subtotal")  && <TableCell className="text-center font-bold text-gray-800 bg-gray-100 border-l">{grandTotals.subtotal}</TableCell>}
                 </TableRow>
               </TableFooter>
             </Table>
           </div>
         )}
 
-        {/* Duration + Details */}
+        {/* Duration + summary */}
         <div className="mt-3 flex items-center justify-between">
           <p className="text-xs text-gray-400 italic">
             Total call duration:{" "}
@@ -378,10 +638,10 @@ export function OutboundCard({ history, agents }: OutboundCardProps) {
         {showComputation && (
           <div className="mt-3 p-4 rounded-xl border border-blue-100 bg-blue-50 text-xs text-blue-900 space-y-1.5">
             <p className="font-semibold text-blue-800 mb-1">Computation Details</p>
-            <p><strong>Touchbase:</strong> Activities where <code>source = "Outbound - Touchbase"</code>.</p>
-            <p><strong>Follow-up:</strong> Activities where <code>source = "Outbound - Follow-up"</code>.</p>
-            <p><strong>Successful / Fail:</strong> Based on <code>call_status</code> field.</p>
-            <p><strong>Subtotal:</strong> Touchbase count + Follow-up count per agent.</p>
+            <p><strong>{touchbaseLabel}:</strong> Activities where <code>source = "Outbound - Touchbase"</code>.</p>
+            <p><strong>{followupLabel}:</strong> Activities where <code>source = "Outbound - Follow-up"</code>.</p>
+            <p><strong>{successLabel} / {failLabel}:</strong> Based on <code>call_status</code> field.</p>
+            <p><strong>Subtotal:</strong> {touchbaseLabel} count + {followupLabel} count per agent.</p>
             <p><strong>Duration:</strong> Sum of <code>end_date - start_date</code> for all <code>type_activity = "Outbound Calls"</code> records.</p>
           </div>
         )}

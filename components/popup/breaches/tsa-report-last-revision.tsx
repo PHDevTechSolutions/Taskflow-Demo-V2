@@ -155,12 +155,6 @@ export default function TSAReports() {
   const [spfPendingProcurement, setSpfPendingProcurement] = useState(0);
   const [spfPendingPD, setSpfPendingPD] = useState(0);
 
-  // Additional closing quotation counts
-  const [orderCompleteCount, setOrderCompleteCount] = useState(0);
-  const [convertToSOCount, setConvertToSOCount] = useState(0);
-  const [declinedCount, setDeclinedCount] = useState(0);
-  const [cancelledCount, setCancelledCount] = useState(0);
-
   const [avgResponseTime, setAvgResponseTime] = useState(0);
   const [avgNonQuotationHT, setAvgNonQuotationHT] = useState(0);
   const [avgQuotationHT, setAvgQuotationHT] = useState(0);
@@ -436,20 +430,6 @@ export default function TSAReports() {
       setSpfPendingPD(
         activities.filter((a) => a.call_type === "Quotation with SPF Preparation" && a.quotation_status === "Pending PD").length
       );
-
-      // Additional closing quotation counts
-      setOrderCompleteCount(
-        activities.filter((a) => a.quotation_status === "Order Complete").length
-      );
-      setConvertToSOCount(
-        activities.filter((a) => a.quotation_status === "Convert to SO").length
-      );
-      setDeclinedCount(
-        activities.filter((a) => a.quotation_status === "Declined").length
-      );
-      setCancelledCount(
-        activities.filter((a) => a.quotation_status === "Cancelled").length
-      );
     } finally {
       setLoadingTime(false);
     }
@@ -678,14 +658,44 @@ export default function TSAReports() {
         <ul className="list-none space-y-3">
 
           {/* Outbound Performance */}
-          <SectionCard title="Outbound Performance">
-            <div className="flex items-center justify-between">
-              <span className="text-[10px] text-gray-500 uppercase font-medium">Daily Count</span>
-              <span className="text-[20px] font-black text-gray-800">{outboundDaily}</span>
+          <SectionCard
+            title="Outbound Performance"
+            badge={
+              <span className={`text-[9px] font-black px-2 py-0.5 ${
+                dailyPct >= 100 ? "bg-emerald-100 text-emerald-700" :
+                dailyPct >= 50  ? "bg-amber-100 text-amber-700" :
+                "bg-red-100 text-red-600"}`}>
+                {dailyPct}% Today
+              </span>
+            }
+          >
+            <div className="mb-3">
+              <div className="h-1 bg-gray-100 w-full overflow-hidden">
+                <div
+                  className={`h-full transition-all duration-500 ${
+                    dailyPct >= 100 ? "bg-emerald-500" :
+                    dailyPct >= 50  ? "bg-amber-500" : "bg-red-500"}`}
+                  style={{ width: `${dailyPct}%` }}
+                />
+              </div>
             </div>
-            <p className="text-[8px] text-gray-400 uppercase font-medium mt-2 tracking-wide">
+            <p className="text-[8px] text-gray-400 uppercase font-medium mb-2 tracking-wide">
               Source: Outbound - Touchbase
             </p>
+            <div className="grid grid-cols-3 gap-1 text-center">
+              {[
+                { label: "Daily",   value: outboundDaily },
+                { label: "Weekly",  value: outboundWeekly },
+                { label: "Monthly", value: outboundMonthly },
+              ].map(({ label, value }, i) => (
+                <div key={label} className={i < 2 ? "border-r border-gray-100" : ""}>
+                  <p className="text-[9px] text-gray-400 uppercase font-semibold mb-0.5">{label}</p>
+                  <p className="font-black text-[12px] text-gray-800">
+                    {value}
+                  </p>
+                </div>
+              ))}
+            </div>
           </SectionCard>
 
           {/* Database Coverage */}
@@ -864,11 +874,7 @@ export default function TSAReports() {
           <SectionCard title="Closing of Quotation" accent="border-l-red-500">
             <div className="space-y-1">
               {[
-                { label: "Pending Client Approval", value: pendingClientApprovalCount },
-                { label: "Order Complete", value: orderCompleteCount },
-                { label: "Convert to SO", value: convertToSOCount },
-                { label: "Declined", value: declinedCount },
-                { label: "Cancelled", value: cancelledCount },
+                { label: "Pending Client Approval",   value: pendingClientApprovalCount },
               ].map(({ label, value }) => (
                 <div key={label} className="flex justify-between items-center px-2 py-1.5 border-b border-gray-50 last:border-b-0">
                   <span className="text-[10px] text-red-500 font-medium">{label}</span>

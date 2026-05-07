@@ -1,4 +1,6 @@
-import React, { useMemo, useState } from "react";
+"use client";
+
+import React, { useMemo, useState, useCallback } from "react";
 import {
   Card, CardContent, CardHeader,
 } from "@/components/ui/card";
@@ -7,7 +9,12 @@ import {
   TableHeader, TableRow, TableFooter,
 } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
-import { Info, Download } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
+import {
+  Info, Download, Settings2, X, Eye, EyeOff, Users, Columns3, RotateCcw, Target,
+} from "lucide-react";
 import ExcelJS from "exceljs";
 
 /* ================= TYPES ================= */
@@ -41,6 +48,31 @@ interface OutboundCardProps {
   setDateCreatedFilterRangeAction?: React.Dispatch<React.SetStateAction<any>>;
 }
 
+/* ================= COLUMN CONFIG ================= */
+
+interface ColumnConfig {
+  key: string;
+  label: string;
+  visible: boolean;
+}
+
+const DEFAULT_COLUMNS: ColumnConfig[] = [
+  { key: "obTarget",      label: "OB Target",                    visible: true },
+  { key: "totalCalls",    label: "Successful Calls",             visible: true },
+  { key: "achievement",   label: "Achievement",                  visible: true },
+  { key: "numQuotes",     label: "Quote Based on OB Successful", visible: true },
+  { key: "callsToQuote",  label: "Calls → Quote %",              visible: true },
+  { key: "quoteAmount",   label: "Quote Amount",                 visible: true },
+  { key: "numSO",         label: "SO Based on OB Successful",    visible: true },
+  { key: "soAmount",      label: "SO Amount",                    visible: true },
+  { key: "quoteToSO",     label: "Quote → SO %",                 visible: true },
+  { key: "numSI",         label: "SI Based on OB Successful",    visible: true },
+  { key: "actualSales",   label: "SI Amount",                    visible: true },
+  { key: "soToSI",        label: "SO → SI %",                    visible: true },
+];
+
+const STORAGE_KEY = "outbound_computation_config";
+
 /* ================= HELPERS ================= */
 
 const pct = (num: number, den: number) =>
@@ -48,6 +80,37 @@ const pct = (num: number, den: number) =>
 
 const convBadge = (count: number) => (
   <span className="ml-1 text-green-600 text-[12px] font-medium">{count}</span>
+);
+
+const loadConfig = () => {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return null;
+    return JSON.parse(raw) as {
+      columns: ColumnConfig[];
+      obTargetPerDay: number;
+      hiddenAgents: string[];
+    };
+  } catch {
+    return null;
+  }
+};
+
+const saveConfig = (cfg: {
+  columns: ColumnConfig[];
+  obTargetPerDay: number;
+  hiddenAgents: string[];
+}) => {
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(cfg)); } catch {}
+};
+
+/* ================= SECTION HEADER ================= */
+
+const SectionHeader = ({ icon, title }: { icon: React.ReactNode; title: string }) => (
+  <div className="flex items-center gap-1.5 text-xs font-semibold text-gray-600 uppercase tracking-wider">
+    {icon}
+    <span>{title}</span>
+  </div>
 );
 
 /* ================= COMPONENT ================= */
@@ -58,6 +121,48 @@ export function OutboundCallsTableCard({
   dateCreatedFilterRange,
 }: OutboundCardProps) {
   const [showComputation, setShowComputation] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
+
+  /* ---- Init config ---- */
+  const initConfig = useCallback(() => {
+    const saved = loadConfig();
+    return {
+      columns:        saved?.columns        ?? DEFAULT_COLUMNS.map((c) => ({ ...c })),
+      obTargetPerDay: saved?.obTargetPerDay ?? 20,
+      hiddenAgents:   saved?.hiddenAgents   ?? ([] as string[]),
+    };
+  }, []);
+
+  /* ---- Committed state (drives table) ---- */
+  const [columns,        setColumns]        = useState<ColumnConfig[]>(() => initConfig().columns);
+  const [obTargetPerDay, setObTargetPerDay] = useState<number>(()        => initConfig().obTargetPerDay);
+  const [hiddenAgents,   setHiddenAgents]   = useState<string[]>(()      => initConfig().hiddenAgents);
+
+  /* ---- Draft state (panel, committed on Save) ---- */
+  const [draftColumns,      setDraftColumns]      = useState<ColumnConfig[]>([]);
+  const [draftObTarget,     setDraftObTarget]     = useState<number>(20);
+  const [draftHiddenAgents, setDraftHiddenAgents] = useState<string[]>([]);
+
+  const openPanel = () => {
+    setDraftColumns(columns.map((c) => ({ ...c })));
+    setDraftObTarget(obTargetPerDay);
+    setDraftHiddenAgents([...hiddenAgents]);
+    setShowSettings(true);
+  };
+
+  const savePanel = () => {
+    setColumns(draftColumns);
+    setObTargetPerDay(draftObTarget);
+    setHiddenAgents(draftHiddenAgents);
+    saveConfig({ columns: draftColumns, obTargetPerDay: draftObTarget, hiddenAgents: draftHiddenAgents });
+    setShowSettings(false);
+  };
+
+  const resetPanel = () => {
+    setDraftColumns(DEFAULT_COLUMNS.map((c) => ({ ...c })));
+    setDraftObTarget(20);
+    setDraftHiddenAgents([]);
+  };
 
   /* ---- Agent map ---- */
   const agentMap = useMemo(() => {
@@ -71,64 +176,43 @@ export function OutboundCallsTableCard({
     return map;
   }, [agents]);
 
-  /* ---- Step 1: Get only Outbound - Touchbase + Successful calls (with date filter) ----
-     These are the "source" calls. Their activity_reference_number is the key
-     we'll use to trace downstream activities (Quote, SO, SI).
-  ---- */
+  /* ---- Successful OB calls (date filtered) ---- */
   const successfulOBCalls = useMemo(() => {
     let base = history.filter(
-      (h) =>
-        h.source === "Outbound - Touchbase" &&
-        h.call_status === "Successful"
+      (h) => h.source === "Outbound - Touchbase" && h.call_status === "Successful"
     );
-
     if (dateCreatedFilterRange?.from && dateCreatedFilterRange?.to) {
-      const start = new Date(dateCreatedFilterRange.from);
-      start.setHours(0, 0, 0, 0);
-      const end = new Date(dateCreatedFilterRange.to);
-      end.setHours(23, 59, 59, 999);
-      base = base.filter((h) => {
-        const d = new Date(h.date_created);
-        return d >= start && d <= end;
-      });
+      const start = new Date(dateCreatedFilterRange.from); start.setHours(0, 0, 0, 0);
+      const end   = new Date(dateCreatedFilterRange.to);   end.setHours(23, 59, 59, 999);
+      base = base.filter((h) => { const d = new Date(h.date_created); return d >= start && d <= end; });
     }
-
     return base;
   }, [history, dateCreatedFilterRange]);
 
-  /* ---- Step 2: Build a lookup of ALL history by activity_reference_number ----
-     This lets us efficiently find what happened on each ref number
-     (Quote-Done, SO-Done, Delivered/Closed) across ALL records — not just
-     the agent's own records, since downstream activities share the same ref number.
-  ---- */
+  /* ---- History lookup by ref num ---- */
   const historyByRefNum = useMemo(() => {
     const map = new Map<string, HistoryItem[]>();
     history.forEach((h) => {
       if (!h.activity_reference_number) return;
-      if (!map.has(h.activity_reference_number)) {
-        map.set(h.activity_reference_number, []);
-      }
+      if (!map.has(h.activity_reference_number)) map.set(h.activity_reference_number, []);
       map.get(h.activity_reference_number)!.push(h);
     });
     return map;
   }, [history]);
 
-  /* ---- OB target days ---- */
+  /* ---- Days count & OB target ---- */
   const daysCount = useMemo(() => {
     if (dateCreatedFilterRange?.from && dateCreatedFilterRange?.to) {
-      const diff =
-        dateCreatedFilterRange.to.getTime() -
-        dateCreatedFilterRange.from.getTime();
+      const diff = dateCreatedFilterRange.to.getTime() - dateCreatedFilterRange.from.getTime();
       return Math.floor(diff / (1000 * 60 * 60 * 24)) + 1;
     }
     return 26;
   }, [dateCreatedFilterRange]);
 
-  const obTarget = 20 * daysCount;
+  const obTarget = obTargetPerDay * daysCount;
 
-  /* ---- Step 3: Compute per-agent stats ---- */
+  /* ---- Per-agent stats ---- */
   const statsByAgent = useMemo(() => {
-    // Group successful OB calls by agent
     const byAgent: Record<string, HistoryItem[]> = {};
     successfulOBCalls.forEach((h) => {
       const id = h.referenceid?.toLowerCase();
@@ -138,251 +222,181 @@ export function OutboundCallsTableCard({
     });
 
     return Object.entries(byAgent).map(([agentId, obCalls]) => {
-      // ── 1. Total successful OB Touchbase calls for this agent
       const totalCalls = obCalls.length;
+      const obRefNums  = new Set(obCalls.map((c) => c.activity_reference_number).filter(Boolean));
 
-      // ── 2. Collect unique activity_reference_numbers from those OB calls
-      //       These are the reference numbers we'll trace downstream.
-      const obRefNums = new Set(
-        obCalls.map((c) => c.activity_reference_number).filter(Boolean)
-      );
-
-      // ── 3. For each ref number, look at ALL activities in history
-      //       (across all sources/statuses) to find Quote, SO, and SI.
-      //       A ref number counts once per conversion stage (unique refs).
-
-      const quoteRefNums = new Set<string>();  // refs with status = "Quote - Done"
-      const soRefNums = new Set<string>();     // refs with status = "SO-Done"
-      const siRefNums = new Set<string>();     // refs with type_activity = "Delivered / Closed Transaction"
+      const quoteRefNums = new Set<string>();
+      const soRefNums    = new Set<string>();
+      const siRefNums    = new Set<string>();
 
       obRefNums.forEach((refNum) => {
-        const activitiesOnRef = historyByRefNum.get(refNum) ?? [];
-
-        activitiesOnRef.forEach((act) => {
-          if (act.status === "Quote-Done") {
-            quoteRefNums.add(refNum);
-          }
-          if (act.status === "SO-Done") {
-            soRefNums.add(refNum);
-          }
-          if (act.type_activity === "Delivered / Closed Transaction") {
-            siRefNums.add(refNum);
-          }
+        const acts = historyByRefNum.get(refNum) ?? [];
+        acts.forEach((act) => {
+          if (act.status === "Quote-Done")                               quoteRefNums.add(refNum);
+          if (act.status === "SO-Done")                                  soRefNums.add(refNum);
+          if (act.type_activity === "Delivered / Closed Transaction")    siRefNums.add(refNum);
         });
       });
 
       const numQuotes = quoteRefNums.size;
-      const numSO = soRefNums.size;
-      const numSI = siRefNums.size;
+      const numSO     = soRefNums.size;
+      const numSI     = siRefNums.size;
 
-      // ── 4. Calculate Quote Amount (sum of quotation_amount from Quote-Done activities)
-      let quoteAmount = 0;
+      let quoteAmount = 0, soAmount = 0, actualSales = 0;
+
       obRefNums.forEach((refNum) => {
-        const activitiesOnRef = historyByRefNum.get(refNum) ?? [];
-        activitiesOnRef.forEach((act) => {
+        const acts = historyByRefNum.get(refNum) ?? [];
+        acts.forEach((act) => {
           if (act.status === "Quote-Done" && act.quotation_amount) {
-            const amount = typeof act.quotation_amount === "string"
-              ? parseFloat(act.quotation_amount)
-              : act.quotation_amount;
-            if (!isNaN(amount)) {
-              quoteAmount += amount;
-            }
+            const v = typeof act.quotation_amount === "string" ? parseFloat(act.quotation_amount) : act.quotation_amount;
+            if (!isNaN(v)) quoteAmount += v;
           }
-        });
-      });
-
-      // ── 5. Calculate SO Amount & Actual Sales (from SO-Done and Delivered activities)
-      let soAmount = 0;
-      let actualSales = 0;
-      obRefNums.forEach((refNum) => {
-        const activitiesOnRef = historyByRefNum.get(refNum) ?? [];
-        activitiesOnRef.forEach((act) => {
           if (act.status === "SO-Done" && act.so_amount) {
-            const amount = typeof act.so_amount === "string"
-              ? parseFloat(act.so_amount)
-              : act.so_amount;
-            if (!isNaN(amount)) {
-              soAmount += amount;
-            }
+            const v = typeof act.so_amount === "string" ? parseFloat(act.so_amount) : act.so_amount;
+            if (!isNaN(v)) soAmount += v;
           }
           if (act.type_activity === "Delivered / Closed Transaction" && act.actual_sales) {
-            const amount = typeof act.actual_sales === "string"
-              ? parseFloat(act.actual_sales)
-              : act.actual_sales;
-            if (!isNaN(amount)) {
-              actualSales += amount;
-            }
+            const v = typeof act.actual_sales === "string" ? parseFloat(act.actual_sales as string) : act.actual_sales as number;
+            if (!isNaN(v)) actualSales += v;
           }
         });
       });
 
-      // ── 6. Conversions
       const achievement = obTarget > 0 ? (totalCalls / obTarget) * 100 : 0;
-      // Calls → Quote: how many of the OB call refs eventually got a Quote
-      const callsToQuote = pct(numQuotes, totalCalls);
-      // Quote → SO: how many of the quoted refs eventually got an SO
-      const quoteToSO = pct(numSO, numQuotes);
-      // SO → SI: how many of the SO refs eventually got delivered/closed
-      const soToSI = pct(numSI, numSO);
 
       return {
-        agentId,
-        totalCalls,
-        numQuotes,
-        numSO,
-        numSI,
-        quoteAmount,
-        soAmount,
-        actualSales,
-        achievement,
-        callsToQuote,
-        quoteToSO,
-        soToSI,
+        agentId, totalCalls, numQuotes, numSO, numSI,
+        quoteAmount, soAmount, actualSales, achievement,
+        callsToQuote: pct(numQuotes, totalCalls),
+        quoteToSO:    pct(numSO, numQuotes),
+        soToSI:       pct(numSI, numSO),
       };
     });
   }, [successfulOBCalls, historyByRefNum, obTarget]);
 
-  /* ── Footer totals ── */
+  /* ---- Visible agents ---- */
+  const visibleStats = useMemo(
+    () => statsByAgent.filter((s) => agentMap.has(s.agentId) && !hiddenAgents.includes(s.agentId)),
+    [statsByAgent, agentMap, hiddenAgents]
+  );
+
+  /* ---- All known agents (for panel list) ---- */
+  const allKnownAgents = useMemo(
+    () => statsByAgent.filter((s) => agentMap.has(s.agentId)),
+    [statsByAgent, agentMap]
+  );
+
+  /* ---- Totals ---- */
   const totals = useMemo(() => {
-    // Only include agents with name info in totals
-    const visibleAgents = statsByAgent.filter((a) => agentMap.has(a.agentId));
-    const totalCalls = visibleAgents.reduce((s, a) => s + a.totalCalls, 0);
-    const numQuotes = visibleAgents.reduce((s, a) => s + a.numQuotes, 0);
-    const numSO = visibleAgents.reduce((s, a) => s + a.numSO, 0);
-    const numSI = visibleAgents.reduce((s, a) => s + a.numSI, 0);
-    const totalQuoteAmount = visibleAgents.reduce((s, a) => s + a.quoteAmount, 0);
-    const totalSoAmount = visibleAgents.reduce((s, a) => s + a.soAmount, 0);
-    const totalActualSales = visibleAgents.reduce((s, a) => s + a.actualSales, 0);
+    const totalCalls  = visibleStats.reduce((s, a) => s + a.totalCalls, 0);
+    const numQuotes   = visibleStats.reduce((s, a) => s + a.numQuotes, 0);
+    const numSO       = visibleStats.reduce((s, a) => s + a.numSO, 0);
+    const numSI       = visibleStats.reduce((s, a) => s + a.numSI, 0);
+    const totalQuoteAmount = visibleStats.reduce((s, a) => s + a.quoteAmount, 0);
+    const totalSoAmount    = visibleStats.reduce((s, a) => s + a.soAmount, 0);
+    const totalActualSales = visibleStats.reduce((s, a) => s + a.actualSales, 0);
     return {
-      totalCalls,
-      numQuotes,
-      numSO,
-      numSI,
-      totalQuoteAmount,
-      totalSoAmount,
-      totalActualSales,
-      achievement: pct(totalCalls, obTarget * visibleAgents.length || 1),
+      totalCalls, numQuotes, numSO, numSI,
+      totalQuoteAmount, totalSoAmount, totalActualSales,
+      achievement:  pct(totalCalls, obTarget * visibleStats.length || 1),
       callsToQuote: pct(numQuotes, totalCalls),
-      quoteToSO: pct(numSO, numQuotes),
-      soToSI: pct(numSI, numSO),
+      quoteToSO:    pct(numSO, numQuotes),
+      soToSI:       pct(numSI, numSO),
     };
-  }, [statsByAgent, obTarget, agentMap]);
+  }, [visibleStats, obTarget]);
 
-  /* ── Excel Export ── */
+  /* ---- Column helper (committed state) ---- */
+  const col = (key: string) => columns.find((c) => c.key === key)?.visible ?? true;
+
+  /* ---- Excel Export ---- */
   const exportToExcel = async () => {
-    if (statsByAgent.length === 0) return;
-
+    if (visibleStats.length === 0) return;
     try {
-      const workbook = new ExcelJS.Workbook();
+      const workbook  = new ExcelJS.Workbook();
       const worksheet = workbook.addWorksheet("Outbound Performance");
 
-      // Headers
-      worksheet.columns = [
-        { header: "Agent", key: "agent", width: 25 },
-        { header: "OB Target", key: "target", width: 12 },
-        { header: "Successful Calls", key: "calls", width: 15 },
-        { header: "Achievement (%)", key: "achievement", width: 15 },
-        { header: "Quotes (Based on OB)", key: "quotes", width: 20 },
-        { header: "Calls → Quote (%)", key: "callsToQuote", width: 15 },
-        { header: "Quote Amount", key: "quoteAmount", width: 18 },
-        { header: "SO (Based on OB)", key: "so", width: 20 },
-        { header: "SO Amount", key: "soAmount", width: 18 },
-        { header: "Quote → SO (%)", key: "quoteToSO", width: 15 },
-        { header: "SI (Based on OB)", key: "si", width: 20 },
-        { header: "Actual Sales", key: "actualSales", width: 18 },
-        { header: "SO → SI (%)", key: "soToSI", width: 15 },
+      const headerDefs = [
+        { key: "agent",       header: "Agent",                 width: 25, always: true },
+        { key: "target",      header: "OB Target",             width: 12, colKey: "obTarget" },
+        { key: "calls",       header: "Successful Calls",      width: 15, colKey: "totalCalls" },
+        { key: "achievement", header: "Achievement (%)",       width: 15, colKey: "achievement" },
+        { key: "quotes",      header: "Quotes (Based on OB)",  width: 20, colKey: "numQuotes" },
+        { key: "c2q",         header: "Calls → Quote (%)",     width: 15, colKey: "callsToQuote" },
+        { key: "quoteAmt",    header: "Quote Amount",          width: 18, colKey: "quoteAmount" },
+        { key: "so",          header: "SO (Based on OB)",      width: 20, colKey: "numSO" },
+        { key: "soAmt",       header: "SO Amount",             width: 18, colKey: "soAmount" },
+        { key: "q2so",        header: "Quote → SO (%)",        width: 15, colKey: "quoteToSO" },
+        { key: "si",          header: "SI (Based on OB)",      width: 20, colKey: "numSI" },
+        { key: "actualSales", header: "Actual Sales",          width: 18, colKey: "actualSales" },
+        { key: "so2si",       header: "SO → SI (%)",           width: 15, colKey: "soToSI" },
       ];
 
-      // Style Header
-      const headerRow = worksheet.getRow(1);
-      headerRow.font = { bold: true };
-      headerRow.fill = {
-        type: 'pattern',
-        pattern: 'solid',
-        fgColor: { argb: 'FFE0E0E0' }
-      };
-      headerRow.alignment = { vertical: 'middle', horizontal: 'center' };
+      worksheet.columns = headerDefs
+        .filter((h) => h.always || col(h.colKey!))
+        .map((h) => ({ header: h.header, key: h.key, width: h.width }));
 
-      // Add Data (only agents with name info)
-      const filteredStats = statsByAgent.filter((stat) => agentMap.has(stat.agentId));
-      filteredStats.forEach((stat) => {
+      const headerRow = worksheet.getRow(1);
+      headerRow.font      = { bold: true };
+      headerRow.fill      = { type: "pattern", pattern: "solid", fgColor: { argb: "FFE0E0E0" } };
+      headerRow.alignment = { vertical: "middle", horizontal: "center" };
+
+      visibleStats.forEach((stat) => {
         const agentName = agentMap.get(stat.agentId)!.name;
-        worksheet.addRow({
-          agent: agentName,
-          target: obTarget,
-          calls: stat.totalCalls,
-          achievement: (stat.achievement / 100),
-          quotes: stat.numQuotes,
-          callsToQuote: parseFloat(stat.callsToQuote) / 100,
-          quoteAmount: stat.quoteAmount,
-          so: stat.numSO,
-          soAmount: stat.soAmount,
-          quoteToSO: parseFloat(stat.quoteToSO) / 100,
-          si: stat.numSI,
-          actualSales: stat.actualSales,
-          soToSI: parseFloat(stat.soToSI) / 100,
-        });
+        const row: Record<string, any> = { agent: agentName };
+        if (col("obTarget"))     row.target       = obTarget;
+        if (col("totalCalls"))   row.calls        = stat.totalCalls;
+        if (col("achievement"))  row.achievement  = stat.achievement / 100;
+        if (col("numQuotes"))    row.quotes       = stat.numQuotes;
+        if (col("callsToQuote")) row.c2q          = parseFloat(stat.callsToQuote) / 100;
+        if (col("quoteAmount"))  row.quoteAmt     = stat.quoteAmount;
+        if (col("numSO"))        row.so           = stat.numSO;
+        if (col("soAmount"))     row.soAmt        = stat.soAmount;
+        if (col("quoteToSO"))    row.q2so         = parseFloat(stat.quoteToSO) / 100;
+        if (col("numSI"))        row.si           = stat.numSI;
+        if (col("actualSales"))  row.actualSales  = stat.actualSales;
+        if (col("soToSI"))       row.so2si        = parseFloat(stat.soToSI) / 100;
+        worksheet.addRow(row);
       });
 
-      // Add Totals Row
       const totalRow = worksheet.addRow({
         agent: "TOTAL",
-        target: obTarget * filteredStats.length,
-        calls: totals.totalCalls,
-        achievement: parseFloat(totals.achievement) / 100,
-        quotes: totals.numQuotes,
-        callsToQuote: parseFloat(totals.callsToQuote) / 100,
-        quoteAmount: totals.totalQuoteAmount,
-        so: totals.numSO,
-        soAmount: totals.totalSoAmount,
-        quoteToSO: parseFloat(totals.quoteToSO) / 100,
-        si: totals.numSI,
-        actualSales: totals.totalActualSales,
-        soToSI: parseFloat(totals.soToSI) / 100,
+        ...(col("obTarget")     && { target:      obTarget * visibleStats.length }),
+        ...(col("totalCalls")   && { calls:       totals.totalCalls }),
+        ...(col("achievement")  && { achievement: parseFloat(totals.achievement) / 100 }),
+        ...(col("numQuotes")    && { quotes:      totals.numQuotes }),
+        ...(col("callsToQuote") && { c2q:         parseFloat(totals.callsToQuote) / 100 }),
+        ...(col("quoteAmount")  && { quoteAmt:    totals.totalQuoteAmount }),
+        ...(col("numSO")        && { so:          totals.numSO }),
+        ...(col("soAmount")     && { soAmt:       totals.totalSoAmount }),
+        ...(col("quoteToSO")    && { q2so:        parseFloat(totals.quoteToSO) / 100 }),
+        ...(col("numSI")        && { si:          totals.numSI }),
+        ...(col("actualSales")  && { actualSales: totals.totalActualSales }),
+        ...(col("soToSI")       && { so2si:       parseFloat(totals.soToSI) / 100 }),
       });
       totalRow.font = { bold: true };
 
-      // Formatting
-      worksheet.eachRow((row, rowNumber) => {
-        row.eachCell((cell, colNumber) => {
-          if (rowNumber > 1) {
-            // Percentages: Achievement (4), Calls→Quote (6), Quote→SO (10), SO→SI (13)
-            if ([4, 6, 10, 13].includes(colNumber)) {
-              cell.numFmt = '0.00%';
-            }
-            // Currency: Quote Amount (7), SO Amount (9), Actual Sales (12)
-            if ([7, 9, 12].includes(colNumber)) {
-              cell.numFmt = '₱#,##0.00';
-            }
-          }
-        });
-      });
-
-      // Filename
       let filename = "Manager_Outbound_Performance";
       if (dateCreatedFilterRange?.from && dateCreatedFilterRange?.to) {
-        const fromStr = new Date(dateCreatedFilterRange.from).toISOString().split('T')[0];
-        const toStr = new Date(dateCreatedFilterRange.to).toISOString().split('T')[0];
+        const fromStr = new Date(dateCreatedFilterRange.from).toISOString().split("T")[0];
+        const toStr   = new Date(dateCreatedFilterRange.to).toISOString().split("T")[0];
         filename += `_${fromStr}_to_${toStr}`;
       }
       filename += ".xlsx";
 
       const buffer = await workbook.xlsx.writeBuffer();
-      const blob = new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
-      const url = window.URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = url;
+      const blob   = new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+      const url    = window.URL.createObjectURL(blob);
+      const link   = document.createElement("a");
+      link.href    = url;
       link.download = filename;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
       window.URL.revokeObjectURL(url);
-
-    } catch (err) {
-      // Export failed silently
-    }
+    } catch {}
   };
 
+  /* ================= RENDER ================= */
   return (
     <Card className="rounded-xl border shadow-sm">
       {/* Header */}
@@ -396,30 +410,178 @@ export function OutboundCallsTableCard({
           </div>
           <div className="flex items-center gap-2">
             <Button
-              variant="outline"
-              size="sm"
-              onClick={exportToExcel}
-              disabled={statsByAgent.length === 0}
+              variant="outline" size="sm" onClick={exportToExcel}
+              disabled={visibleStats.length === 0}
               className="flex items-center gap-1.5 text-xs text-green-600 hover:text-green-800 border-green-200 bg-green-50/50 hover:bg-green-50"
             >
               <Download className="w-3.5 h-3.5" />
               Export
             </Button>
             <Button
-              variant="outline"
-              size="sm"
+              variant="outline" size="sm"
               onClick={() => setShowComputation(!showComputation)}
               className="flex items-center gap-1.5 text-xs text-blue-600 hover:text-blue-800"
             >
               <Info className="w-3.5 h-3.5" />
               {showComputation ? "Hide" : "Details"}
             </Button>
+            <Button
+              variant={showSettings ? "default" : "outline"}
+              size="sm"
+              onClick={openPanel}
+              className={`flex items-center gap-1.5 text-xs ${
+                showSettings
+                  ? "bg-gray-800 text-white hover:bg-gray-700"
+                  : "text-gray-600 hover:text-gray-800"
+              }`}
+            >
+              <Settings2 className="w-3.5 h-3.5" />
+              Customize
+            </Button>
           </div>
         </div>
       </CardHeader>
 
-      <CardContent className="p-4">
-        {statsByAgent.length === 0 ? (
+      <CardContent className="p-4 relative">
+        {/* ── Settings Panel ── */}
+        {showSettings && (
+          <div className="absolute top-0 right-0 z-20 w-72 h-full min-h-96 bg-white border-l border-gray-200 shadow-xl rounded-r-xl flex flex-col overflow-hidden">
+            {/* Panel Header */}
+            <div className="flex items-center justify-between px-4 py-3 border-b bg-gray-50 flex-shrink-0">
+              <div className="flex items-center gap-1.5">
+                <Settings2 className="w-3.5 h-3.5 text-gray-500" />
+                <span className="text-xs font-semibold text-gray-700">Edit Computation</span>
+              </div>
+              <button onClick={() => setShowSettings(false)} className="p-1 rounded hover:bg-gray-200 transition-colors">
+                <X className="w-3.5 h-3.5 text-gray-500" />
+              </button>
+            </div>
+
+            {/* Panel Content */}
+            <div className="flex-1 overflow-y-auto px-4 py-4 space-y-5">
+
+              {/* OB Target */}
+              <div className="space-y-2">
+                <SectionHeader icon={<Target className="w-3.5 h-3.5" />} title="OB Target (per day)" />
+                <div className="flex items-center gap-3">
+                  <Input
+                    type="number"
+                    min={1}
+                    value={draftObTarget}
+                    onChange={(e) => setDraftObTarget(Math.max(1, parseInt(e.target.value) || 1))}
+                    className="w-24 h-8 text-xs"
+                  />
+                  <span className="text-xs text-gray-400">
+                    × {daysCount}d = <strong className="text-gray-700">{draftObTarget * daysCount}</strong>
+                  </span>
+                </div>
+              </div>
+
+              <hr className="border-gray-100" />
+
+              {/* Column Visibility */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <SectionHeader icon={<Columns3 className="w-3.5 h-3.5" />} title="Column Visibility" />
+                  <button
+                    className="text-[10px] text-slate-500 hover:underline"
+                    onClick={() => setDraftColumns((prev) => prev.map((c) => ({ ...c, visible: true })))}
+                  >
+                    Show All
+                  </button>
+                </div>
+                <div className="space-y-1.5">
+                  {draftColumns.map((c) => (
+                    <div key={c.key} className="flex items-center justify-between rounded-lg border border-gray-100 px-3 py-2 hover:bg-gray-50">
+                      <Label htmlFor={`col-${c.key}`} className="text-xs text-gray-600 cursor-pointer select-none">{c.label}</Label>
+                      <Switch
+                        id={`col-${c.key}`}
+                        checked={c.visible}
+                        onCheckedChange={(checked) =>
+                          setDraftColumns((prev) => prev.map((x) => x.key === c.key ? { ...x, visible: checked } : x))
+                        }
+                      />
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <hr className="border-gray-100" />
+
+              {/* Agent Visibility */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <SectionHeader icon={<Users className="w-3.5 h-3.5" />} title="Agent Visibility" />
+                  <div className="flex gap-2">
+                    <button className="text-[10px] text-slate-500 hover:underline" onClick={() => setDraftHiddenAgents([])}>
+                      Show All
+                    </button>
+                    <span className="text-[10px] text-gray-300">|</span>
+                    <button className="text-[10px] text-red-400 hover:underline" onClick={() => setDraftHiddenAgents(allKnownAgents.map((a) => a.agentId))}>
+                      Hide All
+                    </button>
+                  </div>
+                </div>
+                {allKnownAgents.length === 0 ? (
+                  <p className="text-xs text-gray-400 italic">No agents with data yet.</p>
+                ) : (
+                  <div className="space-y-1.5">
+                    {allKnownAgents.map((stat) => {
+                      const info     = agentMap.get(stat.agentId)!;
+                      const isHidden = draftHiddenAgents.includes(stat.agentId);
+                      return (
+                        <div key={stat.agentId} className="flex items-center justify-between rounded-lg border border-gray-100 px-3 py-2 hover:bg-gray-50">
+                          <div className="flex items-center gap-2">
+                            {info.picture ? (
+                              <img src={info.picture} alt={info.name} className="w-6 h-6 rounded-full object-cover border border-gray-200 flex-shrink-0" />
+                            ) : (
+                              <div className="w-6 h-6 rounded-full bg-gray-100 flex items-center justify-center text-[10px] text-gray-400 flex-shrink-0">
+                                {info.name[0]}
+                              </div>
+                            )}
+                            <Label htmlFor={`agent-${stat.agentId}`} className="text-xs text-gray-600 capitalize cursor-pointer select-none">
+                              {info.name}
+                            </Label>
+                          </div>
+                          <Switch
+                            id={`agent-${stat.agentId}`}
+                            checked={!isHidden}
+                            onCheckedChange={(checked) =>
+                              setDraftHiddenAgents((prev) =>
+                                checked ? prev.filter((id) => id !== stat.agentId) : [...prev, stat.agentId]
+                              )
+                            }
+                          />
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Panel Footer */}
+            <div className="border-t bg-gray-50 px-4 py-3 flex items-center justify-between gap-2 flex-shrink-0">
+              <button
+                onClick={resetPanel}
+                className="flex items-center gap-1 text-[10px] text-gray-400 hover:text-gray-600 transition-colors"
+              >
+                <RotateCcw className="w-3 h-3" /> Reset
+              </button>
+              <div className="flex gap-2">
+                <Button variant="outline" size="sm" className="text-xs h-7" onClick={() => setShowSettings(false)}>
+                  Cancel
+                </Button>
+                <Button size="sm" className="text-xs h-7 bg-slate-600 hover:bg-slate-700 text-white" onClick={savePanel}>
+                  Save
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ── Table ── */}
+        {visibleStats.length === 0 ? (
           <div className="flex items-center justify-center py-10 text-xs text-gray-400">
             No outbound records found.
           </div>
@@ -429,37 +591,30 @@ export function OutboundCallsTableCard({
               <TableHeader>
                 <TableRow className="bg-gray-50 text-[11px]">
                   <TableHead className="text-gray-500">Agent</TableHead>
-                  <TableHead className="text-gray-500 text-center">OB Target</TableHead>
-                  <TableHead className="text-gray-500 text-center">Successful Calls</TableHead>
-                  <TableHead className="text-gray-500 text-center">Achievement</TableHead>
-                  <TableHead className="text-gray-500 text-center whitespace-normal break-words max-w-[120px]">Quote Based on OB Successful</TableHead>
-                  <TableHead className="text-gray-500 text-center">Calls → Quote<span className="block text-[9px] font-normal text-gray-400">(Quotes ÷ Calls)</span></TableHead>
-                  <TableHead className="text-gray-500 text-center">Quote Amount</TableHead>
-                  <TableHead className="text-gray-500 text-center whitespace-normal break-words max-w-[120px]">SO Based on OB Successful</TableHead>
-                  <TableHead className="text-gray-500 text-center">SO Amount</TableHead>
-                  <TableHead className="text-gray-500 text-center">Quote → SO<span className="block text-[9px] font-normal text-gray-400">(SO ÷ Quotes)</span></TableHead>
-                  <TableHead className="text-gray-500 text-center whitespace-normal break-words max-w-[120px]">SI Based on OB Successful</TableHead>
-                  <TableHead className="text-gray-500 text-center">SI Amount</TableHead>
-                  <TableHead className="text-gray-500 text-center">SO → SI<span className="block text-[9px] font-normal text-gray-400">(SI ÷ SO)</span></TableHead>
+                  {col("obTarget")     && <TableHead className="text-gray-500 text-center">OB Target</TableHead>}
+                  {col("totalCalls")   && <TableHead className="text-gray-500 text-center">Successful Calls</TableHead>}
+                  {col("achievement")  && <TableHead className="text-gray-500 text-center">Achievement</TableHead>}
+                  {col("numQuotes")    && <TableHead className="text-gray-500 text-center whitespace-normal break-words max-w-[120px]">Quote Based on OB Successful</TableHead>}
+                  {col("callsToQuote") && <TableHead className="text-gray-500 text-center">Calls → Quote<span className="block text-[9px] font-normal text-gray-400">(Quotes ÷ Calls)</span></TableHead>}
+                  {col("quoteAmount")  && <TableHead className="text-gray-500 text-center">Quote Amount</TableHead>}
+                  {col("numSO")        && <TableHead className="text-gray-500 text-center whitespace-normal break-words max-w-[120px]">SO Based on OB Successful</TableHead>}
+                  {col("soAmount")     && <TableHead className="text-gray-500 text-center">SO Amount</TableHead>}
+                  {col("quoteToSO")    && <TableHead className="text-gray-500 text-center">Quote → SO<span className="block text-[9px] font-normal text-gray-400">(SO ÷ Quotes)</span></TableHead>}
+                  {col("numSI")        && <TableHead className="text-gray-500 text-center whitespace-normal break-words max-w-[120px]">SI Based on OB Successful</TableHead>}
+                  {col("actualSales")  && <TableHead className="text-gray-500 text-center">SI Amount</TableHead>}
+                  {col("soToSI")       && <TableHead className="text-gray-500 text-center">SO → SI<span className="block text-[9px] font-normal text-gray-400">(SI ÷ SO)</span></TableHead>}
                 </TableRow>
               </TableHeader>
 
               <TableBody>
-                {statsByAgent
-                  .filter((stat) => agentMap.has(stat.agentId)) // Only show agents with name info
-                  .map((stat) => {
+                {visibleStats.map((stat) => {
                   const info = agentMap.get(stat.agentId)!;
                   return (
                     <TableRow key={stat.agentId} className="text-xs hover:bg-gray-50/50 font-mono">
-                      {/* Agent */}
                       <TableCell>
                         <div className="flex items-center gap-2">
                           {info?.picture ? (
-                            <img
-                              src={info.picture}
-                              alt={info.name}
-                              className="w-7 h-7 rounded-full object-cover border border-white shadow-sm flex-shrink-0"
-                            />
+                            <img src={info.picture} alt={info.name} className="w-7 h-7 rounded-full object-cover border border-white shadow-sm flex-shrink-0" />
                           ) : (
                             <div className="w-7 h-7 rounded-full bg-gray-100 flex items-center justify-center text-xs text-gray-400 flex-shrink-0">
                               {info.name[0]}
@@ -468,85 +623,44 @@ export function OutboundCallsTableCard({
                           <span className="capitalize text-gray-700">{info.name}</span>
                         </div>
                       </TableCell>
-
-                      {/* OB Target */}
-                      <TableCell className="text-center text-gray-600">{obTarget}</TableCell>
-
-                      {/* Successful Calls */}
-                      <TableCell className="text-center font-semibold text-gray-800">
-                        {stat.totalCalls}
-                      </TableCell>
-
-                      {/* Achievement */}
-                      <TableCell className="text-center">
-                        <span className={`font-semibold ${stat.achievement >= 100 ? "text-green-600" : stat.achievement >= 70 ? "text-amber-500" : "text-red-500"}`}>
-                          {stat.achievement.toFixed(2)}%
-                        </span>
-                      </TableCell>
-
-                      <TableCell className="text-center font-bold">
-                        {convBadge(stat.numQuotes)}
-                      </TableCell>
-
-                      {/* Calls → Quote */}
-                      <TableCell className="text-center">
-                        <span className="text-gray-700">{stat.callsToQuote}</span>
-                      </TableCell>
-
-                      {/* Quote Amount */}
-                      <TableCell className="text-gray-700 text-center">
-                        {stat.quoteAmount.toLocaleString()}
-                      </TableCell>
-
-                      <TableCell className="text-center font-bold">
-                        {convBadge(stat.numSO)}
-                      </TableCell>
-
-                      {/* SO Amount */}
-                      <TableCell className="text-center font-semibold text-blue-600">
-                        ₱{stat.soAmount.toLocaleString()}
-                      </TableCell>
-
-                      {/* Quote → SO */}
-                      <TableCell className="text-center">
-                        <span className="text-gray-700">{stat.quoteToSO}</span>
-                      </TableCell>
-
-                      <TableCell className="text-center font-bold">
-                        {convBadge(stat.numSI)}
-                      </TableCell>
-
-                      {/* Actual Sales */}
-                      <TableCell className="text-center font-semibold text-emerald-600">
-                        ₱{stat.actualSales.toLocaleString()}
-                      </TableCell>
-
-                      {/* SO → SI */}
-                      <TableCell className="text-center">
-                        <span className="text-gray-700">{stat.soToSI}</span>
-                      </TableCell>
-
+                      {col("obTarget")     && <TableCell className="text-center text-gray-600">{obTarget}</TableCell>}
+                      {col("totalCalls")   && <TableCell className="text-center font-semibold text-gray-800">{stat.totalCalls}</TableCell>}
+                      {col("achievement")  && (
+                        <TableCell className="text-center">
+                          <span className={`font-semibold ${stat.achievement >= 100 ? "text-green-600" : stat.achievement >= 70 ? "text-amber-500" : "text-red-500"}`}>
+                            {stat.achievement.toFixed(2)}%
+                          </span>
+                        </TableCell>
+                      )}
+                      {col("numQuotes")    && <TableCell className="text-center font-bold">{convBadge(stat.numQuotes)}</TableCell>}
+                      {col("callsToQuote") && <TableCell className="text-center"><span className="text-gray-700">{stat.callsToQuote}</span></TableCell>}
+                      {col("quoteAmount")  && <TableCell className="text-gray-700 text-center">{stat.quoteAmount.toLocaleString()}</TableCell>}
+                      {col("numSO")        && <TableCell className="text-center font-bold">{convBadge(stat.numSO)}</TableCell>}
+                      {col("soAmount")     && <TableCell className="text-center font-semibold text-blue-600">₱{stat.soAmount.toLocaleString()}</TableCell>}
+                      {col("quoteToSO")    && <TableCell className="text-center"><span className="text-gray-700">{stat.quoteToSO}</span></TableCell>}
+                      {col("numSI")        && <TableCell className="text-center font-bold">{convBadge(stat.numSI)}</TableCell>}
+                      {col("actualSales")  && <TableCell className="text-center font-semibold text-emerald-600">₱{stat.actualSales.toLocaleString()}</TableCell>}
+                      {col("soToSI")       && <TableCell className="text-center"><span className="text-gray-700">{stat.soToSI}</span></TableCell>}
                     </TableRow>
                   );
                 })}
               </TableBody>
 
-              {/* Footer totals */}
               <TableFooter>
                 <TableRow className="bg-gray-50 text-xs font-semibold font-mono">
                   <TableCell className="text-gray-700">Total</TableCell>
-                  <TableCell className="text-center text-gray-600">{obTarget * statsByAgent.filter((s) => agentMap.has(s.agentId)).length}</TableCell>
-                  <TableCell className="text-center text-gray-800">{totals.totalCalls}</TableCell>
-                  <TableCell className="text-center text-gray-700">{totals.achievement}</TableCell>
-                  <TableCell className="text-center">{convBadge(totals.numQuotes)}</TableCell>
-                  <TableCell className="text-center">{totals.callsToQuote}</TableCell>
-                  <TableCell className="text-center font-semibold">{totals.totalQuoteAmount.toLocaleString()}</TableCell>
-                  <TableCell className="text-center">{convBadge(totals.numSO)}</TableCell>
-                  <TableCell className="text-center font-semibold text-blue-600">₱{totals.totalSoAmount.toLocaleString()}</TableCell>
-                  <TableCell className="text-center">{totals.quoteToSO}</TableCell>
-                  <TableCell className="text-center">{convBadge(totals.numSI)}</TableCell>
-                  <TableCell className="text-center font-semibold text-emerald-600">₱{totals.totalActualSales.toLocaleString()}</TableCell>
-                  <TableCell className="text-center">{totals.soToSI}</TableCell>
+                  {col("obTarget")     && <TableCell className="text-center text-gray-600">{obTarget * visibleStats.length}</TableCell>}
+                  {col("totalCalls")   && <TableCell className="text-center text-gray-800">{totals.totalCalls}</TableCell>}
+                  {col("achievement")  && <TableCell className="text-center text-gray-700">{totals.achievement}</TableCell>}
+                  {col("numQuotes")    && <TableCell className="text-center">{convBadge(totals.numQuotes)}</TableCell>}
+                  {col("callsToQuote") && <TableCell className="text-center">{totals.callsToQuote}</TableCell>}
+                  {col("quoteAmount")  && <TableCell className="text-center font-semibold">{totals.totalQuoteAmount.toLocaleString()}</TableCell>}
+                  {col("numSO")        && <TableCell className="text-center">{convBadge(totals.numSO)}</TableCell>}
+                  {col("soAmount")     && <TableCell className="text-center font-semibold text-blue-600">₱{totals.totalSoAmount.toLocaleString()}</TableCell>}
+                  {col("quoteToSO")    && <TableCell className="text-center">{totals.quoteToSO}</TableCell>}
+                  {col("numSI")        && <TableCell className="text-center">{convBadge(totals.numSI)}</TableCell>}
+                  {col("actualSales")  && <TableCell className="text-center font-semibold text-emerald-600">₱{totals.totalActualSales.toLocaleString()}</TableCell>}
+                  {col("soToSI")       && <TableCell className="text-center">{totals.soToSI}</TableCell>}
                 </TableRow>
               </TableFooter>
             </Table>
@@ -558,15 +672,11 @@ export function OutboundCallsTableCard({
           <div className="mt-3 p-4 rounded-xl border border-blue-100 bg-blue-50 text-xs text-blue-900 space-y-1.5">
             <p className="font-semibold text-blue-800 mb-1">Computation Details</p>
             <p><strong>Base data:</strong> All records where <code>source = "Outbound - Touchbase"</code> AND <code>call_status = "Successful"</code> (date filter applied here).</p>
-            <p><strong>OB Target:</strong> 20 × number of days in selected range (default: 26 days = 520).</p>
+            <p><strong>OB Target:</strong> {obTargetPerDay} × number of days in selected range (current: {daysCount} days = {obTarget}).</p>
             <p><strong>Achievement:</strong> (Successful Calls ÷ OB Target) × 100%</p>
-            <p><strong>Calls → Quote %:</strong> Count of unique <code>activity_reference_number</code>s (from OB calls) that have ANY activity with <code>status = "Quote - Done"</code> in the full history ÷ Successful Calls</p>
+            <p><strong>Calls → Quote %:</strong> Count of unique <code>activity_reference_number</code>s that have ANY activity with <code>status = "Quote - Done"</code> in full history ÷ Successful Calls</p>
             <p><strong>Quote → SO %:</strong> Count of unique refs with <code>status = "SO-Done"</code> ÷ Count of Quoted refs</p>
             <p><strong>SO → SI %:</strong> Count of unique refs with <code>type_activity = "Delivered / Closed Transaction"</code> ÷ Count of SO refs</p>
-            <p className="text-blue-700 text-[10px] mt-1">
-              * Each conversion stage traces back to the same <code>activity_reference_number</code> from a Successful OB Touchbase call.
-              All activities on that ref number (any source, any status) are scanned to determine if a conversion occurred.
-            </p>
           </div>
         )}
       </CardContent>

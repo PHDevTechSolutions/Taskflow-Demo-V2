@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 
 /* ─── Storage key ────────────────────────────────────────────────────────── */
 
@@ -25,20 +26,14 @@ const STORAGE_KEY = "so_computation_config";
 type AmountField = "quotation_amount" | "so_amount" | "actual_sales";
 
 interface SOConfig {
-  // SO Done row definition
-  soStatus: string;                     // default: "SO-Done"
-  soAmountField: AmountField;           // default: so_amount
-
-  // Delivered row definition
-  deliveredTypeActivity: string;        // default: "Delivered / Closed Transaction"
-  deliveredAmountField: AmountField;    // default: actual_sales
-
-  // SO → SI conversion: count-based or amount-based
+  soStatus: string;
+  soAmountField: AmountField;
+  deliveredTypeActivity: string;
+  deliveredAmountField: AmountField;
   soToSIMode: "count" | "amount";
-
-  // Color thresholds
-  thresholdHigh: number;  // default: 70
-  thresholdMid: number;   // default: 40
+  thresholdHigh: number;
+  thresholdMid: number;
+  hiddenAgents: string[]; // ← NEW
 }
 
 const DEFAULT_CONFIG: SOConfig = {
@@ -49,6 +44,7 @@ const DEFAULT_CONFIG: SOConfig = {
   soToSIMode: "count",
   thresholdHigh: 70,
   thresholdMid: 40,
+  hiddenAgents: [], // ← NEW
 };
 
 function loadConfig(): SOConfig {
@@ -129,8 +125,6 @@ const ToggleBtn = ({
   </button>
 );
 
-/* ─── Field select buttons ───────────────────────────────────────────────── */
-
 const FieldToggle = ({
   value, onChange,
 }: { value: AmountField; onChange: (v: AmountField) => void }) => (
@@ -148,12 +142,22 @@ const EditComputationDialog: React.FC<{
   onClose: () => void;
   config: SOConfig;
   onSave: (cfg: SOConfig) => void;
-}> = ({ open, onClose, config, onSave }) => {
+  knownAgents: { agentId: string; name: string; picture: string }[]; // ← NEW
+}> = ({ open, onClose, config, onSave, knownAgents }) => {
   const [draft, setDraft] = useState<SOConfig>(config);
   useEffect(() => { if (open) setDraft(config); }, [open, config]);
 
   const set = <K extends keyof SOConfig>(k: K, v: SOConfig[K]) =>
     setDraft((p) => ({ ...p, [k]: v }));
+
+  const toggleAgent = (agentId: string, visible: boolean) => {
+    setDraft((prev) => ({
+      ...prev,
+      hiddenAgents: visible
+        ? prev.hiddenAgents.filter((id) => id !== agentId)
+        : [...prev.hiddenAgents, agentId],
+    }));
+  };
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
@@ -174,28 +178,18 @@ const EditComputationDialog: React.FC<{
             <p className="text-[11px] font-bold uppercase tracking-widest text-gray-400 border-b pb-1">
               Sales Order Row Definition
             </p>
-
             <div className="space-y-1.5">
-              <Label className="text-xs font-semibold uppercase tracking-wide text-gray-600">
-                status value
-              </Label>
-              <p className="text-[11px] text-gray-400">
-                Rows matching this status are counted as a Sales Order.
-              </p>
+              <Label className="text-xs font-semibold uppercase tracking-wide text-gray-600">status value</Label>
+              <p className="text-[11px] text-gray-400">Rows matching this status are counted as a Sales Order.</p>
               <Input
                 value={draft.soStatus}
                 onChange={(e) => set("soStatus", e.target.value)}
                 className="text-xs rounded-none w-full"
               />
             </div>
-
             <div className="space-y-1.5">
-              <Label className="text-xs font-semibold uppercase tracking-wide text-gray-600">
-                SO Amount field
-              </Label>
-              <p className="text-[11px] text-gray-400">
-                Which column is summed as the "Total SO Amount".
-              </p>
+              <Label className="text-xs font-semibold uppercase tracking-wide text-gray-600">SO Amount field</Label>
+              <p className="text-[11px] text-gray-400">Which column is summed as the "Total SO Amount".</p>
               <FieldToggle value={draft.soAmountField} onChange={(v) => set("soAmountField", v)} />
             </div>
           </section>
@@ -205,28 +199,18 @@ const EditComputationDialog: React.FC<{
             <p className="text-[11px] font-bold uppercase tracking-widest text-gray-400 border-b pb-1">
               Delivered / Sales Invoice Row Definition
             </p>
-
             <div className="space-y-1.5">
-              <Label className="text-xs font-semibold uppercase tracking-wide text-gray-600">
-                type_activity value
-              </Label>
-              <p className="text-[11px] text-gray-400">
-                Rows matching this type_activity are counted as Delivered.
-              </p>
+              <Label className="text-xs font-semibold uppercase tracking-wide text-gray-600">type_activity value</Label>
+              <p className="text-[11px] text-gray-400">Rows matching this type_activity are counted as Delivered.</p>
               <Input
                 value={draft.deliveredTypeActivity}
                 onChange={(e) => set("deliveredTypeActivity", e.target.value)}
                 className="text-xs rounded-none w-full"
               />
             </div>
-
             <div className="space-y-1.5">
-              <Label className="text-xs font-semibold uppercase tracking-wide text-gray-600">
-                Sales Invoice Amount field
-              </Label>
-              <p className="text-[11px] text-gray-400">
-                Which column is summed as the "Total Sales Invoice".
-              </p>
+              <Label className="text-xs font-semibold uppercase tracking-wide text-gray-600">Sales Invoice Amount field</Label>
+              <p className="text-[11px] text-gray-400">Which column is summed as the "Total Sales Invoice".</p>
               <FieldToggle value={draft.deliveredAmountField} onChange={(v) => set("deliveredAmountField", v)} />
             </div>
           </section>
@@ -236,25 +220,14 @@ const EditComputationDialog: React.FC<{
             <p className="text-[11px] font-bold uppercase tracking-widest text-gray-400 border-b pb-1">
               SO → SI Conversion Formula
             </p>
-
             <div className="space-y-1.5">
-              <Label className="text-xs font-semibold uppercase tracking-wide text-gray-600">
-                Conversion mode
-              </Label>
-              <p className="text-[11px] text-gray-400">
-                How to measure the conversion rate from SO to SI.
-              </p>
+              <Label className="text-xs font-semibold uppercase tracking-wide text-gray-600">Conversion mode</Label>
+              <p className="text-[11px] text-gray-400">How to measure the conversion rate from SO to SI.</p>
               <div className="flex gap-2 flex-wrap">
-                <ToggleBtn
-                  active={draft.soToSIMode === "count"}
-                  onClick={() => set("soToSIMode", "count")}
-                >
+                <ToggleBtn active={draft.soToSIMode === "count"} onClick={() => set("soToSIMode", "count")}>
                   Count-based (Delivered ÷ SO-Done)
                 </ToggleBtn>
-                <ToggleBtn
-                  active={draft.soToSIMode === "amount"}
-                  onClick={() => set("soToSIMode", "amount")}
-                >
+                <ToggleBtn active={draft.soToSIMode === "amount"} onClick={() => set("soToSIMode", "amount")}>
                   Amount-based (SI amount ÷ SO amount)
                 </ToggleBtn>
               </div>
@@ -266,15 +239,12 @@ const EditComputationDialog: React.FC<{
             <p className="text-[11px] font-bold uppercase tracking-widest text-gray-400 border-b pb-1">
               Color Thresholds (SO → SI column)
             </p>
-            <p className="text-[11px] text-gray-400">
-              Green if ≥ High, Amber if ≥ Mid, Red if below Mid.
-            </p>
+            <p className="text-[11px] text-gray-400">Green if ≥ High, Amber if ≥ Mid, Red if below Mid.</p>
             <div className="flex gap-6 items-center">
               <div className="space-y-1">
                 <Label className="text-[11px] text-gray-500 font-semibold">High (green) %</Label>
                 <Input
-                  type="number" min={0} max={100}
-                  value={draft.thresholdHigh}
+                  type="number" min={0} max={100} value={draft.thresholdHigh}
                   onChange={(e) => set("thresholdHigh", Math.min(100, Math.max(0, Number(e.target.value))))}
                   className="w-20 text-xs rounded-none"
                 />
@@ -282,13 +252,79 @@ const EditComputationDialog: React.FC<{
               <div className="space-y-1">
                 <Label className="text-[11px] text-gray-500 font-semibold">Mid (amber) %</Label>
                 <Input
-                  type="number" min={0} max={100}
-                  value={draft.thresholdMid}
+                  type="number" min={0} max={100} value={draft.thresholdMid}
                   onChange={(e) => set("thresholdMid", Math.min(100, Math.max(0, Number(e.target.value))))}
                   className="w-20 text-xs rounded-none"
                 />
               </div>
             </div>
+          </section>
+
+          {/* ── Agent Visibility ── NEW */}
+          <section className="space-y-3">
+            <div className="flex items-center justify-between border-b pb-1">
+              <p className="text-[11px] font-bold uppercase tracking-widest text-gray-400">
+                Agent Visibility
+              </p>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  className="text-[10px] text-purple-500 hover:underline"
+                  onClick={() => set("hiddenAgents", [])}
+                >
+                  Show All
+                </button>
+                <span className="text-[10px] text-gray-300">|</span>
+                <button
+                  type="button"
+                  className="text-[10px] text-red-400 hover:underline"
+                  onClick={() => set("hiddenAgents", knownAgents.map((a) => a.agentId))}
+                >
+                  Hide All
+                </button>
+              </div>
+            </div>
+
+            {knownAgents.length === 0 ? (
+              <p className="text-xs text-gray-400 italic">No agents with data yet.</p>
+            ) : (
+              <div className="grid grid-cols-1 gap-2">
+                {knownAgents.map((agent) => {
+                  const isVisible = !draft.hiddenAgents.includes(agent.agentId);
+                  return (
+                    <div
+                      key={agent.agentId}
+                      className="flex items-center justify-between rounded-lg border border-gray-100 px-3 py-2 hover:bg-gray-50"
+                    >
+                      <div className="flex items-center gap-2">
+                        {agent.picture ? (
+                          <img
+                            src={agent.picture}
+                            alt={agent.name}
+                            className="w-6 h-6 rounded-full object-cover border border-gray-200 flex-shrink-0"
+                          />
+                        ) : (
+                          <div className="w-6 h-6 rounded-full bg-gray-100 flex items-center justify-center text-[10px] text-gray-400 flex-shrink-0">
+                            {agent.name[0]}
+                          </div>
+                        )}
+                        <Label
+                          htmlFor={`agent-${agent.agentId}`}
+                          className="text-xs text-gray-600 capitalize cursor-pointer select-none"
+                        >
+                          {agent.name}
+                        </Label>
+                      </div>
+                      <Switch
+                        id={`agent-${agent.agentId}`}
+                        checked={isVisible}
+                        onCheckedChange={(checked) => toggleAgent(agent.agentId, checked)}
+                      />
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </section>
 
           {/* ── Live preview ── */}
@@ -310,6 +346,10 @@ const EditComputationDialog: React.FC<{
               <strong className="text-amber-500">≥{draft.thresholdMid}% amber</strong>
               &nbsp;/&nbsp;
               <strong className="text-red-500">below red</strong>
+            </p>
+            <p>
+              <span className="text-gray-400 w-44 inline-block">Hidden agents:</span>
+              <strong>{draft.hiddenAgents.length === 0 ? "None" : `${draft.hiddenAgents.length} hidden`}</strong>
             </p>
           </div>
         </div>
@@ -355,6 +395,7 @@ export function SalesOrderTableCard({
     soStatus, soAmountField,
     deliveredTypeActivity, deliveredAmountField,
     soToSIMode, thresholdHigh, thresholdMid,
+    hiddenAgents,
   } = config;
 
   /* ── Agent map ── */
@@ -397,13 +438,10 @@ export function SalesOrderTableCard({
 
       const stat = map.get(agentID)!;
 
-      // Sales Order rows
       if (item.status === soStatus) {
         stat.totalSODoneCount++;
         stat.totalSOAmount += getField(item, soAmountField);
       }
-
-      // Delivered rows
       if (item.type_activity === deliveredTypeActivity) {
         stat.totalDeliveredCount++;
         stat.totalSalesInvoice += getField(item, deliveredAmountField);
@@ -412,6 +450,27 @@ export function SalesOrderTableCard({
 
     return Array.from(map.values());
   }, [history, soStatus, soAmountField, deliveredTypeActivity, deliveredAmountField]);
+
+  /* ── Known agents for dialog (has name + has data) ── */
+  const knownAgents = useMemo(
+    () =>
+      statsByAgent
+        .filter((s) => agentMap.has(s.agentID))
+        .map((s) => ({
+          agentId: s.agentID,
+          name: agentMap.get(s.agentID)!.name,
+          picture: agentMap.get(s.agentID)!.picture,
+        })),
+    [statsByAgent, agentMap]
+  );
+
+  /* ── Visible stats (not hidden + has name) ── */
+  const visibleStats = useMemo(
+    () => statsByAgent.filter(
+      (s) => agentMap.has(s.agentID) && !hiddenAgents.includes(s.agentID)
+    ),
+    [statsByAgent, agentMap, hiddenAgents]
+  );
 
   /* ── Conversion helper ── */
   const getSoToSIVal = (stat: (typeof statsByAgent)[0]) =>
@@ -424,29 +483,25 @@ export function SalesOrderTableCard({
     : val >= thresholdMid ? "text-amber-500"
     : "text-red-500";
 
-  /* ── Footer totals ── */
+  /* ── Footer totals (visible agents only) ── */
   const totals = useMemo(() => {
-    // Only include agents with name info in totals
-    const visibleAgents = statsByAgent.filter((a) => agentMap.has(a.agentID));
-    const totalSODoneCount = visibleAgents.reduce((s, a) => s + a.totalSODoneCount, 0);
-    const totalSOAmount = visibleAgents.reduce((s, a) => s + a.totalSOAmount, 0);
-    const totalDeliveredCount = visibleAgents.reduce((s, a) => s + a.totalDeliveredCount, 0);
-    const totalSalesInvoice = visibleAgents.reduce((s, a) => s + a.totalSalesInvoice, 0);
+    const totalSODoneCount    = visibleStats.reduce((s, a) => s + a.totalSODoneCount, 0);
+    const totalSOAmount       = visibleStats.reduce((s, a) => s + a.totalSOAmount, 0);
+    const totalDeliveredCount = visibleStats.reduce((s, a) => s + a.totalDeliveredCount, 0);
+    const totalSalesInvoice   = visibleStats.reduce((s, a) => s + a.totalSalesInvoice, 0);
     const soToSIVal = soToSIMode === "count"
       ? pctVal(totalDeliveredCount, totalSODoneCount)
       : pctVal(totalSalesInvoice, totalSOAmount);
     return { totalSODoneCount, totalSOAmount, totalDeliveredCount, totalSalesInvoice, soToSIVal };
-  }, [statsByAgent, soToSIMode, agentMap]);
+  }, [visibleStats, soToSIMode]);
 
   /* ── Excel Export ── */
   const exportToExcel = async () => {
-    if (statsByAgent.length === 0) return;
-
+    if (visibleStats.length === 0) return;
     try {
       const workbook = new ExcelJS.Workbook();
       const worksheet = workbook.addWorksheet("Sales Order Performance");
 
-      // Headers
       worksheet.columns = [
         { header: "Agent", key: "agent", width: 25 },
         { header: `Total SO Done (${soStatus})`, key: "soCount", width: 20 },
@@ -456,33 +511,23 @@ export function SalesOrderTableCard({
         { header: `Total Delivered (${deliveredTypeActivity})`, key: "deliveredCount", width: 25 },
       ];
 
-      // Style Header
       const headerRow = worksheet.getRow(1);
       headerRow.font = { bold: true };
-      headerRow.fill = {
-        type: 'pattern',
-        pattern: 'solid',
-        fgColor: { argb: 'FFE0E0E0' }
-      };
-      headerRow.alignment = { vertical: 'middle', horizontal: 'center' };
+      headerRow.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFE0E0E0" } };
+      headerRow.alignment = { vertical: "middle", horizontal: "center" };
 
-      // Add Data (only agents with name info)
-      const filteredStats = statsByAgent.filter((stat) => agentMap.has(stat.agentID));
-      filteredStats.forEach((stat) => {
+      visibleStats.forEach((stat) => {
         const info = agentMap.get(stat.agentID)!;
-        const soToSIVal = getSoToSIVal(stat);
-
         worksheet.addRow({
           agent: info.name,
           soCount: stat.totalSODoneCount,
           soAmount: stat.totalSOAmount,
           siAmount: stat.totalSalesInvoice,
-          soToSI: soToSIVal / 100,
+          soToSI: getSoToSIVal(stat) / 100,
           deliveredCount: stat.totalDeliveredCount,
         });
       });
 
-      // Add Totals Row
       const totalRow = worksheet.addRow({
         agent: "TOTAL",
         soCount: totals.totalSODoneCount,
@@ -493,27 +538,19 @@ export function SalesOrderTableCard({
       });
       totalRow.font = { bold: true };
 
-      // Formatting
       worksheet.eachRow((row, rowNumber) => {
         row.eachCell((cell, colNumber) => {
           if (rowNumber > 1) {
-            // Percentages
-            if (colNumber === 5) {
-              cell.numFmt = '0.00%';
-            }
-            // Currency
-            if (colNumber === 3 || colNumber === 4) {
-              cell.numFmt = '#,##0.00" ₱"';
-            }
+            if (colNumber === 5) cell.numFmt = "0.00%";
+            if (colNumber === 3 || colNumber === 4) cell.numFmt = '#,##0.00" ₱"';
           }
         });
       });
 
-      // Filename
       let filename = "TSM_Sales_Order_Performance";
       if (dateCreatedFilterRange?.from && dateCreatedFilterRange?.to) {
-        const fromStr = new Date(dateCreatedFilterRange.from).toISOString().split('T')[0];
-        const toStr = new Date(dateCreatedFilterRange.to).toISOString().split('T')[0];
+        const fromStr = new Date(dateCreatedFilterRange.from).toISOString().split("T")[0];
+        const toStr   = new Date(dateCreatedFilterRange.to).toISOString().split("T")[0];
         filename += `_${fromStr}_to_${toStr}`;
       }
       filename += ".xlsx";
@@ -528,7 +565,6 @@ export function SalesOrderTableCard({
       link.click();
       document.body.removeChild(link);
       window.URL.revokeObjectURL(url);
-
     } catch (err) {
       console.error("Export failed:", err);
     }
@@ -541,6 +577,7 @@ export function SalesOrderTableCard({
         onClose={() => setEditOpen(false)}
         config={config}
         onSave={handleSave}
+        knownAgents={knownAgents}
       />
 
       {/* ── Header ── */}
@@ -556,27 +593,22 @@ export function SalesOrderTableCard({
           </div>
           <div className="flex items-center gap-2">
             <Button
-              variant="outline"
-              size="sm"
-              onClick={exportToExcel}
-              disabled={statsByAgent.length === 0}
+              variant="outline" size="sm" onClick={exportToExcel}
+              disabled={visibleStats.length === 0}
               className="flex items-center gap-1.5 text-xs text-green-600 hover:text-green-800 border-green-200 bg-green-50/50 hover:bg-green-50"
             >
               <Download className="w-3.5 h-3.5" />
               Export
             </Button>
             <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setEditOpen(true)}
+              variant="outline" size="sm" onClick={() => setEditOpen(true)}
               className="flex items-center gap-1.5 text-xs border-dashed"
             >
               <Settings2 className="w-3.5 h-3.5" />
               Edit Computation
             </Button>
             <Button
-              variant="outline"
-              size="sm"
+              variant="outline" size="sm"
               onClick={() => setShowComputation(!showComputation)}
               className="flex items-center gap-1.5 text-xs text-blue-600 hover:text-blue-800"
             >
@@ -588,7 +620,7 @@ export function SalesOrderTableCard({
       </CardHeader>
 
       <CardContent className="p-4">
-        {statsByAgent.length === 0 ? (
+        {visibleStats.length === 0 ? (
           <div className="flex items-center justify-center py-10 text-xs text-gray-400">
             No sales order records found.
           </div>
@@ -613,9 +645,7 @@ export function SalesOrderTableCard({
                   <TableHead className="text-gray-500 text-center">
                     SO → SI
                     <span className="block text-[9px] font-normal text-gray-400">
-                      {soToSIMode === "count"
-                        ? "(Delivered ÷ SO-Done)"
-                        : "(SI amount ÷ SO amount)"}
+                      {soToSIMode === "count" ? "(Delivered ÷ SO-Done)" : "(SI amount ÷ SO amount)"}
                     </span>
                   </TableHead>
                   <TableHead className="text-gray-500 text-center">
@@ -626,21 +656,16 @@ export function SalesOrderTableCard({
               </TableHeader>
 
               <TableBody>
-                {statsByAgent
-                  .filter((stat) => agentMap.has(stat.agentID)) // Only show agents with name info
-                  .map((stat) => {
+                {visibleStats.map((stat) => {
                   const info = agentMap.get(stat.agentID)!;
                   const soToSIVal = getSoToSIVal(stat);
-
                   return (
                     <TableRow key={stat.agentID} className="text-xs hover:bg-gray-50/50 font-mono">
-                      {/* Agent */}
                       <TableCell>
                         <div className="flex items-center gap-2">
                           {info?.picture ? (
                             <img
-                              src={info.picture}
-                              alt={info.name}
+                              src={info.picture} alt={info.name}
                               className="w-7 h-7 rounded-full object-cover border border-white shadow-sm flex-shrink-0"
                             />
                           ) : (
@@ -651,25 +676,20 @@ export function SalesOrderTableCard({
                           <span className="capitalize text-gray-700">{info.name}</span>
                         </div>
                       </TableCell>
-
                       <TableCell className="text-center font-semibold text-gray-800">
                         {stat.totalSODoneCount}
                       </TableCell>
-
                       <TableCell className="text-center text-gray-700">
                         {fmt(stat.totalSOAmount)}
                       </TableCell>
-
                       <TableCell className="text-center text-gray-700">
                         {fmt(stat.totalSalesInvoice)}
                       </TableCell>
-
                       <TableCell className="text-center">
                         <span className={`font-semibold ${colorClass(soToSIVal)}`}>
                           {soToSIVal.toFixed(2)}%
                         </span>
                       </TableCell>
-
                       <TableCell className="text-center text-gray-700">
                         {stat.totalDeliveredCount}
                       </TableCell>
@@ -696,22 +716,13 @@ export function SalesOrderTableCard({
           </div>
         )}
 
-        {/* ── Computation details panel ── */}
         {showComputation && (
           <div className="mt-3 p-4 rounded-xl border border-blue-100 bg-blue-50 text-xs text-blue-900 space-y-1.5">
             <p className="font-semibold text-blue-800 mb-1">Computation Details (Current Settings)</p>
-            <p>
-              <strong>Total SO Done:</strong> Count where <code>status = "{soStatus}"</code>.
-            </p>
-            <p>
-              <strong>Total SO Amount:</strong> Sum of <code>{soAmountField}</code> from SO-Done rows.
-            </p>
-            <p>
-              <strong>Total Delivered:</strong> Count where <code>type_activity = "{deliveredTypeActivity}"</code>.
-            </p>
-            <p>
-              <strong>Total Sales Invoice:</strong> Sum of <code>{deliveredAmountField}</code> from Delivered rows.
-            </p>
+            <p><strong>Total SO Done:</strong> Count where <code>status = "{soStatus}"</code>.</p>
+            <p><strong>Total SO Amount:</strong> Sum of <code>{soAmountField}</code> from SO-Done rows.</p>
+            <p><strong>Total Delivered:</strong> Count where <code>type_activity = "{deliveredTypeActivity}"</code>.</p>
+            <p><strong>Total Sales Invoice:</strong> Sum of <code>{deliveredAmountField}</code> from Delivered rows.</p>
             <p>
               <strong>SO → SI %:</strong>{" "}
               {soToSIMode === "count"
@@ -724,6 +735,11 @@ export function SalesOrderTableCard({
               <span className="text-amber-600">Amber ≥ {thresholdMid}%</span> /{" "}
               <span className="text-red-600">Red below</span>
             </p>
+            {hiddenAgents.length > 0 && (
+              <p>
+                <strong>Hidden agents:</strong> {hiddenAgents.length} agent{hiddenAgents.length > 1 ? "s" : ""} excluded from table and totals.
+              </p>
+            )}
           </div>
         )}
       </CardContent>

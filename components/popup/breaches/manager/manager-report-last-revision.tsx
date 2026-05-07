@@ -1,4 +1,4 @@
-// popup/breaches/tsa-report.tsx
+// popup/breaches/tsm-report.tsx
 "use client";
 
 import React, { useState, useEffect, useCallback } from "react";
@@ -27,20 +27,26 @@ interface Activity {
 }
 
 interface ClientSegments {
-  top50: number; next30: number; balance20: number;
-  csrClient: number; newClient: number; tsaClient: number;
+  top50: number;
+  next30: number;
+  balance20: number;
+  csrClient: number;
+  newClient: number;
+  tsaClient: number;
   outbound: number;
 }
 
 interface Denominators {
-  total: number; top50: number; next30: number; bal20: number;
-  csrClient: number; newClient: number; tsaClient: number;
-  daily: number; weekly: number; monthly: number;
-}
-
-interface Agent {
-  Firstname: string; Lastname: string;
-  ReferenceID: string; Position: string; Status: string;
+  total: number;
+  top50: number;
+  next30: number;
+  bal20: number;
+  csrClient: number;
+  newClient: number;
+  tsaClient: number;
+  daily: number;
+  weekly: number;
+  monthly: number;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -73,9 +79,36 @@ const computeTimeByActivity = (activities: any[]): TimeByActivity =>
     return acc;
   }, {} as TimeByActivity);
 
-// Outbound is determined ONLY by source === "Outbound - Touchbase"
 const isOutboundTouchbase = (a: any): boolean =>
   a.source === "Outbound - Touchbase" && a.call_status === "Successful";
+
+const getFixedCount = (refId: string, date: Date): number => {
+  const month = date.getMonth() + 1;
+  const year = date.getFullYear();
+
+  const feb2026: Record<string, number> = {
+    "RT-NCR-815758": 11,
+    "MF-PH-840897": 7,
+    "AB-NCR-288130": 11,
+    "AS-NCR-146592": 4,
+    "MP-CDO-613398": 4,
+    "JG-NCR-713768": 1,
+    "JM-CBU-702043": 3,
+  };
+  const marchOnwards: Record<string, number> = {
+    "RT-NCR-815758": 12,
+    "MF-PH-840897": 5,
+    "AB-NCR-288130": 11,
+    "AS-NCR-146592": 4,
+    "MP-CDO-613398": 4,
+    "JG-NCR-713768": 1,
+    "JM-CBU-702043": 2,
+  };
+
+  if (year === 2026 && month === 2) return feb2026[refId] ?? 0;
+  if (year > 2026 || (year === 2026 && month >= 3)) return marchOnwards[refId] ?? 0;
+  return 0;
+};
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
@@ -89,8 +122,10 @@ const StatRow = ({ label, value }: { label: string; value: string | number }) =>
 const SectionCard = ({
   title, badge, children, accent,
 }: {
-  title: string; badge?: React.ReactNode;
-  children: React.ReactNode; accent?: string;
+  title: string;
+  badge?: React.ReactNode;
+  children: React.ReactNode;
+  accent?: string;
 }) => (
   <li className={`bg-white border border-gray-200 shadow-sm overflow-hidden ${accent ? `border-l-4 ${accent}` : ""}`}>
     <div className="flex justify-between items-center px-3 py-2 border-b border-gray-100 bg-gray-50">
@@ -103,27 +138,24 @@ const SectionCard = ({
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 
-export default function TSAReports() {
+export default function TSMReports() {
   const searchParams = useSearchParams();
   const { userId, setUserId } = useUser();
   const queryUserId = searchParams?.get("id") ?? "";
 
   const today = new Date().toISOString().split("T")[0];
-  const [startDate, setStartDate] = useState<string>(today);
-  const [endDate, setEndDate] = useState<string>(today);
+  const [fromDate, setFromDate] = useState<string>(today);
+  const [toDate, setToDate] = useState<string>(today);
 
-  const [managerDetails, setManagerDetails] = useState({
+  const [userDetails, setUserDetails] = useState({
     referenceid: "", firstname: "", lastname: "", role: "",
   });
 
-  const [selectedRefId, setSelectedRefId] = useState<string>("");
-  const [agents, setAgents] = useState<Agent[]>([]);
   const [activities, setActivities] = useState<any[]>([]);
   const [clusterAccounts, setClusterAccounts] = useState<Activity[]>([]);
   const [uniqueActivitiesList, setUniqueActivitiesList] = useState<Activity[]>([]);
 
   const [loadingUser, setLoadingUser] = useState(false);
-  const [loadingAgents, setLoadingAgents] = useState(false);
   const [loadingActivities, setLoadingActivities] = useState(false);
   const [loadingOverdue, setLoadingOverdue] = useState(false);
   const [loadingCsrMetrics, setLoadingCsrMetrics] = useState(false);
@@ -147,19 +179,13 @@ export default function TSAReports() {
   const [denominators, setDenominators] = useState<Denominators>({
     total: 0, top50: 0, next30: 0, bal20: 0,
     csrClient: 0, newClient: 0, tsaClient: 0,
-    daily: 20, weekly: 120, monthly: 520,
+    daily: 0, weekly: 0, monthly: 0,
   });
 
   const [pendingClientApprovalCount, setPendingClientApprovalCount] = useState(0);
   const [spfPendingClientApproval, setSpfPendingClientApproval] = useState(0);
   const [spfPendingProcurement, setSpfPendingProcurement] = useState(0);
   const [spfPendingPD, setSpfPendingPD] = useState(0);
-
-  // Additional closing quotation counts
-  const [orderCompleteCount, setOrderCompleteCount] = useState(0);
-  const [convertToSOCount, setConvertToSOCount] = useState(0);
-  const [declinedCount, setDeclinedCount] = useState(0);
-  const [cancelledCount, setCancelledCount] = useState(0);
 
   const [avgResponseTime, setAvgResponseTime] = useState(0);
   const [avgNonQuotationHT, setAvgNonQuotationHT] = useState(0);
@@ -175,20 +201,38 @@ export default function TSAReports() {
   const [newClientByCompany, setNewClientByCompany] = useState<Record<string, number>>({});
   const [showAllNewClients, setShowAllNewClients] = useState(false);
 
-  // ── Sync userId ───────────────────────────────────────────────────────────
+  const [totalAgents, setTotalAgents] = useState<number>(() => {
+    if (typeof window === "undefined") return 0;
+    return Number(localStorage.getItem("tsm_totalAgents")) || 0;
+  });
+
+  const [workingDays, setWorkingDays] = useState<number>(() => {
+    if (typeof window === "undefined") return 26;
+    return Number(localStorage.getItem("tsm_workingDays")) || 26;
+  });
+
+  useEffect(() => {
+    localStorage.setItem("tsm_totalAgents", String(totalAgents));
+  }, [totalAgents]);
+
+  useEffect(() => {
+    localStorage.setItem("tsm_workingDays", String(workingDays));
+  }, [workingDays]);
+
+  // ── Sync userId from URL ──────────────────────────────────────────────────
 
   useEffect(() => {
     if (queryUserId && queryUserId !== userId) setUserId(queryUserId);
   }, [queryUserId, userId, setUserId]);
 
-  // ── Fetch manager ─────────────────────────────────────────────────────────
+  // ── Fetch user ────────────────────────────────────────────────────────────
 
   useEffect(() => {
     if (!userId) return;
     setLoadingUser(true);
     fetch(`/api/user?id=${encodeURIComponent(userId)}`)
       .then((res) => { if (!res.ok) throw new Error(); return res.json(); })
-      .then((data) => setManagerDetails({
+      .then((data) => setUserDetails({
         referenceid: data.ReferenceID || "",
         role: data.Role || "",
         firstname: data.Firstname || "",
@@ -198,34 +242,37 @@ export default function TSAReports() {
       .finally(() => setLoadingUser(false));
   }, [userId]);
 
-  // ── Fetch agents under manager ────────────────────────────────────────────
-
-  useEffect(() => {
-    if (!managerDetails.referenceid) return;
-    setLoadingAgents(true);
-    fetch(`/api/activity/tsm/breaches/fetch-agent?id=${encodeURIComponent(managerDetails.referenceid)}`)
-      .then((res) => { if (!res.ok) throw new Error(); return res.json(); })
-      .then((data: Agent[]) => {
-        const active = data.filter((a) => (a.Status || "").toLowerCase() === "active");
-        setAgents(active);
-        if (active.length > 0 && !selectedRefId) setSelectedRefId(active[0].ReferenceID);
-      })
-      .catch(() => console.error("Failed to fetch agents"))
-      .finally(() => setLoadingAgents(false));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [managerDetails.referenceid]);
-
   // ── Fetch helpers ─────────────────────────────────────────────────────────
 
   const fetchClusterData = useCallback(async (refId: string) => {
     if (!refId) return;
     try {
-      const res = await fetch(`/api/com-fetch-cluster-account?referenceid=${encodeURIComponent(refId)}`);
-      if (!res.ok) throw new Error();
-      const data = await res.json();
-      const active: any[] = (data.data || []).filter((a: any) => (a.status || "").toLowerCase() === "active");
+      const PAGE_SIZE = 1000;
+      let offset = 0;
+      let allAccounts: any[] = [];
+      let hasMore = true;
+
+      while (hasMore) {
+        const res = await fetch(
+          `/api/com-fetch-manager-account?manager=${encodeURIComponent(refId)}&limit=${PAGE_SIZE}&offset=${offset}`
+        );
+        if (!res.ok) throw new Error();
+        const data = await res.json();
+        const batch: any[] = data.data || [];
+        allAccounts = [...allAccounts, ...batch];
+        hasMore = batch.length === PAGE_SIZE;
+        offset += PAGE_SIZE;
+      }
+
+      const active = allAccounts.filter(
+        (a: any) => (a.status || "").toLowerCase() === "active"
+      );
+
       const countByType = (val: string) =>
-        active.filter((a) => (a.type_client || "").trim().toLowerCase() === val).length;
+        active.filter(
+          (a: any) => (a.type_client || "").trim().toLowerCase() === val
+        ).length;
+
       setDenominators((prev) => ({
         ...prev,
         total: active.length,
@@ -236,21 +283,29 @@ export default function TSAReports() {
         newClient: countByType("new client"),
         tsaClient: countByType("tsa client"),
       }));
+
       setClusterAccounts(
-        active.map((a) => ({
+        active.map((a: any) => ({
           account_reference_number: a.account_reference_number,
           company_name: a.company_name,
           type_client: (a.type_client || "").toLowerCase().replace(/\s+/g, ""),
         }))
       );
-    } catch { /* silent */ }
+    } catch {
+      sileo.error({
+        title: "Error",
+        description: "Failed to fetch cluster.",
+        duration: 4000,
+        position: "top-center",
+      });
+    }
   }, []);
 
   const fetchActivities = useCallback(async (refId: string) => {
     if (!refId) return;
     setLoadingActivities(true);
     try {
-      const res = await fetch(`/api/activity/tsa/breaches/fetch?referenceid=${encodeURIComponent(refId)}`);
+      const res = await fetch(`/api/activity/manager/breaches/fetch?manager=${encodeURIComponent(refId)}`);
       if (!res.ok) throw new Error();
       const data = await res.json();
       setActivities(data.activities || []);
@@ -265,25 +320,30 @@ export default function TSAReports() {
     if (!refId) return;
     setLoadingOverdue(true);
     try {
-      const url = `/api/activity/tsa/breaches/fetch-activity?referenceid=${encodeURIComponent(refId)}`;
+      const url = `/api/activity/manager/breaches/fetch-activity?manager=${encodeURIComponent(refId)}`;
       const res = await fetch(url);
       if (!res.ok) throw new Error();
       const data = await res.json();
       const acts: any[] = data.activities || [];
       const grouped: Record<string, number> = {};
-      acts.forEach((a) => { const c = a.company_name || "Unknown"; grouped[c] = (grouped[c] || 0) + 1; });
+      acts.forEach((a) => {
+        const c = a.company_name || "Unknown";
+        grouped[c] = (grouped[c] || 0) + 1;
+      });
       setOverdueByCompany(grouped);
       setOverdueCount(acts.length);
-    } catch { /* silent */ } finally {
+    } catch {
+      sileo.error({ title: "Error", description: "Failed to fetch overdue.", duration: 4000, position: "top-center" });
+    } finally {
       setLoadingOverdue(false);
     }
   }, []);
 
-  const fetchCsrMetrics = useCallback(async (refId: string, start: string, end: string) => {
+  const fetchCsrMetrics = useCallback(async (refId: string, from: string, to: string) => {
     if (!refId) return;
     setLoadingCsrMetrics(true);
     try {
-      const res = await fetch(`/api/act-fetch-activity-v2?referenceid=${encodeURIComponent(refId)}`);
+      const res = await fetch(`/api/activity/manager/breaches/fetch-ecodesk?referenceid=${encodeURIComponent(refId)}`);
       if (!res.ok) throw new Error();
       const result = await res.json();
       const data: any[] = result.data || [];
@@ -294,9 +354,9 @@ export default function TSAReports() {
         "Threats/Extortion/Intimidation", "Prank Call",
       ];
 
-      const startTs = new Date(start).getTime();
-      const endDateObj = new Date(end); endDateObj.setHours(23, 59, 59, 999);
-      const endTs = endDateObj.getTime();
+      const fromTs = new Date(from).getTime();
+      const toDateObj = new Date(to); toDateObj.setHours(23, 59, 59, 999);
+      const toTs = toDateObj.getTime();
 
       let rtTotal = 0, rtCount = 0;
       let nqTotal = 0, nqCount = 0;
@@ -306,18 +366,20 @@ export default function TSAReports() {
       data.forEach((row) => {
         if (row.status !== "Closed" && row.status !== "Converted into Sales") return;
         const created = new Date(row.date_created).getTime();
-        if (isNaN(created) || created < startTs || created > endTs) return;
+        if (isNaN(created) || created < fromTs || created > toTs) return;
         if (excluded.includes(row.wrap_up)) return;
 
         const tsaAck = new Date(row.tsa_acknowledge_date).getTime();
         const endorsed = new Date(row.ticket_endorsed).getTime();
         if (!isNaN(tsaAck) && !isNaN(endorsed) && tsaAck >= endorsed) {
-          rtTotal += (tsaAck - endorsed) / 3600000; rtCount++;
+          rtTotal += (tsaAck - endorsed) / 3600000;
+          rtCount++;
         }
 
         const received = new Date(row.ticket_received).getTime();
         const tsaHandle = new Date(row.tsa_handling_time).getTime();
         const tsmHandle = new Date(row.tsm_handling_time).getTime();
+
         let baseHT = 0;
         if (!isNaN(tsaHandle) && !isNaN(received) && tsaHandle >= received) {
           baseHT = (tsaHandle - received) / 3600000;
@@ -347,18 +409,16 @@ export default function TSAReports() {
     }
   }, []);
 
-  // ── Auto-fetch on agent/date change ───────────────────────────────────────
+  // ── Auto-fetch ────────────────────────────────────────────────────────────
 
   useEffect(() => {
-    if (!selectedRefId) return;
-    setActivities([]);
-    setOverdueByCompany({});
-    setOverdueCount(0);
-    fetchClusterData(selectedRefId);
-    fetchActivities(selectedRefId);
-    fetchOverdue(selectedRefId);
-    fetchCsrMetrics(selectedRefId, startDate, endDate);
-  }, [selectedRefId, startDate, endDate, fetchClusterData, fetchActivities, fetchOverdue, fetchCsrMetrics]);
+    const refId = userDetails.referenceid;
+    if (!refId) return;
+    fetchClusterData(refId);
+    fetchActivities(refId);
+    fetchOverdue(refId);
+    fetchCsrMetrics(refId, fromDate, toDate);
+  }, [userDetails.referenceid, fromDate, toDate, fetchClusterData, fetchActivities, fetchOverdue, fetchCsrMetrics]);
 
   // ── Compute outbound + time metrics ───────────────────────────────────────
 
@@ -372,35 +432,33 @@ export default function TSAReports() {
 
     setLoadingTime(true);
     try {
-      const startRange = new Date(startDate);
-      startRange.setHours(0, 0, 0, 0);
-      const endRange = new Date(endDate);
-      endRange.setHours(23, 59, 59, 999);
+      const targetDate = new Date(fromDate);
+      const startOfDay = new Date(targetDate); startOfDay.setHours(0, 0, 0, 0);
+      const endOfDay = new Date(targetDate); endOfDay.setHours(23, 59, 59, 999);
 
-      // Filter activities within the selected date range
-      const rangeActivities = activities.filter((act) => {
+      const fixedCount = getFixedCount(userDetails.referenceid, targetDate);
+
+      const dailyActivities = activities.filter((act) => {
         const t = new Date(act.date_created).getTime();
-        return t >= startRange.getTime() && t <= endRange.getTime();
+        return t >= startOfDay.getTime() && t <= endOfDay.getTime();
       });
 
-      const grouped = computeTimeByActivity(rangeActivities);
+      const grouped = computeTimeByActivity(dailyActivities);
       setTimeByActivity(grouped);
       setTimeConsumedMs(Object.values(grouped).reduce((s, ms) => s + ms, 0));
 
       let sales = 0;
-      rangeActivities.forEach((act) => {
+      dailyActivities.forEach((act) => {
         if (act.status === "Delivered") sales += Number(act.actual_sales) || 0;
       });
       setTotalSales(sales);
 
-      // Outbound count based ONLY on source === "Outbound - Touchbase" within date range
-      const dailyCount = rangeActivities.filter(isOutboundTouchbase).length;
+      const dailyCount = dailyActivities.filter(isOutboundTouchbase).length;
 
-      // Weekly: Calculate based on the date range (from startDate to endDate)
-      const weekStart = new Date(startRange);
-      const dayOfWeek = weekStart.getDay();
+      const dayOfWeek = targetDate.getDay();
       const diffToMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
-      weekStart.setDate(weekStart.getDate() - diffToMonday);
+      const weekStart = new Date(targetDate);
+      weekStart.setDate(targetDate.getDate() - diffToMonday);
       weekStart.setHours(0, 0, 0, 0);
       const weekEnd = new Date(weekStart);
       weekEnd.setDate(weekStart.getDate() + 6);
@@ -411,18 +469,29 @@ export default function TSAReports() {
         return t >= weekStart.getTime() && t <= weekEnd.getTime() && isOutboundTouchbase(act);
       }).length;
 
-      // Monthly: Fixed to the full month of startDate
-      const monthStart = new Date(startRange.getFullYear(), startRange.getMonth(), 1, 0, 0, 0, 0);
-      const monthEnd = new Date(startRange.getFullYear(), startRange.getMonth() + 1, 0, 23, 59, 59, 999);
-
       const monthlyCount = activities.filter((act) => {
-        const t = new Date(act.date_created).getTime();
-        return t >= monthStart.getTime() && t <= monthEnd.getTime() && isOutboundTouchbase(act);
+        const d = new Date(act.date_created);
+        return (
+          d.getMonth() === targetDate.getMonth() &&
+          d.getFullYear() === targetDate.getFullYear() &&
+          isOutboundTouchbase(act)
+        );
       }).length;
+
+      const agentCount = totalAgents > 0 ? totalAgents : (fixedCount || 1);
+      const dailyDenom = agentCount * 20;
+      const weeklyDenom = dailyDenom * 6;
+      const monthlyDenom = dailyDenom * workingDays; // ← was * 26
 
       setOutboundDaily(dailyCount);
       setOutboundWeekly(weeklyCount);
       setOutboundMonthly(monthlyCount);
+      setDenominators((prev) => ({
+        ...prev,
+        daily: dailyDenom,
+        weekly: weeklyDenom,
+        monthly: monthlyDenom,
+      }));
 
       setPendingClientApprovalCount(
         activities.filter((a) => a.status === "Quote-Done" && a.quotation_status === "Pending Client Approval").length
@@ -436,34 +505,12 @@ export default function TSAReports() {
       setSpfPendingPD(
         activities.filter((a) => a.call_type === "Quotation with SPF Preparation" && a.quotation_status === "Pending PD").length
       );
-
-      // Additional closing quotation counts
-      setOrderCompleteCount(
-        activities.filter((a) => a.quotation_status === "Order Complete").length
-      );
-      setConvertToSOCount(
-        activities.filter((a) => a.quotation_status === "Convert to SO").length
-      );
-      setDeclinedCount(
-        activities.filter((a) => a.quotation_status === "Declined").length
-      );
-      setCancelledCount(
-        activities.filter((a) => a.quotation_status === "Cancelled").length
-      );
     } finally {
       setLoadingTime(false);
     }
-  }, [activities, startDate, endDate]);
+  }, [activities, fromDate, userDetails.referenceid, totalAgents, workingDays]);
 
   // ── Territory coverage ────────────────────────────────────────────────────
-  //
-  // Scope: the FULL calendar month of startDate (month start → month end).
-  // - "Covered"     = cluster accounts whose company_name appears in ANY
-  //                   activity within that month range
-  // - "Not Reached" = the rest
-  // - NO source filter — isOutboundTouchbase applies only to the Outbound
-  //   Performance card, NOT to coverage counts.
-  // - Denominators come from clusterAccounts, not activities.
 
   useEffect(() => {
     if (!clusterAccounts.length) {
@@ -475,21 +522,27 @@ export default function TSAReports() {
       return;
     }
 
-    // Explicit month bounds from startDate
-    const startDateObj = new Date(startDate);
-    const monthStart  = new Date(startDateObj.getFullYear(), startDateObj.getMonth(), 1, 0, 0, 0, 0).getTime();
-    const monthEnd    = new Date(startDateObj.getFullYear(), startDateObj.getMonth() + 1, 0, 23, 59, 59, 999).getTime();
+    const fromDateObj = new Date(fromDate);
+    const monthStart = new Date(fromDateObj.getFullYear(), fromDateObj.getMonth(), 1, 0, 0, 0, 0).getTime();
+    const monthEnd = new Date(fromDateObj.getFullYear(), fromDateObj.getMonth() + 1, 0, 23, 59, 59, 999).getTime();
 
-    // Step 1 — account_reference_numbers with ANY activity within the calendar month
-    const touchedAccountRefs = new Set<string>();
+    // ── KEY FIX: dual-key set — mirrors all.tsx activityKeySet logic exactly.
+    // Old code only matched by company_name → 309 accounts missed due to string
+    // mismatches. Now uses account_reference_number first, falls back to
+    // "name:company_name" — same strategy as all.tsx getAccountKey / activityKeySet.
+    const activityKeySet = new Set<string>();
     const byActivityRef: Record<string, any> = {};
 
     activities.forEach((act) => {
-      if (!act.account_reference_number || !act.date_created) return;
+      if (!act.date_created) return;
       const t = new Date(act.date_created).getTime();
       if (isNaN(t) || t < monthStart || t > monthEnd) return;
 
-      touchedAccountRefs.add(act.account_reference_number);
+      if (act.account_reference_number) {
+        activityKeySet.add(act.account_reference_number.toLowerCase());
+      } else if (act.company_name) {
+        activityKeySet.add(`name:${act.company_name.toLowerCase()}`);
+      }
 
       if (act.activity_reference_number) {
         byActivityRef[act.activity_reference_number] = act;
@@ -498,23 +551,23 @@ export default function TSAReports() {
 
     setUniqueActivitiesList(Object.values(byActivityRef));
 
-    // Step 2 — covered / uncovered split by account_reference_number
-    const covered = clusterAccounts.filter((acc) =>
-      acc.account_reference_number && touchedAccountRefs.has(acc.account_reference_number)
-    );
-    const uncovered = clusterAccounts.filter((acc) =>
-      !acc.account_reference_number || !touchedAccountRefs.has(acc.account_reference_number)
-    );
+    // Mirror all.tsx getAccountKey helper
+    const getAccountKey = (acc: Activity): string => {
+      if (acc.account_reference_number) return acc.account_reference_number.toLowerCase();
+      return `name:${(acc.company_name ?? "").toLowerCase()}`;
+    };
+
+    const covered = clusterAccounts.filter((acc) => activityKeySet.has(getAccountKey(acc)));
+    const uncovered = clusterAccounts.filter((acc) => !activityKeySet.has(getAccountKey(acc)));
 
     setCoveredAccounts(covered);
     setUncoveredAccounts(uncovered);
 
-    // Step 3 — segment counts from covered cluster accounts
     const seg = { top50: 0, next30: 0, balance20: 0, csrClient: 0, newClient: 0, tsaClient: 0 };
     covered.forEach((acc) => {
       const type = acc.type_client ?? "";
-      if      (type === "top50")     seg.top50++;
-      else if (type === "next30")    seg.next30++;
+      if (type === "top50") seg.top50++;
+      else if (type === "next30") seg.next30++;
       else if (type === "balance20") seg.balance20++;
       else if (type === "csrclient") seg.csrClient++;
       else if (type === "newclient") seg.newClient++;
@@ -523,19 +576,18 @@ export default function TSAReports() {
 
     setUniqueClientReach(covered.length);
     setClientSegments({ ...seg, outbound: covered.length });
-  }, [activities, clusterAccounts, startDate]);
+  }, [activities, clusterAccounts, fromDate]);
 
   // ── New clients ───────────────────────────────────────────────────────────
 
   useEffect(() => {
-    if (!activities.length || !startDate) {
+    if (!activities.length || !fromDate) {
       setNewClientByCompany({}); setNewClientCount(0); return;
     }
 
-    const startRange = new Date(startDate);
-    startRange.setHours(0, 0, 0, 0);
-    const endRange = new Date(endDate);
-    endRange.setHours(23, 59, 59, 999);
+    const targetDate = new Date(fromDate);
+    const startOfDay = new Date(targetDate); startOfDay.setHours(0, 0, 0, 0);
+    const endOfDay = new Date(targetDate); endOfDay.setHours(23, 59, 59, 999);
     const allowed = ["Assisted", "Quote-Done", "SO-Done", "Delivered"];
 
     const grouped: Record<string, number> = {};
@@ -543,7 +595,11 @@ export default function TSAReports() {
 
     activities.forEach((act) => {
       const t = new Date(act.date_created).getTime();
-      if (allowed.includes(act.status) && act.type_client === "New Client" && t >= startRange.getTime() && t <= endRange.getTime()) {
+      if (
+        allowed.includes(act.status) &&
+        act.type_client === "New Client" &&
+        t >= startOfDay.getTime() && t <= endOfDay.getTime()
+      ) {
         const company = act.company_name || "Unknown";
         grouped[company] = (grouped[company] || 0) + 1;
         total++;
@@ -552,33 +608,34 @@ export default function TSAReports() {
 
     setNewClientByCompany(grouped);
     setNewClientCount(total);
-  }, [activities, startDate, endDate]);
+  }, [activities, fromDate]);
 
   // ── Derived ───────────────────────────────────────────────────────────────
 
-  const overdueEntries    = Object.entries(overdueByCompany);
-  const visibleOverdue    = showAllOverdue ? overdueEntries : overdueEntries.slice(0, 5);
-  const newClientEntries  = Object.entries(newClientByCompany);
+  const overdueEntries = Object.entries(overdueByCompany);
+  const visibleOverdue = showAllOverdue ? overdueEntries : overdueEntries.slice(0, 5);
+  const newClientEntries = Object.entries(newClientByCompany);
   const visibleNewClients = showAllNewClients ? newClientEntries : newClientEntries.slice(0, 5);
-
-  const isAnySyncing  = loadingActivities || loadingOverdue;
-  const dailyPct      = denominators.daily > 0
-    ? Math.min(100, Math.round((outboundDaily / denominators.daily) * 100))
-    : 0;
-  const selectedAgent = agents.find((a) => a.ReferenceID === selectedRefId);
+  const isAnySyncing = loadingActivities || loadingOverdue;
 
   const handleManualSync = () => {
-    if (!selectedRefId) return;
-    fetchClusterData(selectedRefId);
-    fetchActivities(selectedRefId);
-    fetchOverdue(selectedRefId);
-    fetchCsrMetrics(selectedRefId, startDate, endDate);
+    const refId = userDetails.referenceid;
+    if (!refId) return;
+    fetchClusterData(refId);
+    fetchActivities(refId);
+    fetchOverdue(refId);
+    fetchCsrMetrics(refId, fromDate, toDate);
     sileo.success({
       title: "Syncing",
-      description: `Refreshing data for ${selectedAgent?.Lastname ?? ""}, ${selectedAgent?.Firstname ?? ""}`,
-      duration: 3000, position: "top-right",
+      description: `Refreshing data for ${userDetails.lastname}, ${userDetails.firstname}`,
+      duration: 3000,
+      position: "top-right",
     });
   };
+
+  const dailyPct = denominators.daily > 0
+    ? Math.min(100, Math.round((outboundDaily / denominators.daily) * 100))
+    : 0;
 
   // ── Render ────────────────────────────────────────────────────────────────
 
@@ -588,85 +645,65 @@ export default function TSAReports() {
       {/* ── SYNC PANEL ──────────────────────────────────────────────────── */}
       <div className="bg-gray-50 border border-gray-200 p-3 space-y-3">
         <h4 className="text-[9px] font-black uppercase tracking-widest text-gray-400">
-          Agent Selection
+          Sync Configuration
         </h4>
-
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-3 gap-3">
           <div>
             <label className="text-[9px] font-semibold uppercase text-gray-400 block mb-1">
-              {loadingUser ? "Loading..." : `TSM: ${managerDetails.lastname || "—"}, ${managerDetails.firstname || "—"}`}
+              {loadingUser
+                ? "Loading..."
+                : `${userDetails.lastname || "—"}, ${userDetails.firstname || "—"}`}
             </label>
-
-            {loadingAgents ? (
-              <div className="flex items-center gap-2 text-gray-400 h-8">
-                <Loader2 className="w-3 h-3 animate-spin" />
-                <span className="text-[10px]">Loading agents...</span>
-              </div>
-            ) : agents.length === 0 ? (
-              <p className="text-[10px] text-gray-400 italic h-8 flex items-center">No agents found</p>
-            ) : (
-              <div className="flex flex-wrap gap-1.5">
-                {agents.map((agent) => {
-                  const isActive = agent.ReferenceID === selectedRefId;
-                  return (
-                    <button
-                      key={agent.ReferenceID}
-                      onClick={() => setSelectedRefId(agent.ReferenceID)}
-                      className={`text-[9px] font-bold uppercase px-2 py-1 border transition-colors ${
-                        isActive
-                          ? "bg-gray-900 text-white border-gray-900"
-                          : "bg-white text-gray-600 border-gray-200 hover:border-gray-400 hover:text-gray-900"
-                      }`}
-                    >
-                      {agent.Lastname}, {agent.Firstname}
-                    </button>
-                  );
-                })}
-              </div>
-            )}
+            <Input
+              className="h-7 text-[11px] font-mono rounded-none bg-white border-gray-200"
+              value={userDetails.referenceid}
+              disabled
+              placeholder="Reference ID"
+            />
           </div>
-
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="text-[9px] font-semibold uppercase text-gray-400 block mb-1">
-                Start Date
-              </label>
+          <div>
+            <label className="text-[9px] font-semibold uppercase text-gray-400 block mb-1">
+              Total Agents
+            </label>
+            <div className="flex gap-1.5">
               <Input
-                type="date"
-                className="h-7 text-[11px] rounded-none bg-white border-gray-200"
-                value={startDate}
-                onChange={(e) => setStartDate(e.target.value)}
+                type="number"
+                min={0}
+                className="h-7 text-[11px] rounded-none bg-white border-gray-200 w-20"
+                value={totalAgents === 0 ? "" : totalAgents}
+                onChange={(e) => setTotalAgents(Number(e.target.value) || 0)}
+                placeholder="e.g. 27"
               />
+              <select
+                className="h-7 text-[11px] rounded-none bg-white border border-gray-200 px-2 text-gray-700 font-mono flex-1 cursor-pointer"
+                value={workingDays}
+                onChange={(e) => setWorkingDays(Number(e.target.value))}
+              >
+                <option value={26}>26 days</option>
+                <option value={22}>22 days</option>
+              </select>
             </div>
-
-            <div>
-              <label className="text-[9px] font-semibold uppercase text-gray-400 block mb-1">
-                End Date
-              </label>
-              <Input
-                type="date"
-                className="h-7 text-[11px] rounded-none bg-white border-gray-200"
-                value={endDate}
-                onChange={(e) => setEndDate(e.target.value)}
-              />
-            </div>
+          </div>
+          <div>
+            <label className="text-[9px] font-semibold uppercase text-gray-400 block mb-1">
+              Target Date
+            </label>
+            <Input
+              type="date"
+              className="h-7 text-[11px] rounded-none bg-white border-gray-200"
+              value={fromDate}
+              onChange={(e) => { setFromDate(e.target.value); setToDate(e.target.value); }}
+            />
           </div>
         </div>
-
-        {selectedAgent && (
-          <div className="flex items-center gap-2 text-[10px] text-gray-500">
-            <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-500" />
-            Viewing: <strong className="text-gray-800">{selectedAgent.Lastname}, {selectedAgent.Firstname}</strong>
-            <span className="font-mono text-gray-400">({selectedRefId})</span>
-          </div>
-        )}
-
         <Button
           className="w-full h-8 bg-gray-900 hover:bg-gray-800 text-[10px] uppercase font-black tracking-wider gap-2 rounded-none"
           onClick={handleManualSync}
-          disabled={isAnySyncing || !selectedRefId}
+          disabled={isAnySyncing || !userDetails.referenceid}
         >
-          {isAnySyncing ? <Loader2 size={11} className="animate-spin" /> : <RefreshCcw size={11} />}
+          {isAnySyncing
+            ? <Loader2 size={11} className="animate-spin" />
+            : <RefreshCcw size={11} />}
           {isAnySyncing ? "Syncing..." : "Sync Data"}
         </Button>
       </div>
@@ -674,71 +711,72 @@ export default function TSAReports() {
       {/* ── METRICS GRID ────────────────────────────────────────────────── */}
       <div className="grid grid-cols-2 gap-3">
 
-        {/* LEFT */}
+        {/* LEFT COLUMN */}
         <ul className="list-none space-y-3">
 
           {/* Outbound Performance */}
-          <SectionCard title="Outbound Performance">
-            <div className="flex items-center justify-between">
-              <span className="text-[10px] text-gray-500 uppercase font-medium">Daily Count</span>
-              <span className="text-[20px] font-black text-gray-800">{outboundDaily}</span>
+          <SectionCard
+            title="Outbound Touchbase"
+            badge={
+              <span className={`text-[9px] font-black px-2 py-0.5 ${dailyPct >= 100 ? "bg-emerald-100 text-emerald-700" :
+                dailyPct >= 50 ? "bg-amber-100 text-amber-700" :
+                  "bg-red-100 text-red-600"}`}>
+                {dailyPct}% Today
+              </span>
+            }
+          >
+            <div className="mb-3">
+              <div className="h-1 bg-gray-100 w-full overflow-hidden">
+                <div
+                  className={`h-full transition-all duration-500 ${dailyPct >= 100 ? "bg-emerald-500" :
+                    dailyPct >= 50 ? "bg-amber-500" : "bg-red-500"}`}
+                  style={{ width: `${dailyPct}%` }}
+                />
+              </div>
             </div>
-            <p className="text-[8px] text-gray-400 uppercase font-medium mt-2 tracking-wide">
-              Source: Outbound - Touchbase
-            </p>
+            <div className="grid grid-cols-3 gap-1 text-center">
+              {[
+                { label: "Daily", value: outboundDaily },
+                { label: "Weekly", value: outboundWeekly },
+                { label: "Monthly", value: outboundMonthly },
+              ].map(({ label, value }, i) => (
+                <div key={label} className={i < 2 ? "border-r border-gray-100" : ""}>
+                  <p className="text-[9px] text-gray-400 uppercase font-semibold mb-0.5">{label}</p>
+                  <p className="font-black text-[12px] text-gray-800">
+                    {value}
+                    
+                  </p>
+                </div>
+              ))}
+            </div>
           </SectionCard>
 
           {/* Database Coverage */}
           <SectionCard title="Database Coverage">
             <div className="space-y-2">
-              {/* With Activity / Total */}
               <div className="flex items-center justify-between mb-1">
-                <span className="text-[14px] font-black text-blue-700">{coveredAccounts.length}</span>
+                <span className="text-[10px] font-bold text-blue-700">{uniqueClientReach}</span>
                 <span className="text-[10px] text-gray-400">of {denominators.total} accounts</span>
               </div>
               <div className="h-1.5 bg-gray-100 w-full overflow-hidden">
                 <div
                   className="h-full bg-blue-600 transition-all duration-500"
-                  style={{
-                    width: denominators.total
-                      ? `${Math.min(100, (coveredAccounts.length / denominators.total) * 100)}%` 
-                      : "0%",
-                  }}
+                  style={{ width: denominators.total ? `${Math.min(100, (uniqueClientReach / denominators.total) * 100)}%` : "0%" }}
                 />
               </div>
-
-              {/* Activity Status */}
-              <div className="grid grid-cols-2 gap-2 py-2 border-y border-gray-100">
-                <div className="text-center">
-                  <p className="text-[9px] text-gray-400 uppercase mb-1">With Activity</p>
-                  <p className="text-[16px] font-black text-emerald-600">{coveredAccounts.length}</p>
-                  <p className="text-[9px] text-gray-400">
-                    {denominators.total ? Math.round((coveredAccounts.length / denominators.total) * 100) : 0}% of total
-                  </p>
-                </div>
-                <div className="text-center border-l border-gray-100">
-                  <p className="text-[9px] text-gray-400 uppercase mb-1">No Activity</p>
-                  <p className="text-[16px] font-black text-amber-600">{uncoveredAccounts.length}</p>
-                  <p className="text-[9px] text-gray-400">
-                    {denominators.total ? Math.round((uncoveredAccounts.length / denominators.total) * 100) : 0}% of total
-                  </p>
-                </div>
-              </div>
-
-              {/* Type Client Grid - Covered/Total format */}
               <div className="grid grid-cols-3 gap-1 mt-2">
                 {[
-                  { label: "Top 50", key: "top50", covered: clientSegments.top50, total: denominators.top50 },
-                  { label: "Next 30", key: "next30", covered: clientSegments.next30, total: denominators.next30 },
-                  { label: "Bal 20", key: "balance20", covered: clientSegments.balance20, total: denominators.bal20 },
-                  { label: "CSR", key: "csrclient", covered: clientSegments.csrClient, total: denominators.csrClient },
-                  { label: "New", key: "newclient", covered: clientSegments.newClient, total: denominators.newClient },
-                  { label: "TSA", key: "tsaclient", covered: clientSegments.tsaClient, total: denominators.tsaClient },
-                ].map(({ label, key, covered, total }) => (
+                  { label: "Top 50", val: clientSegments.top50, denom: denominators.top50 },
+                  { label: "Next 30", val: clientSegments.next30, denom: denominators.next30 },
+                  { label: "Bal 20", val: clientSegments.balance20, denom: denominators.bal20 },
+                  { label: "CSR", val: clientSegments.csrClient, denom: denominators.csrClient },
+                  { label: "New", val: clientSegments.newClient, denom: denominators.newClient },
+                  { label: "TSA", val: clientSegments.tsaClient, denom: denominators.tsaClient },
+                ].map(({ label, val, denom }) => (
                   <div key={label} className="bg-gray-50 px-2 py-1 text-center border border-gray-100">
                     <p className="text-[8px] text-gray-400 uppercase">{label}</p>
                     <p className="text-[10px] font-black text-gray-700">
-                      {covered}<span className="text-gray-400 font-normal">/{total}</span>
+                      {val}<span className="text-gray-400 font-normal">/{denom}</span>
                     </p>
                   </div>
                 ))}
@@ -752,7 +790,10 @@ export default function TSAReports() {
             accent="border-l-red-400"
             badge={
               overdueEntries.length > 5 ? (
-                <button onClick={() => setShowAllOverdue(!showAllOverdue)} className="text-[9px] text-blue-600 font-semibold hover:underline">
+                <button
+                  onClick={() => setShowAllOverdue(!showAllOverdue)}
+                  className="text-[9px] text-blue-600 font-semibold hover:underline"
+                >
                   {showAllOverdue ? "Less" : "More"}
                 </button>
               ) : undefined
@@ -782,7 +823,10 @@ export default function TSAReports() {
             title={`New Account Devt${newClientCount > 0 ? ` · ${newClientCount}` : ""}`}
             badge={
               newClientEntries.length > 5 ? (
-                <button onClick={() => setShowAllNewClients(!showAllNewClients)} className="text-[9px] text-blue-600 font-semibold hover:underline">
+                <button
+                  onClick={() => setShowAllNewClients(!showAllNewClients)}
+                  className="text-[9px] text-blue-600 font-semibold hover:underline"
+                >
                   {showAllNewClients ? "Less" : "More"}
                 </button>
               ) : undefined
@@ -803,7 +847,7 @@ export default function TSAReports() {
           </SectionCard>
         </ul>
 
-        {/* RIGHT */}
+        {/* RIGHT COLUMN */}
         <ul className="list-none space-y-3">
 
           {/* Time Consumed */}
@@ -852,9 +896,9 @@ export default function TSAReports() {
               </div>
             ) : (
               <div className="space-y-1">
-                <StatRow label="TSA Response Time"     value={formatHoursToHMS(avgResponseTime)} />
-                <StatRow label="Non-Quotation HT"      value={formatHoursToHMS(avgNonQuotationHT)} />
-                <StatRow label="Quotation HT"          value={formatHoursToHMS(avgQuotationHT)} />
+                <StatRow label="TSA Response Time" value={formatHoursToHMS(avgResponseTime)} />
+                <StatRow label="Non-Quotation HT" value={formatHoursToHMS(avgNonQuotationHT)} />
+                <StatRow label="Quotation HT" value={formatHoursToHMS(avgQuotationHT)} />
                 <StatRow label="SPF Handling Duration" value={formatHoursToHMS(avgSpfHT)} />
               </div>
             )}
@@ -865,10 +909,7 @@ export default function TSAReports() {
             <div className="space-y-1">
               {[
                 { label: "Pending Client Approval", value: pendingClientApprovalCount },
-                { label: "Order Complete", value: orderCompleteCount },
-                { label: "Convert to SO", value: convertToSOCount },
-                { label: "Declined", value: declinedCount },
-                { label: "Cancelled", value: cancelledCount },
+                
               ].map(({ label, value }) => (
                 <div key={label} className="flex justify-between items-center px-2 py-1.5 border-b border-gray-50 last:border-b-0">
                   <span className="text-[10px] text-red-500 font-medium">{label}</span>
@@ -882,10 +923,10 @@ export default function TSAReports() {
 
       {/* ── COVERAGE DIALOG ─────────────────────────────────────────────── */}
       {(() => {
-        const isCovered   = coverageDialogSource === "covered";
+        const isCovered = coverageDialogSource === "covered";
         const isUncovered = coverageDialogSource === "uncovered";
-        const dialogOpen  = isCovered || isUncovered;
-        const list        = isCovered ? coveredAccounts : uncoveredAccounts;
+        const dialogOpen = isCovered || isUncovered;
+        const list = isCovered ? coveredAccounts : uncoveredAccounts;
 
         const typeLabel = (normalized: string): string => {
           const map: Record<string, string> = {
@@ -896,8 +937,8 @@ export default function TSAReports() {
         };
 
         const typeColors: Record<string, string> = {
-          top50:     "bg-amber-100 text-amber-700 border-amber-200",
-          next30:    "bg-blue-100 text-blue-700 border-blue-200",
+          top50: "bg-amber-100 text-amber-700 border-amber-200",
+          next30: "bg-blue-100 text-blue-700 border-blue-200",
           balance20: "bg-violet-100 text-violet-700 border-violet-200",
           newclient: "bg-emerald-100 text-emerald-700 border-emerald-200",
           tsaclient: "bg-rose-100 text-rose-700 border-rose-200",
@@ -909,33 +950,24 @@ export default function TSAReports() {
         return (
           <Dialog open={dialogOpen} onOpenChange={(v) => { if (!v) setCoverageDialogSource(null); }}>
             <DialogContent className="max-w-lg max-h-[80vh] flex flex-col p-0 gap-0">
-
-              {/* Header */}
               <DialogHeader className="px-4 py-3 border-b border-gray-100 shrink-0">
                 <div className="flex items-center justify-between">
                   <DialogTitle className="text-[11px] font-black uppercase tracking-wider text-gray-700">
                     {isCovered ? "Covered Accounts" : "Not Reached Accounts"}
                     <span className="ml-2 text-gray-400 font-normal">{list.length}</span>
                   </DialogTitle>
-                  {/* Tab toggle */}
                   <div className="flex items-center gap-1 rounded-lg border border-gray-200 overflow-hidden">
                     <button
                       onClick={() => setCoverageDialogSource("covered")}
-                      className={`px-2.5 py-1 text-[9px] font-bold uppercase transition-colors ${
-                        isCovered
-                          ? "bg-emerald-600 text-white"
-                          : "bg-white text-gray-500 hover:bg-gray-50"
-                      }`}
+                      className={`px-2.5 py-1 text-[9px] font-bold uppercase transition-colors ${isCovered ? "bg-emerald-600 text-white" : "bg-white text-gray-500 hover:bg-gray-50"
+                        }`}
                     >
                       Covered · {coveredAccounts.length}
                     </button>
                     <button
                       onClick={() => setCoverageDialogSource("uncovered")}
-                      className={`px-2.5 py-1 text-[9px] font-bold uppercase transition-colors ${
-                        isUncovered
-                          ? "bg-amber-500 text-white"
-                          : "bg-white text-gray-500 hover:bg-gray-50"
-                      }`}
+                      className={`px-2.5 py-1 text-[9px] font-bold uppercase transition-colors ${isUncovered ? "bg-amber-500 text-white" : "bg-white text-gray-500 hover:bg-gray-50"
+                        }`}
                     >
                       Not Reached · {uncoveredAccounts.length}
                     </button>
@@ -943,7 +975,6 @@ export default function TSAReports() {
                 </div>
               </DialogHeader>
 
-              {/* Table */}
               {list.length === 0 ? (
                 <p className="text-[11px] text-gray-300 italic px-4 py-6 text-center">
                   {isCovered
@@ -989,7 +1020,6 @@ export default function TSAReports() {
           </Dialog>
         );
       })()}
-
     </div>
   );
 }
