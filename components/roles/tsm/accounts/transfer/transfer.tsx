@@ -28,6 +28,7 @@ interface Account {
     status?: string;
     transfer_to: string;
     date_transferred: string;
+    remarks: string;
 }
 
 interface UserDetails {
@@ -303,6 +304,13 @@ export function AccountsCards({ posts = [], userDetails, setDateCreatedFilterRan
                                     <div>
                                         <span className="text-gray-500">Address:</span> {account.address}
                                     </div>
+
+                                    {account.remarks && account.remarks !== "-" && (
+                                        <div className="bg-amber-50 border border-amber-200 p-2 rounded-none">
+                                            <span className="text-amber-700 font-medium">Remarks:</span>
+                                            <span className="text-gray-700 italic ml-1">{account.remarks}</span>
+                                        </div>
+                                    )}
                                 </div>
 
                                 {/* FOOTER */}

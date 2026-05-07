@@ -62,6 +62,7 @@ interface Account {
     transfer_to: string;
     date_transferred: string;
     date_removed: string;
+    remarks: string;
 }
 
 interface SPFRequest {
@@ -87,6 +88,7 @@ interface HistoryItem {
     status: string;
     date_created: string;
     referenceid: string;
+    remarks: string;
 }
 
 function DashboardContent() {

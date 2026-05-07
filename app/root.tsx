@@ -19,6 +19,7 @@ import { FollowUpToday } from "@/components/popup/followup-today";
 import { OfflineDialog } from "@/components/popup/offline";
 
 import { UserProvider, useUser } from "@/contexts/UserContext";
+import { NotificationProvider } from "@/contexts/NotificationContext";
 
 // ─── Dynamic Page Titles ──────────────────────────────────────────────────────
 
@@ -150,7 +151,9 @@ function LayoutContent({ children }: { children: React.ReactNode }) {
 export default function RootLayoutClient({ children }: { children: React.ReactNode }) {
   return (
     <UserProvider>
-      <LayoutContent>{children}</LayoutContent>
+      <NotificationProvider>
+        <LayoutContent>{children}</LayoutContent>
+      </NotificationProvider>
     </UserProvider>
   );
 }

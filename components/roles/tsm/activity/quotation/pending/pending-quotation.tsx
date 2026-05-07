@@ -361,6 +361,14 @@ export const Scheduled: React.FC<ScheduledProps> = ({
                                             <span className="font-mono text-[10px] text-gray-600">{item.date_created.slice(0, 10)}</span>
                                         </div>
                                     </div>
+
+                                    {/* Remarks */}
+                                    {item.remarks && item.remarks !== "-" && (
+                                        <div className="col-span-2 mt-2 bg-amber-50 border border-amber-200 p-2 rounded-none">
+                                            <span className="text-amber-700 font-medium text-[10px] uppercase">Remarks:</span>
+                                            <span className="text-gray-700 italic text-[10px] ml-1">{item.remarks}</span>
+                                        </div>
+                                    )}
                                 </div>
                             </div>
                         );

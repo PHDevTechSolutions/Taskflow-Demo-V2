@@ -473,12 +473,14 @@ export function QuotationTableCard({
 
   /* ── Footer totals ── */
   const totals = useMemo(() => {
-    const totalQuoteDoneCount = statsByAgent.reduce((s, a) => s + a.totalQuoteDoneCount, 0);
-    const totalQuotationAmount = statsByAgent.reduce((s, a) => s + a.totalQuotationAmount, 0);
-    const totalSOCount = statsByAgent.reduce((s, a) => s + a.totalSOCount, 0);
-    const totalSOAmount = statsByAgent.reduce((s, a) => s + a.totalSOAmount, 0);
-    const totalDeliveredCount = statsByAgent.reduce((s, a) => s + a.totalDeliveredCount, 0);
-    const totalSIAmount = statsByAgent.reduce((s, a) => s + a.totalSIAmount, 0);
+    // Only include agents with name info in totals
+    const visibleAgents = statsByAgent.filter((a) => agentMap.has(a.agentID));
+    const totalQuoteDoneCount = visibleAgents.reduce((s, a) => s + a.totalQuoteDoneCount, 0);
+    const totalQuotationAmount = visibleAgents.reduce((s, a) => s + a.totalQuotationAmount, 0);
+    const totalSOCount = visibleAgents.reduce((s, a) => s + a.totalSOCount, 0);
+    const totalSOAmount = visibleAgents.reduce((s, a) => s + a.totalSOAmount, 0);
+    const totalDeliveredCount = visibleAgents.reduce((s, a) => s + a.totalDeliveredCount, 0);
+    const totalSIAmount = visibleAgents.reduce((s, a) => s + a.totalSIAmount, 0);
 
     const quoteToSOVal = quoteToSOMode === "count"
       ? pctVal(totalSOCount, totalQuoteDoneCount)
@@ -494,7 +496,7 @@ export function QuotationTableCard({
       totalDeliveredCount, totalSIAmount,
       quoteToSOVal, quotationToSIVal,
     };
-  }, [statsByAgent, quoteToSOMode, quotationToSIMode]);
+  }, [statsByAgent, quoteToSOMode, quotationToSIMode, agentMap]);
 
   /* ── Excel Export ── */
   const exportToExcel = async () => {
@@ -525,14 +527,15 @@ export function QuotationTableCard({
       };
       headerRow.alignment = { vertical: 'middle', horizontal: 'center' };
 
-      // Add Data
-      statsByAgent.forEach((stat) => {
-        const info = agentMap.get(stat.agentID);
+      // Add Data (only agents with name info)
+      const filteredStats = statsByAgent.filter((stat) => agentMap.has(stat.agentID));
+      filteredStats.forEach((stat) => {
+        const info = agentMap.get(stat.agentID)!;
         const quoteToSOVal = getQuoteToSOVal(stat);
         const quotationToSIVal = getQuotationToSIVal(stat);
 
         worksheet.addRow({
-          agent: info?.name ?? stat.agentID,
+          agent: info.name,
           totalQuotes: stat.totalQuoteDoneCount,
           quoteAmount: stat.totalQuotationAmount,
           quoteToSO: quoteToSOVal / 100,
@@ -686,8 +689,10 @@ export function QuotationTableCard({
               </TableHeader>
 
               <TableBody>
-                {statsByAgent.map((stat) => {
-                  const info = agentMap.get(stat.agentID);
+                {statsByAgent
+                  .filter((stat) => agentMap.has(stat.agentID)) // Only show agents with name info
+                  .map((stat) => {
+                  const info = agentMap.get(stat.agentID)!;
                   const quoteToSOVal = getQuoteToSOVal(stat);
                   const quotationToSIVal = getQuotationToSIVal(stat);
 
@@ -701,10 +706,10 @@ export function QuotationTableCard({
                               className="w-7 h-7 rounded-full object-cover border border-white shadow-sm flex-shrink-0" />
                           ) : (
                             <div className="w-7 h-7 rounded-full bg-gray-100 flex items-center justify-center text-xs text-gray-400 flex-shrink-0">
-                              {info?.name?.[0] ?? "?"}
+                              {info.name[0]}
                             </div>
                           )}
-                          <span className="capitalize text-gray-700">{info?.name ?? stat.agentID}</span>
+                          <span className="capitalize text-gray-700">{info.name}</span>
                         </div>
                       </TableCell>
 
