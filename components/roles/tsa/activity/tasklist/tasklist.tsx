@@ -554,7 +554,11 @@ export const TaskList: React.FC<CompletedProps> = ({
   const [pendingTimeItem, setPendingTimeItem]   = useState<Completed | null>(null);
 
   const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage, setItemsPerPage] = useState(20);
+  const [itemsPerPage, setItemsPerPage] = useState(10); // Default to 10 as requested
+  const [totalCount, setTotalCount] = useState(0);
+  const [totalPages, setTotalPages] = useState(0);
+  const [hasMore, setHasMore] = useState(false);
+  const [paginationLoading, setPaginationLoading] = useState(false);
 
   // ── Status Progression Automation ─────────────────────────────────────────────
 
@@ -750,8 +754,8 @@ export const TaskList: React.FC<CompletedProps> = ({
         throw new Error(errorData?.error || "Failed to update");
       }
 
-      // Find the updated item to trigger automation
-      const updatedItem = activities.find(item => item.id === id);
+      // Find the updated item to trigger automation (with null check)
+      const updatedItem = activities.find(item => item && item.id === id);
       if (updatedItem) {
         // Create updated item object
         const itemWithNewStatus = { ...updatedItem, quotation_status: main.trim() };
@@ -783,13 +787,20 @@ export const TaskList: React.FC<CompletedProps> = ({
 
   // ── Fetch ──────────────────────────────────────────────────────────────────
 
-  const fetchActivities = useCallback(async () => {
+  const fetchActivities = useCallback(async (page?: number) => {
     if (!referenceid?.trim()) {
       setActivities([]);
+      setTotalCount(0);
+      setTotalPages(0);
       return;
     }
 
-    setLoading(true);
+    // Use pagination loading for all page changes, main loading only for initial load
+    if (page !== undefined) {
+      setPaginationLoading(true);
+    } else {
+      setLoading(true);
+    }
     setError(null);
 
     try {
@@ -802,6 +813,32 @@ export const TaskList: React.FC<CompletedProps> = ({
 
       const url = new URL("/api/activity/tsa/historical/fetch", window.location.origin);
       url.searchParams.append("referenceid", encodeURIComponent(referenceid.trim()));
+      url.searchParams.append("page", String(page ?? 1));
+      url.searchParams.append("limit", String(itemsPerPage));
+      
+      // Add search and filters
+      if (searchTerm.trim()) {
+        url.searchParams.append("search", searchTerm.trim());
+      }
+      if (filterStatus !== "all") {
+        url.searchParams.append("status", filterStatus);
+      }
+      if (filterTypeActivity !== "all") {
+        url.searchParams.append("type_activity", filterTypeActivity);
+      }
+      if (filterSource !== "all") {
+        url.searchParams.append("source", filterSource);
+      }
+      if (filterTypeClient !== "all") {
+        url.searchParams.append("type_client", filterTypeClient);
+      }
+      if (filterCallStatus !== "all") {
+        url.searchParams.append("call_status", filterCallStatus);
+      }
+      if (filterQuotationStatus !== "all") {
+        url.searchParams.append("quotation_status", filterQuotationStatus);
+      }
+      
       if (from && to) {
         url.searchParams.append("from", from);
         url.searchParams.append("to", to);
@@ -820,13 +857,23 @@ export const TaskList: React.FC<CompletedProps> = ({
       
       const data = await res.json();
       setActivities(Array.isArray(data.activities) ? data.activities : []);
+      
+      // Update pagination info from API response
+      if (data.pagination) {
+        setTotalCount(data.pagination.total_count);
+        setTotalPages(data.pagination.total_pages);
+        setHasMore(data.pagination.has_more);
+      }
     } catch (err: any) {
       setError(err.message || "Failed to fetch activities");
       setActivities([]);
+      setTotalCount(0);
+      setTotalPages(0);
     } finally {
       setLoading(false);
+      setPaginationLoading(false);
     }
-  }, [referenceid, dateCreatedFilterRange]);
+  }, [referenceid, dateCreatedFilterRange, itemsPerPage, searchTerm, filterStatus, filterTypeActivity, filterSource, filterTypeClient, filterCallStatus, filterQuotationStatus]);
 
   useEffect(() => {
     if (!referenceid?.trim()) return;
@@ -836,7 +883,7 @@ export const TaskList: React.FC<CompletedProps> = ({
     
     const initializeChannel = async () => {
       try {
-        await fetchActivities();
+        await fetchActivities(); // Initial load without page parameter uses main loading
         
         if (mounted) {
           channel = supabase
@@ -866,43 +913,18 @@ export const TaskList: React.FC<CompletedProps> = ({
   }, [referenceid, fetchActivities]);
 
   // ── Derived data ───────────────────────────────────────────────────────────
+  // Note: Filtering and sorting now handled by API for better performance
 
-  const filteredActivities = useMemo(() => {
-    const q = searchTerm.toLowerCase();
-    return activities
-      .filter((item) => {
-        if (!q) return true;
-        return Object.values(item).some(
-          (val) => val !== null && val !== undefined && String(val).toLowerCase().includes(q),
-        );
-      })
-      .filter((item) => {
-        if (filterStatus !== "all" && item.status !== filterStatus) return false;
-        if (filterTypeActivity !== "all" && item.type_activity !== filterTypeActivity) return false;
-        if (filterSource !== "all" && item.source !== filterSource) return false;
-        if (filterTypeClient !== "all" && item.type_client !== filterTypeClient) return false;
-        if (filterCallStatus !== "all" && item.call_status !== filterCallStatus) return false;
-        if (filterQuotationStatus !== "all" && item.quotation_status !== filterQuotationStatus) return false;
-        return true;
-      })
-      .filter((item) => {
-        if (!dateCreatedFilterRange?.from && !dateCreatedFilterRange?.to) return true;
-        const updated = item.date_updated
-          ? new Date(item.date_updated)
-          : new Date(item.date_created);
-        if (isNaN(updated.getTime())) return false;
-        if (dateCreatedFilterRange.from && updated < new Date(dateCreatedFilterRange.from)) return false;
-        if (dateCreatedFilterRange.to && updated > new Date(dateCreatedFilterRange.to)) return false;
-        return true;
-      })
-      .filter(hasMeaningfulData)
-      .sort((a, b) =>
-        new Date(b.date_updated ?? b.date_created).getTime() -
-        new Date(a.date_updated ?? a.date_created).getTime(),
-      );
-  }, [activities, searchTerm, filterStatus, filterTypeActivity, filterSource, filterTypeClient, filterCallStatus, filterQuotationStatus, dateCreatedFilterRange]);
+  // Reset page when filters change
+  useEffect(() => { 
+    setCurrentPage(1); 
+    // The currentPage useEffect will handle fetching page 1
+  }, [searchTerm, filterStatus, filterTypeActivity, filterSource, filterTypeClient, filterCallStatus, filterQuotationStatus, dateCreatedFilterRange, itemsPerPage]);
 
-  useEffect(() => { setCurrentPage(1); }, [searchTerm, filterStatus, filterTypeActivity, filterSource, filterTypeClient, filterCallStatus, filterQuotationStatus, dateCreatedFilterRange]);
+  // Fetch page-specific data when currentPage changes
+  useEffect(() => {
+    fetchActivities(currentPage); // Fetch current page (including page 1)
+  }, [currentPage]); // Remove fetchActivities to prevent infinite loop
 
   const statusOptions = useMemo(() => {
     return [...new Set(activities.map((a) => a.status).filter(Boolean))].sort() as string[];
@@ -928,42 +950,47 @@ export const TaskList: React.FC<CompletedProps> = ({
     return [...new Set(activities.map((a) => a.quotation_status).filter(Boolean))].sort() as string[];
   }, [activities]);
 
-  const totalPages = Math.max(1, Math.ceil(filteredActivities.length / itemsPerPage));
-
-  const paginatedActivities = useMemo(() => {
-    const start = (currentPage - 1) * itemsPerPage;
-    return filteredActivities.slice(start, start + itemsPerPage);
-  }, [filteredActivities, currentPage, itemsPerPage]);
+  // Remove old client-side filtering and pagination - now handled by API
+  const paginatedActivities = activities; // API returns already paginated data
 
   // ── Selection ──────────────────────────────────────────────────────────────
 
-  const toggleSelect = (id: number) => {
+  const toggleSelect = useCallback((id: number) => {
     setSelectedIds((prev) => {
       const next = new Set(prev);
       next.has(id) ? next.delete(id) : next.add(id);
       return next;
     });
-  };
+  }, []);
 
-  const allCurrentSelected =
+  const allCurrentSelected = useMemo(() =>
     paginatedActivities.length > 0 &&
-    paginatedActivities.every((item) => selectedIds.has(item.id));
+    paginatedActivities.every((item) => item && item.id !== undefined && selectedIds.has(item.id)),
+  [paginatedActivities, selectedIds]);
 
-  const toggleSelectAll = () => {
+  const toggleSelectAll = useCallback(() => {
     if (allCurrentSelected) {
       setSelectedIds((prev) => {
         const next = new Set(prev);
-        paginatedActivities.forEach((item) => next.delete(item.id));
+        paginatedActivities.forEach((item) => {
+          if (item && item.id !== undefined) {
+            next.delete(item.id);
+          }
+        });
         return next;
       });
     } else {
       setSelectedIds((prev) => {
         const next = new Set(prev);
-        paginatedActivities.forEach((item) => next.add(item.id));
+        paginatedActivities.forEach((item) => {
+          if (item && item.id !== undefined) {
+            next.add(item.id);
+          }
+        });
         return next;
       });
     }
-  };
+  }, [allCurrentSelected, paginatedActivities]);
 
   // ── Delete ─────────────────────────────────────────────────────────────────
 
@@ -1101,6 +1128,44 @@ export const TaskList: React.FC<CompletedProps> = ({
     return pages;
   }, [currentPage, totalPages]);
 
+  // Memoized pagination click handlers to prevent recreation
+  const handlePageChange = useCallback((page: number) => {
+    if (page !== currentPage && !paginationLoading) {
+      setCurrentPage(page);
+    }
+  }, [currentPage, paginationLoading]);
+
+  const handlePrevPage = useCallback(() => {
+    if (currentPage > 1 && !paginationLoading) {
+      setCurrentPage(currentPage - 1);
+    }
+  }, [currentPage, paginationLoading]);
+
+  const handleNextPage = useCallback(() => {
+    if (currentPage < totalPages && !paginationLoading) {
+      setCurrentPage(currentPage + 1);
+    }
+  }, [currentPage, totalPages, paginationLoading]);
+
+  // Memoized table row handlers to prevent recreation
+  const handleEditClick = useCallback((item: Completed) => {
+    setEditItem(item);
+    setEditOpen(true);
+  }, []);
+
+  const handleReSoClick = useCallback((item: Completed) => {
+    setReSoItem(item);
+    setEditSoNumber(item.so_number || "");
+    setEditSoAmount(item.so_amount ?? "");
+    setIsEditingSo(false);
+    setReSoOpen(true);
+  }, []);
+
+  const handleEditTimeClickOptimized = useCallback((item: Completed) => {
+    setPendingTimeItem(item);
+    setPwGateOpen(true);
+  }, []);
+
   // ── Render ─────────────────────────────────────────────────────────────────
 
   return (
@@ -1217,13 +1282,13 @@ export const TaskList: React.FC<CompletedProps> = ({
         </div>
       )}
 
-      {!loading && filteredActivities.length > 0 && (
-        <div className="bg-white border border-zinc-200 shadow-sm overflow-hidden">
+      {!loading && activities.length > 0 && (
+        <div className="bg-white border border-zinc-200 shadow-sm overflow-hidden relative">
           <div className="px-4 py-3 border-b border-zinc-100 bg-zinc-50/50 flex items-center justify-between">
             <div className="flex items-center gap-2">
               <span className="text-xs font-bold uppercase tracking-widest text-zinc-500">Historical Records</span>
               <Badge variant="outline" className="rounded-none bg-white text-[10px] font-mono border-zinc-200">
-                {filteredActivities.length}
+                {activities.length}
               </Badge>
               {selectedIds.size > 0 && (
                 <Badge className="rounded-none bg-indigo-50 text-indigo-700 border-indigo-100 text-[10px] font-bold">
@@ -1265,8 +1330,12 @@ export const TaskList: React.FC<CompletedProps> = ({
 
               <TableBody>
                 {paginatedActivities.map((item) => {
+                  // Add null/undefined checks to prevent errors
+                  if (!item || item.id === undefined) {
+                    return null; // Skip invalid items
+                  }
+                  
                   const isSelected = selectedIds.has(item.id);
-
 
                   return (
                     <TableRow
@@ -1289,7 +1358,7 @@ export const TaskList: React.FC<CompletedProps> = ({
                             variant="ghost"
                             size="sm"
                             className="h-8 w-8 p-0 rounded-none hover:bg-blue-50 hover:text-blue-600 border border-zinc-200 transition-all group/edit"
-                            onClick={() => { setEditItem(item); setEditOpen(true); }}
+                            onClick={() => handleEditClick(item)}
                             title="Edit Record"
                           >
                             <PenIcon className="h-3.5 w-3.5 text-zinc-400 group-hover/edit:text-blue-600" />
@@ -1300,13 +1369,7 @@ export const TaskList: React.FC<CompletedProps> = ({
                               variant="ghost"
                               size="sm"
                               className="h-8 w-8 p-0 rounded-none hover:bg-amber-50 hover:text-amber-600 border border-zinc-200 transition-all group/reso"
-                              onClick={() => {
-                                setReSoItem(item);
-                                setEditSoNumber(item.so_number || "");
-                                setEditSoAmount(item.so_amount ?? "");
-                                setIsEditingSo(false);
-                                setReSoOpen(true);
-                              }}
+                              onClick={() => handleReSoClick(item)}
                               title="RE-SO Preparation"
                             >
                               <Undo className="h-3.5 w-3.5 text-zinc-400 group-hover/reso:text-amber-600" />
@@ -1318,7 +1381,7 @@ export const TaskList: React.FC<CompletedProps> = ({
                               variant="ghost"
                               size="sm"
                               className="h-8 w-8 p-0 rounded-none hover:bg-emerald-50 hover:text-emerald-600 transition-all group/time"
-                              onClick={() => handleEditTimeClick(item)}
+                              onClick={() => handleEditTimeClickOptimized(item)}
                               title="Edit Timestamp"
                             >
                               <Clock className="h-3.5 w-3.5 text-zinc-400 group-hover/time:text-emerald-600" />
@@ -1490,11 +1553,21 @@ export const TaskList: React.FC<CompletedProps> = ({
               </TableBody>
             </Table>
           </div>
+          
+          {/* Pagination Loading Overlay */}
+          {paginationLoading && (
+            <div className="absolute inset-0 bg-white/60 backdrop-blur-sm flex items-center justify-center z-10">
+              <div className="flex flex-col items-center gap-2">
+                <Loader2 className="h-6 w-6 animate-spin text-zinc-600" />
+                <p className="text-xs font-medium text-zinc-600">Loading page {currentPage}...</p>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
       {/* ── Empty state ───────────────────────────────────────────────────── */}
-      {!loading && !error && filteredActivities.length === 0 && (
+      {!loading && !error && activities.length === 0 && (
         <div className="flex flex-col items-center justify-center py-20 text-zinc-300 gap-2">
           <CheckCircle2Icon className="h-10 w-10" strokeWidth={1} />
           <p className="text-sm font-medium text-zinc-400">No historical records found</p>
@@ -1510,14 +1583,14 @@ export const TaskList: React.FC<CompletedProps> = ({
       )}
 
       {/* ── Pagination ───────────────────────────────────────────────────── */}
-      {!loading && filteredActivities.length > 0 && (
+      {!loading && activities.length > 0 && (
         <div className="flex flex-col sm:flex-row items-center justify-between mt-6 gap-4">
           <div className="text-[11px] text-zinc-400 font-bold uppercase tracking-wider bg-zinc-50 px-3 py-1.5 border border-zinc-100">
-            Showing <span className="text-zinc-900">{Math.min((currentPage - 1) * itemsPerPage + 1, filteredActivities.length)}</span>
+            Showing <span className="text-zinc-900">{Math.min((currentPage - 1) * itemsPerPage + 1, totalCount)}</span>
             <span className="mx-1.5">–</span>
-            <span className="text-zinc-900">{Math.min(currentPage * itemsPerPage, filteredActivities.length)}</span>
+            <span className="text-zinc-900">{Math.min(currentPage * itemsPerPage, totalCount)}</span>
             <span className="mx-1.5 text-zinc-300">of</span>
-            <span className="text-zinc-900">{filteredActivities.length}</span>
+            <span className="text-zinc-900">{totalCount}</span>
             <span className="ml-1.5">Records</span>
           </div>
 
@@ -1526,15 +1599,19 @@ export const TaskList: React.FC<CompletedProps> = ({
               variant="ghost"
               size="sm"
               className="rounded-none h-8 w-8 p-0 hover:bg-zinc-100 disabled:opacity-30 transition-all"
-              onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-              disabled={currentPage === 1}
+              onClick={handlePrevPage}
+              disabled={currentPage === 1 || paginationLoading}
             >
-              <ChevronLeft className="h-4 w-4" />
+              {paginationLoading ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <ChevronLeft className="h-4 w-4" />
+              )}
             </Button>
 
             {currentPage > 3 && (
               <>
-                <Button variant="ghost" size="sm" className="rounded-none h-8 w-8 p-0 text-[11px] font-bold" onClick={() => setCurrentPage(1)}>1</Button>
+                <Button variant="ghost" size="sm" className="rounded-none h-8 w-8 p-0 text-[11px] font-bold" onClick={() => handlePageChange(1)}>1</Button>
                 {currentPage > 4 && <span className="px-1 text-zinc-300 text-[10px]">•••</span>}
               </>
             )}
@@ -1549,16 +1626,21 @@ export const TaskList: React.FC<CompletedProps> = ({
                     ? "bg-zinc-900 text-white hover:bg-zinc-800"
                     : "hover:bg-zinc-100"
                 }`}
-                onClick={() => setCurrentPage(page)}
+                onClick={() => handlePageChange(page)}
+                disabled={paginationLoading}
               >
-                {page}
+                {paginationLoading && page === currentPage ? (
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                ) : (
+                  page
+                )}
               </Button>
             ))}
 
             {currentPage < totalPages - 2 && (
               <>
                 {currentPage < totalPages - 3 && <span className="px-1 text-zinc-300 text-[10px]">•••</span>}
-                <Button variant="ghost" size="sm" className="rounded-none h-8 w-8 p-0 text-[11px] font-bold" onClick={() => setCurrentPage(totalPages)}>{totalPages}</Button>
+                <Button variant="ghost" size="sm" className="rounded-none h-8 w-8 p-0 text-[11px] font-bold" onClick={() => handlePageChange(totalPages)}>{totalPages}</Button>
               </>
             )}
 
@@ -1566,10 +1648,14 @@ export const TaskList: React.FC<CompletedProps> = ({
               variant="ghost"
               size="sm"
               className="rounded-none h-8 w-8 p-0 hover:bg-zinc-100 disabled:opacity-30 transition-all"
-              onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
-              disabled={currentPage === totalPages}
+              onClick={handleNextPage}
+              disabled={currentPage === totalPages || paginationLoading}
             >
-              <ChevronRight className="h-4 w-4" />
+              {paginationLoading ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <ChevronRight className="h-4 w-4" />
+              )}
             </Button>
           </div>
         </div>

@@ -2,27 +2,23 @@ import type { NextApiRequest, NextApiResponse } from "next";
 import { supabase } from "@/utils/supabase";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
-const BATCH_SIZE = 1000;  // FIX: lowered from 5000 — avoids timeouts on large datasets
-const IN_CHUNK_SIZE = 500; // FIX: Supabase .in() is unreliable beyond ~500 values
+const BATCH_SIZE = 1000;
+const IN_CHUNK_SIZE = 500;
 
-// ─────────────────────────────────────────────────────────────────────────────
-// SORT: Orders by date_updated DESC (latest first) to get most recent activities
-// LIMIT: Defaults to 500 max records per request to reduce payload size
-// ─────────────────────────────────────────────────────────────────────────────
+// ─── Activity batch fetcher ───────────────────────────────────────────────────
 async function* fetchActivityBatches(
   referenceid: string,
   fromISO?: string,
   toISO?: string,
+  search?: string,
   maxRecords?: number | null,
 ) {
   let totalFetched = 0;
 
   while (true) {
-    // Calculate remaining batch size
     const remaining = maxRecords ? maxRecords - totalFetched : null;
-    const batchSize = remaining !== null && remaining < BATCH_SIZE
-      ? remaining
-      : BATCH_SIZE;
+    const batchSize =
+      remaining !== null && remaining < BATCH_SIZE ? remaining : BATCH_SIZE;
 
     if (remaining !== null && remaining <= 0) break;
 
@@ -33,9 +29,25 @@ async function* fetchActivityBatches(
       .order("date_updated", { ascending: false })
       .limit(batchSize);
 
-    // Apply date filters independently
     if (fromISO) query = query.gte("date_created", fromISO);
     if (toISO)   query = query.lt("date_created", toISO);
+
+    // Full-text search across key fields using ilike
+    if (search) {
+      query = query.or(
+        [
+          `company_name.ilike.%${search}%`,
+          `contact_person.ilike.%${search}%`,
+          `contact_number.ilike.%${search}%`,
+          `email_address.ilike.%${search}%`,
+          `address.ilike.%${search}%`,
+          `activity_reference_number.ilike.%${search}%`,
+          `ticket_reference_number.ilike.%${search}%`,
+          `status.ilike.%${search}%`,
+          `type_client.ilike.%${search}%`,
+        ].join(","),
+      );
+    }
 
     const { data, error } = await query;
     if (error) throw error;
@@ -44,30 +56,17 @@ async function* fetchActivityBatches(
     yield data;
     totalFetched += data.length;
 
-    // Stop if we reached maxRecords
     if (maxRecords && totalFetched >= maxRecords) break;
-
-    // Stop if partial batch — no more rows
     if (data.length < batchSize) break;
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// FIX 4: History was using offset-based pagination — unreliable on large
-//   datasets and concurrent writes (rows can shift between pages).
-//   New code: cursor-based using `id`, same pattern as activities.
-//
-// FIX 5: Supabase .in() with thousands of values causes query plan issues
-//   or silent truncation. New code: chunks refs into groups of 500 and
-//   paginates each chunk with a cursor.
-// ─────────────────────────────────────────────────────────────────────────────
+// ─── History batch fetcher ────────────────────────────────────────────────────
 async function* fetchHistoryBatches(activityReferenceNumbers: string[]) {
   if (!activityReferenceNumbers.length) return;
 
-  // Deduplicate first to minimize query size
   const uniqueRefs = [...new Set(activityReferenceNumbers)];
 
-  // Split into chunks to avoid Supabase .in() limits
   const chunks: string[][] = [];
   for (let i = 0; i < uniqueRefs.length; i += IN_CHUNK_SIZE) {
     chunks.push(uniqueRefs.slice(i, i + IN_CHUNK_SIZE));
@@ -103,25 +102,36 @@ export default async function handler(
   req: NextApiRequest,
   res: NextApiResponse,
 ) {
-  const { referenceid, from, to, limit } = req.query;
+  const { referenceid, from, to, limit, search } = req.query;
 
   if (!referenceid || typeof referenceid !== "string") {
     return res.status(400).json({ message: "Missing or invalid referenceid" });
   }
 
-  // Parse pagination params - default to 500 max records
+  const searchStr = typeof search === "string" && search.trim() ? search.trim() : undefined;
+  const hasFrom   = typeof from === "string" && from.trim().length > 0;
+  const hasTo     = typeof to === "string" && to.trim().length > 0;
+
+  // ── Guard: require at least one filter ────────────────────────────────────
+  // Prevents loading all records on mount with no filter applied.
+  if (!searchStr && !hasFrom) {
+    return res.status(200).json({
+      activities: [],
+      history: [],
+      total_activities: 0,
+      total_history: 0,
+      has_more: false,
+    });
+  }
+
   const parsedLimit = limit ? parseInt(String(limit), 10) : 500;
 
-  // Parse date range — filter is on date_created for this endpoint
-  const fromISO =
-    typeof from === "string" && from
-      ? new Date(from).toISOString()
-      : undefined;
+  const fromISO = hasFrom ? new Date(from as string).toISOString() : undefined;
 
   let toISO: string | undefined;
-  if (typeof to === "string" && to) {
-    const toDay = new Date(to);
-    toDay.setDate(toDay.getDate() + 1); // include full 'to' day
+  if (hasTo) {
+    const toDay = new Date(to as string);
+    toDay.setDate(toDay.getDate() + 1); // include the full "to" day
     toISO = toDay.toISOString();
   }
 
@@ -134,12 +144,13 @@ export default async function handler(
     let totalActivities = 0;
     let hasMore = false;
 
-    for await (const batch of fetchActivityBatches(referenceid, fromISO, toISO, parsedLimit)) {
+    for await (const batch of fetchActivityBatches(
+      referenceid, fromISO, toISO, searchStr, parsedLimit,
+    )) {
       for (const row of batch) {
         if (row.activity_reference_number) {
           allActivityReferenceNumbers.push(row.activity_reference_number);
         }
-
         const json = JSON.stringify(row);
         res.write(firstActivity ? json : `,${json}`);
         firstActivity = false;
@@ -147,7 +158,6 @@ export default async function handler(
       }
     }
 
-    // Check if there might be more records (only when limit is applied)
     if (parsedLimit && totalActivities >= parsedLimit) {
       hasMore = true;
     }

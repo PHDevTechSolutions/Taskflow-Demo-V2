@@ -788,16 +788,15 @@ function DashboardContent() {
               </Breadcrumb>
             </div>
             <div className="flex items-center gap-2 px-3">
-               {/*<Button
+              <Button
                 variant="outline"
                 size="sm"
                 className="rounded-none text-xs"
                 onClick={() => window.location.href = `/roles/tsa/activity/planner/all?id=${userId}`}
               >
-                <List className="w-4 h-4 mr-2" />
+                <Eye className="w-4 h-4 mr-2" />
                 View All
-             
-              </Button>*/}
+              </Button>
               {userDetails.referenceid && (
                 <NotificationDropdown referenceid={userDetails.referenceid} userId={userId ?? ""} />
               )}
