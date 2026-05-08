@@ -87,84 +87,156 @@ async function* fetchSignatoriesBatches(referenceid: string, quotationNumbers: s
 }
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  const { referenceid, from, to, limit } = req.query;
+  const { 
+    referenceid, 
+    from, 
+    to, 
+    limit = "10",
+    page = "1",
+    search,
+    status,
+    type_activity,
+    source,
+    type_client,
+    call_status,
+    quotation_status
+  } = req.query;
 
   if (!referenceid || typeof referenceid !== "string") {
     return res.status(400).json({ message: "Missing or invalid referenceid" });
   }
 
-  // Parse limit with safeguards
-  const parsedLimit = Math.min(
-    parseInt(typeof limit === "string" ? limit : String(DEFAULT_LIMIT), 10) || DEFAULT_LIMIT,
-    MAX_LIMIT
-  );
-
-  // Per-table limit to distribute load
-  const perTableLimit = Math.ceil(parsedLimit / 2); // Split between history and revised_quotations
+  // Parse pagination parameters
+  const pageNum = Math.max(1, parseInt(typeof page === "string" ? page : "1", 10));
+  const limitNum = Math.min(Math.max(1, parseInt(typeof limit === "string" ? limit : "10", 10)), 50);
+  const offset = (pageNum - 1) * limitNum;
 
   try {
-    res.setHeader("Content-Type", "application/json");
-    res.write(`{"activities":[`); // start JSON array
-    let firstHistory = true;
-    const allQuotationNumbers: string[] = [];
-    const revisedQuotationsMap = new Map<string, any>();
+    // Build base query for history table
+    let query = supabase
+      .from("history")
+      .select("*", { count: "exact" })
+      .eq("referenceid", referenceid)
+      .eq("status", "Quote-Done") // Only show Quote-Done activities
+      .order("date_updated", { ascending: false })
+      .order("date_created", { ascending: false });
 
-    // First, fetch revised quotations to get PDF config (limited)
-    for await (const revisedBatch of fetchRevisedQuotationsBatches(referenceid, from as string, to as string, perTableLimit)) {
-      for (const r of revisedBatch) {
-        revisedQuotationsMap.set(r.activity_reference_number || r.quotation_number, r);
+    // Apply search filter
+    if (search && typeof search === "string") {
+      const searchTerm = search.trim();
+      if (searchTerm) {
+        query = query.or(`company_name.ilike.%${searchTerm}%,quotation_number.ilike.%${searchTerm}%,activity_reference_number.ilike.%${searchTerm}%,contact_person.ilike.%${searchTerm}%,contact_number.ilike.%${searchTerm}%,email_address.ilike.%${searchTerm}%,remarks.ilike.%${searchTerm}%`);
       }
     }
 
-    // ---------------- Stream history (limited) ----------------
-    const mergedActivities: any[] = [];
-    let hasMore = false;
+    // Apply filters
+    if (status && typeof status === "string" && status !== "all") {
+      query = query.eq("status", status);
+    }
+    if (type_activity && typeof type_activity === "string" && type_activity !== "all") {
+      query = query.eq("type_activity", type_activity);
+    }
+    if (source && typeof source === "string" && source !== "all") {
+      query = query.eq("source", source);
+    }
+    if (type_client && typeof type_client === "string" && type_client !== "all") {
+      query = query.eq("type_client", type_client);
+    }
+    if (call_status && typeof call_status === "string" && call_status !== "all") {
+      query = query.eq("call_status", call_status);
+    }
+    if (quotation_status && typeof quotation_status === "string" && quotation_status !== "all") {
+      query = query.eq("quotation_status", quotation_status);
+    }
 
-    for await (const historyBatch of fetchHistoryBatches(referenceid, from as string, to as string, parsedLimit)) {
-      for (const h of historyBatch) {
-        if (mergedActivities.length >= parsedLimit) {
-          hasMore = true;
-          break;
+    // Apply date range filter
+    if (from && typeof from === "string") {
+      query = query.gte("date_created", from);
+    }
+    if (to && typeof to === "string") {
+      query = query.lte("date_created", to);
+    }
+
+    // Apply pagination
+    query = query.range(offset, offset + limitNum - 1);
+
+    // Execute query
+    const { data: historyData, error: historyError, count: totalCount } = await query;
+
+    if (historyError) {
+      console.error("History query error:", historyError);
+      throw historyError;
+    }
+
+    // Fetch revised quotations for PDF configuration
+    const quotationNumbers = historyData?.map(item => item.quotation_number).filter(Boolean) || [];
+    const { data: revisedData, error: revisedError } = await supabase
+      .from("revised_quotations")
+      .select("*")
+      .eq("referenceid", referenceid)
+      .in("quotation_number", quotationNumbers.length > 0 ? quotationNumbers : [""]);
+
+    if (revisedError) {
+      console.error("Revised quotations query error:", revisedError);
+    }
+
+    // Fetch signatories
+    const { data: signatoryData, error: signatoryError } = await supabase
+      .from("signatories")
+      .select("*")
+      .eq("referenceid", referenceid)
+      .in("quotation_number", quotationNumbers.length > 0 ? quotationNumbers : [""]);
+
+    if (signatoryError) {
+      console.error("Signatories query error:", signatoryError);
+    }
+
+    // Create maps for quick lookup
+    const revisedMap = new Map();
+    (revisedData || []).forEach(item => {
+      revisedMap.set(item.activity_reference_number || item.quotation_number, item);
+    });
+
+    const signaturesMap = new Map();
+    (signatoryData || []).forEach(item => {
+      signaturesMap.set(item.quotation_number, item);
+    });
+
+    // Filter out items without meaningful data and merge with additional data
+    const filteredData = (historyData || []).filter(item => {
+      if (!item || typeof item !== "object") return false;
+      
+      const checks = [
+        "activity_reference_number", "referenceid", "quotation_number", "quotation_amount"
+      ];
+      return checks.some((col) => {
+        try {
+          const val = item[col as keyof typeof item];
+          if (val === null || val === undefined) return false;
+          if (typeof val === "string") return val.trim() !== "" && val.trim() !== "-";
+          if (typeof val === "number") return !isNaN(val);
+          return Boolean(val);
+        } catch (err) {
+          return false;
         }
-        allQuotationNumbers.push(h.quotation_number);
-        // Merge with revised quotation data if available (for PDF config)
-        const revised = revisedQuotationsMap.get(h.activity_reference_number || h.quotation_number);
-        mergedActivities.push({
-          ...h,
-          // PDF configuration from revised_quotations takes precedence
-          hide_discount_in_preview: revised?.hide_discount_in_preview ?? h.hide_discount_in_preview ?? false,
-          show_discount_columns: revised?.show_discount_columns ?? h.show_discount_columns ?? false,
-          show_summary_discounts: revised?.show_summary_discounts ?? h.show_summary_discounts ?? false,
-          show_profit_margins: revised?.show_profit_margins ?? h.show_profit_margins ?? false,
-          margin_alert_threshold: revised?.margin_alert_threshold ?? h.margin_alert_threshold ?? 0,
-          show_margin_alerts: revised?.show_margin_alerts ?? h.show_margin_alerts ?? false,
-          product_view_mode: revised?.product_view_mode ?? h.product_view_mode ?? 'list',
-          visible_columns: revised?.visible_columns ?? h.visible_columns ?? null,
-        });
-      }
-      if (hasMore) break;
-    }
-
-    // ---------------- Stream signatories (limited) ----------------
-    const signaturesMap = new Map<string, any>();
-    const uniqueQuotations = [...new Set(allQuotationNumbers)];
-    const signatoryLimit = parsedLimit * 2;
-    let signatoryCount = 0;
-
-    for await (const sigBatch of fetchSignatoriesBatches(referenceid, uniqueQuotations)) {
-      for (const s of sigBatch) {
-        if (signatoryCount >= signatoryLimit) break;
-        signaturesMap.set(s.quotation_number, s);
-        signatoryCount++;
-      }
-      if (signatoryCount >= signatoryLimit) break;
-    }
-
-    // ---------------- Merge signatures into activities ----------------
-    for (const h of mergedActivities) {
-      const sig = signaturesMap.get(h.quotation_number);
-      const merged = {
-        ...h,
+      });
+    }).map(item => {
+      // Merge with revised quotation data for PDF config
+      const revised = revisedMap.get(item.activity_reference_number || item.quotation_number);
+      const sig = signaturesMap.get(item.quotation_number);
+      
+      return {
+        ...item,
+        // PDF configuration from revised_quotations
+        hide_discount_in_preview: revised?.hide_discount_in_preview ?? item.hide_discount_in_preview ?? false,
+        show_discount_columns: revised?.show_discount_columns ?? item.show_discount_columns ?? false,
+        show_summary_discounts: revised?.show_summary_discounts ?? item.show_summary_discounts ?? false,
+        show_profit_margins: revised?.show_profit_margins ?? item.show_profit_margins ?? false,
+        margin_alert_threshold: revised?.margin_alert_threshold ?? item.margin_alert_threshold ?? 0,
+        show_margin_alerts: revised?.show_margin_alerts ?? item.show_margin_alerts ?? false,
+        product_view_mode: revised?.product_view_mode ?? item.product_view_mode ?? 'list',
+        visible_columns: revised?.visible_columns ?? item.visible_columns ?? null,
+        // Signatory data
         agent_signature: sig?.agent_signature || null,
         agent_contact_number: sig?.agent_contact_number || null,
         agent_email_address: sig?.agent_email_address || null,
@@ -179,16 +251,51 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         manager_remarks: sig?.manager_remarks || null,
         manager_approval_date: sig?.manager_approval_date || null,
       };
+    });
 
-      const json = JSON.stringify(merged);
-      res.write(firstHistory ? json : `,${json}`);
-      firstHistory = false;
-    }
+    // Calculate pagination info
+    const totalPages = Math.ceil((totalCount || 0) / limitNum);
+    const hasMore = pageNum < totalPages;
 
-    res.write(`],"has_more":${hasMore},"limit":${parsedLimit},"cached":false}`);
-    res.end();
+    // Validate and sanitize response data
+    const safeResponse = {
+      activities: filteredData || [],
+      totalCount: Math.max(0, totalCount || 0),
+      totalPages: Math.max(0, totalPages),
+      currentPage: Math.max(1, pageNum),
+      itemsPerPage: Math.max(1, limitNum),
+      hasMore: Boolean(hasMore),
+      offset: Math.max(0, offset),
+      search_applied: {
+        query: typeof search === 'string' ? search.trim() : null,
+        filters: {
+          status: typeof status === 'string' ? status : null,
+          type_activity: typeof type_activity === 'string' ? type_activity : null,
+          source: typeof source === 'string' ? source : null,
+          type_client: typeof type_client === 'string' ? type_client : null,
+          call_status: typeof call_status === 'string' ? call_status : null,
+          quotation_status: typeof quotation_status === 'string' ? quotation_status : null,
+          date_range: {
+            from: from || null,
+            to: to || null
+          }
+        }
+      },
+      cached: false
+    };
+
+    return res.status(200).json(safeResponse);
   } catch (err: any) {
     console.error("Server error:", err);
-    if (!res.writableEnded) res.status(500).json({ message: err.message || "Server error" });
+    return res.status(500).json({ 
+      message: err.message || "Server error",
+      activities: [],
+      totalCount: 0,
+      totalPages: 0,
+      currentPage: 1,
+      itemsPerPage: 10,
+      hasMore: false,
+      offset: 0
+    });
   }
 }

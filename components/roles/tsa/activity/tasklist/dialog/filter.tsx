@@ -114,7 +114,7 @@ export const TaskListDialog: React.FC<TaskListDialogProps> = ({
   return (
     <>
       {/* ── Trigger button ───────────────────────────────────────────── */}
-      <div className="relative inline-flex items-center gap-2">
+      <div className="relative inline-flex items-center gap-2 pr-2">
         <Button
           variant="outline"
           size="sm"
