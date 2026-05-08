@@ -182,7 +182,7 @@ export function ApprovalHistory({ history, dateCreatedFilterRange, onRefresh }: 
                   {item.tsm_approved_status}
                 </Badge>
               </TableCell>
-              <TableCell className="text-xs">
+              <TableCell className="text-xs bg-blue-100 font-bold">
                 {item.tsm_approved_remarks || "N/A"}
               </TableCell>
               <TableCell className="text-xs">
