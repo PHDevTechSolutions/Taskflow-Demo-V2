@@ -3,7 +3,7 @@
 import React, { useEffect, useState, useCallback, useMemo } from "react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, } from "@/components/ui/dropdown-menu";
-import { AlertCircleIcon, CheckCircle2Icon, Eye, FileSpreadsheet, FileText, MoreVertical, } from "lucide-react";
+import { AlertCircleIcon, CheckCircle2Icon, Eye, FileSpreadsheet, FileText, MoreVertical, LoaderPinwheel } from "lucide-react";
 import { supabase } from "@/utils/supabase";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -99,41 +99,100 @@ export const DeclineQuotation: React.FC<CompletedProps> = ({
     const [tsmDetails, setTsmDetails] = useState<SupervisorDetails | null>(null);
     const [managerDetails, setManagerDetails] = useState<SupervisorDetails | null>(null);
 
+    // Pagination state
+    const [itemsPerPage] = useState(10); // Default to 10 items per page
+    const [totalCount, setTotalCount] = useState(0);
+    const [totalPages, setTotalPages] = useState(0);
+    const [hasMore, setHasMore] = useState(false);
+    const [loadingMore, setLoadingMore] = useState(false);
+    const [currentPage, setCurrentPage] = useState(1);
+
     // -----------------------------
-    // FETCH ACTIVITIES
+    // FETCH ACTIVITIES (paginated)
     // -----------------------------
-    const fetchActivities = useCallback(() => {
+    const fetchActivities = useCallback(async (page: number = 1, loadMore: boolean = false) => {
         if (!referenceid) {
             setActivities([]);
             return;
         }
 
-        setLoading(true);
+        // Set appropriate loading state
+        if (loadMore) {
+            setLoadingMore(true);
+        } else {
+            setLoading(true);
+        }
         setError(null);
 
-        const from = dateCreatedFilterRange?.from
-            ? new Date(dateCreatedFilterRange.from).toISOString().slice(0, 10)
-            : null;
-        const to = dateCreatedFilterRange?.to
-            ? new Date(dateCreatedFilterRange.to).toISOString().slice(0, 10)
-            : null;
+        try {
+            const url = new URL("/api/activity/tsm/quotation/declined/fetch", window.location.origin);
+            url.searchParams.append("referenceid", referenceid);
+            url.searchParams.append("page", String(page));
+            url.searchParams.append("limit", String(itemsPerPage));
 
-        const url = new URL("/api/activity/tsm/quotation/fetch", window.location.origin);
-        url.searchParams.append("referenceid", referenceid);
-        if (from && to) {
-            url.searchParams.append("from", from);
-            url.searchParams.append("to", to);
+            // Add search term if present
+            if (searchTerm.trim()) {
+                url.searchParams.append("search", searchTerm.trim());
+            }
+
+            // Add date range filter
+            const from = dateCreatedFilterRange?.from
+                ? new Date(dateCreatedFilterRange.from).toISOString().slice(0, 10)
+                : null;
+            const to = dateCreatedFilterRange?.to
+                ? new Date(dateCreatedFilterRange.to).toISOString().slice(0, 10)
+                : null;
+
+            if (from && to) {
+                url.searchParams.append("from", from);
+                url.searchParams.append("to", to);
+            }
+
+            const res = await fetch(url.toString());
+            if (!res.ok) throw new Error("Failed to fetch activities");
+            const data = await res.json();
+
+            if (loadMore && page > 1) {
+                // Append new data for load more
+                setActivities(prev => [...prev, ...(data.activities || [])]);
+            } else {
+                // Replace data for initial load or new search
+                setActivities(data.activities || []);
+            }
+
+            // Update pagination info
+            setTotalCount(data.totalCount || 0);
+            setTotalPages(data.totalPages || 0);
+            setHasMore(data.hasMore || false);
+            setCurrentPage(page);
+        } catch (err: any) {
+            setError(err.message || "Failed to fetch activities");
+            setActivities([]);
+        } finally {
+            setLoading(false);
+            setLoadingMore(false);
         }
+    }, [referenceid, itemsPerPage, searchTerm, dateCreatedFilterRange]);
 
-        fetch(url.toString())
-            .then(async (res) => {
-                if (!res.ok) throw new Error("Failed to fetch activities");
-                return res.json();
-            })
-            .then((data) => setActivities(data.activities || []))
-            .catch((err) => setError(err.message))
-            .finally(() => setLoading(false));
-    }, [referenceid, dateCreatedFilterRange]);
+    // Search handler - only fetches when search button is clicked
+    const handleSearch = useCallback(() => {
+        setCurrentPage(1);
+        fetchActivities(1, false);
+    }, [fetchActivities]);
+
+    // Load more handler
+    const handleLoadMore = useCallback(() => {
+        if (hasMore && !loadingMore) {
+            const nextPage = currentPage + 1;
+            fetchActivities(nextPage, true);
+        }
+    }, [currentPage, hasMore, loadingMore, fetchActivities]);
+
+    // Reset page when search or filter changes
+    useEffect(() => {
+        setCurrentPage(1);
+        // The search will be triggered by the search button click
+    }, [searchTerm]);
 
     // -----------------------------
     // REAL-TIME SUBSCRIPTION
@@ -141,7 +200,7 @@ export const DeclineQuotation: React.FC<CompletedProps> = ({
     useEffect(() => {
         if (!referenceid) return;
 
-        fetchActivities();
+        fetchActivities(1, false);
 
         const channel = supabase
             .channel(`history-${referenceid}`)
@@ -154,7 +213,7 @@ export const DeclineQuotation: React.FC<CompletedProps> = ({
                     filter: `tsm=eq.${referenceid}`,
                 },
                 () => {
-                    fetchActivities();
+                    fetchActivities(1, false);
                 }
             )
             .subscribe();
@@ -165,72 +224,9 @@ export const DeclineQuotation: React.FC<CompletedProps> = ({
     }, [referenceid, fetchActivities]);
 
     // -----------------------------
-    // SORT & FILTER
+    // SORT & FILTER (removed - now handled server-side)
     // -----------------------------
-    const sortedActivities = useMemo(() => {
-        return [...activities].sort(
-            (a, b) =>
-                new Date(b.date_updated ?? b.date_created).getTime() -
-                new Date(a.date_updated ?? a.date_created).getTime()
-        );
-    }, [activities]);
-
-    const hasMeaningfulData = (item: Completed) => {
-        const columnsToCheck = ["activity_reference_number", "referenceid", "quotation_number", "quotation_amount"];
-        return columnsToCheck.some((col) => {
-            const val = (item as any)[col];
-            if (val === null || val === undefined) return false;
-            if (typeof val === "string") return val.trim() !== "";
-            if (typeof val === "number") return !isNaN(val);
-            return Boolean(val);
-        });
-    };
-
-    const filteredActivities = useMemo(() => {
-        const search = searchTerm.toLowerCase();
-
-        return sortedActivities
-            // 🔴 EXCLUDE declined quotations
-            .filter((item) => item.tsm_approved_status === "Decline")
-
-            // 🔍 search filter
-            .filter((item) => {
-                if (!search) return true;
-                return Object.values(item).some(
-                    (val) => val && String(val).toLowerCase().includes(search)
-                );
-            })
-
-            // 📄 quotation only
-            .filter((item) => item.type_activity === "Quotation Preparation")
-
-            // 🧹 meaningful data only
-            .filter(hasMeaningfulData)
-
-            // 📅 date range filter
-            .filter((item) => {
-                if (!dateCreatedFilterRange) return true;
-
-                const updated = item.date_updated
-                    ? new Date(item.date_updated)
-                    : new Date(item.date_created);
-
-                if (isNaN(updated.getTime())) return false;
-
-                const from = dateCreatedFilterRange.from
-                    ? new Date(dateCreatedFilterRange.from)
-                    : null;
-
-                const to = dateCreatedFilterRange.to
-                    ? new Date(dateCreatedFilterRange.to)
-                    : null;
-
-                if (from && updated < from) return false;
-                if (to && updated > to) return false;
-
-                return true;
-            });
-    }, [sortedActivities, searchTerm, dateCreatedFilterRange]);
+    // Client-side filtering removed - all filtering is now done by the API
 
     // -----------------------------
     // AGENT MAP
@@ -314,13 +310,36 @@ export const DeclineQuotation: React.FC<CompletedProps> = ({
         <>
             {/* Search */}
             <div className="mb-4 flex items-center gap-4">
-                <Input
-                    type="text"
-                    placeholder="Search..."
-                    className="input input-bordered input-sm flex-grow max-w-md rounded-none"
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                />
+                <div className="relative flex-1 max-w-md">
+                    <Input
+                        type="text"
+                        placeholder="Search quotations, companies, agents..."
+                        className="input input-bordered input-sm w-full rounded-none pl-9"
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                        onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                                handleSearch();
+                            }
+                        }}
+                    />
+                    <div className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                        </svg>
+                    </div>
+                </div>
+                <Button
+                    onClick={handleSearch}
+                    disabled={loading}
+                    className="h-9 px-4 rounded-none bg-zinc-900 hover:bg-zinc-800 text-white text-sm font-medium"
+                >
+                    {loading ? (
+                        <div className="w-4 h-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                    ) : (
+                        "Search"
+                    )}
+                </Button>
             </div>
 
             {/* Error */}
@@ -348,12 +367,20 @@ export const DeclineQuotation: React.FC<CompletedProps> = ({
             )}
 
             {/* Total Records */}
-            {filteredActivities.length > 0 && (
-                <div className="mb-2 text-xs font-bold">Total Records: {filteredActivities.length}</div>
+            {activities.length > 0 && (
+                <div className="mb-2 text-xs font-bold">
+                    Showing {activities.length} records
+                    {totalCount > activities.length && (
+                        <span className="text-gray-500 ml-2">
+                            of {totalCount} total
+                        </span>
+                    )}
+                </div>
             )}
 
             {/* Table */}
-            {filteredActivities.length > 0 && (
+            {activities.length > 0 && (
+                <>
                 <div className="overflow-auto space-y-8 custom-scrollbar">
                     <Table className="text-xs">
                         <TableHeader>
@@ -361,19 +388,20 @@ export const DeclineQuotation: React.FC<CompletedProps> = ({
                                 <TableHead className="w-[60px] text-center">Tools</TableHead>
                                 <TableHead>Agent</TableHead>
                                 <TableHead>Quotation #</TableHead>
+                                <TableHead>Quotation Amount</TableHead>
                                 <TableHead>Date Created</TableHead>
                                 <TableHead>Duration</TableHead>
                                 <TableHead>Company</TableHead>
                                 <TableHead className="text-center">Status</TableHead>
                                 <TableHead>Date Decline</TableHead>
                                 <TableHead>Contact #</TableHead>
-                                <TableHead>Quotation Amount</TableHead>
+                                
                                 <TableHead className="text-center">Source</TableHead>
                             </TableRow>
                         </TableHeader>
 
                         <TableBody>
-                            {filteredActivities.map((item) => {
+                            {activities.map((item: Completed) => {
                                 const agent = agentMap[item.referenceid?.toLowerCase() ?? ""];
                                 return (
                                     <TableRow key={item.id}>
@@ -402,7 +430,7 @@ export const DeclineQuotation: React.FC<CompletedProps> = ({
                                         </TableCell>
 
                                         <TableCell className="w-[250px] max-w-[250px]">
-                                            <div className="flex items-center gap-2 overflow-hidden">
+                                            <div className="flex items-center gap-2 overflow-hidden uppercase">
                                                 {agent?.profilePicture ? (
                                                     <img
                                                         src={agent.profilePicture}
@@ -423,6 +451,15 @@ export const DeclineQuotation: React.FC<CompletedProps> = ({
 
                                         <TableCell className="uppercase">{displayValue(item.quotation_number)}</TableCell>
 
+                                        <TableCell>
+                                            {displayValue(item.quotation_amount) !== "-"
+                                                ? parseFloat(displayValue(item.quotation_amount)).toLocaleString(undefined, {
+                                                    minimumFractionDigits: 2,
+                                                    maximumFractionDigits: 2,
+                                                })
+                                                : "-"}
+                                        </TableCell>
+                                        
                                         <TableCell>
                                             {new Date(item.date_updated ?? item.date_created).toLocaleDateString("en-PH", {
                                                 timeZone: "Asia/Manila",
@@ -460,14 +497,6 @@ export const DeclineQuotation: React.FC<CompletedProps> = ({
 
                                         <TableCell>{displayValue(item.contact_number)}</TableCell>
                                         
-                                        <TableCell>
-                                            {displayValue(item.quotation_amount) !== "-"
-                                                ? parseFloat(displayValue(item.quotation_amount)).toLocaleString(undefined, {
-                                                    minimumFractionDigits: 2,
-                                                    maximumFractionDigits: 2,
-                                                })
-                                                : "-"}
-                                        </TableCell>
                                         <TableCell className="text-center">
                                             <span
                                                 className={`inline-flex items-center rounded-xs shadow-sm px-3 py-1 text-xs font-semibold capitalize
@@ -487,6 +516,24 @@ export const DeclineQuotation: React.FC<CompletedProps> = ({
                         </TableBody>
                     </Table>
                 </div>
+
+                {/* Load More Button */}
+                {hasMore && (
+                    <div className="flex justify-center mt-4">
+                        <Button
+                            onClick={handleLoadMore}
+                            disabled={loadingMore}
+                            className="h-9 px-6 rounded-none bg-zinc-900 hover:bg-zinc-800 text-white text-sm font-medium"
+                        >
+                            {loadingMore ? <LoaderPinwheel className="animate-spin" /> : null} {loadingMore ? (
+                                "Loading..."
+                            ) : (
+                                "Load More"
+                            )}
+                        </Button>
+                    </div>
+                )}
+                </>
             )}
 
             {/* Edit Dialog */}

@@ -1220,7 +1220,7 @@ export const TaskList: React.FC<CompletedProps> = ({
             </span>
           )}
 
-          <div className="flex items-center gap-1.5 rounded-none p-1 bg-white">
+          <div className="flex items-center gap-1.5 border border-zinc-200 p-1 bg-white">
             <TaskListDialog
               filterStatus={filterStatus}
               filterTypeActivity={filterTypeActivity}

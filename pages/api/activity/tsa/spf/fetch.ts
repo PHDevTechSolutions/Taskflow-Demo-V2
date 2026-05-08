@@ -1,33 +1,63 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { supabase } from "@/utils/supabase";
 
-const BATCH_SIZE = 5000;
+export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+  const { 
+    referenceid, 
+    from, 
+    to, 
+    limit = "10",
+    page = "1",
+    search
+  } = req.query;
 
-async function* fetchHistoryBatches(
-  referenceid: string,
-  fromDate?: string,
-  toDate?: string
-) {
-  let lastId: number | null = null;
+  if (!referenceid || typeof referenceid !== "string") {
+    return res.status(400).json({ message: "Missing or invalid referenceid" });
+  }
 
-  while (true) {
+  // Parse pagination parameters
+  const pageNum = Math.max(1, parseInt(typeof page === "string" ? page : "1", 10));
+  const limitNum = Math.min(Math.max(1, parseInt(typeof limit === "string" ? limit : "10", 10)), 50);
+  const offset = (pageNum - 1) * limitNum;
+
+  try {
+    // Build base query for spf_request table
     let query = supabase
       .from("spf_request")
-      .select("*")
+      .select("*", { count: "exact" })
       .eq("referenceid", referenceid)
-      .order("id", { ascending: true })
-      .limit(BATCH_SIZE);
+      .order("date_created", { ascending: false })
+      .order("spf_number", { ascending: false });
 
-    if (lastId) query = query.gt("id", lastId);
-    if (fromDate && toDate) query = query.gte("date_created", fromDate).lte("date_created", toDate);
+    // Apply search filter
+    if (search && typeof search === "string") {
+      const searchTerm = search.trim();
+      if (searchTerm) {
+        query = query.or(`customer_name.ilike.%${searchTerm}%,spf_number.ilike.%${searchTerm}%,contact_person.ilike.%${searchTerm}%,contact_number.ilike.%${searchTerm}%,registered_address.ilike.%${searchTerm}%`);
+      }
+    }
 
-    const { data, error } = await query;
-    if (error) throw error;
+    // Apply date range filter
+    if (from && typeof from === "string") {
+      query = query.gte("date_created", from);
+    }
+    if (to && typeof to === "string") {
+      query = query.lte("date_created", to);
+    }
 
-    if (!data || data.length === 0) break;
+    // Apply pagination
+    query = query.range(offset, offset + limitNum - 1);
+
+    // Execute query
+    const { data: requestData, error: requestError, count: totalCount } = await query;
+
+    if (requestError) {
+      console.error("SPF request query error:", requestError);
+      throw requestError;
+    }
 
     // Fetch status and id from spf_creation table for each SPF request
-    const spfNumbers = data.map(item => item.spf_number).filter(Boolean);
+    const spfNumbers = requestData?.map(item => item.spf_number).filter(Boolean) || [];
     let statusMap = new Map();
     let creationIdMap = new Map();
     
@@ -46,49 +76,47 @@ async function* fetchHistoryBatches(
     }
 
     // Merge status and creation id into the data
-    const mergedData = data.map(item => ({
+    const mergedData = (requestData || []).map(item => ({
       ...item,
       status: statusMap.get(item.spf_number) || item.status || "pending",
       spf_creation_id: creationIdMap.get(item.spf_number) || null
     }));
 
-    yield mergedData;
+    // Calculate pagination info
+    const totalPages = Math.ceil((totalCount || 0) / limitNum);
+    const hasMore = pageNum < totalPages;
 
-    lastId = data[data.length - 1].id;
-  }
-}
+    // Validate and sanitize response data
+    const safeResponse = {
+      activities: mergedData || [],
+      totalCount: Math.max(0, totalCount || 0),
+      totalPages: Math.max(0, totalPages),
+      currentPage: Math.max(1, pageNum),
+      itemsPerPage: Math.max(1, limitNum),
+      hasMore: Boolean(hasMore),
+      offset: Math.max(0, offset),
+      search_applied: {
+        query: typeof search === 'string' ? search.trim() : null,
+        date_range: {
+          from: from || null,
+          to: to || null
+        }
+      },
+      cached: false
+    };
 
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  const { referenceid, from, to } = req.query;
-
-  if (!referenceid || typeof referenceid !== "string") {
-    return res.status(400).json({ message: "Missing or invalid referenceid" });
-  }
-
-  const fromDate = typeof from === "string" ? from : undefined;
-  const toDate = typeof to === "string" ? to : undefined;
-
-  try {
-    res.setHeader("Content-Type", "application/json");
-    res.write(`{"activities":[`); // start JSON array
-    let first = true;
-    let total = 0;
-
-    for await (const batch of fetchHistoryBatches(referenceid, fromDate, toDate)) {
-      for (const row of batch) {
-        const json = JSON.stringify(row);
-        res.write(first ? json : `,${json}`);
-        first = false;
-        total++;
-      }
-    }
-
-    res.write(`],"total":${total},"cached":false}`);
-    res.end();
+    return res.status(200).json(safeResponse);
   } catch (err: any) {
     console.error("Server error:", err);
-    if (!res.writableEnded) {
-      res.status(500).json({ message: err.message || "Server error" });
-    }
+    return res.status(500).json({ 
+      message: err.message || "Server error",
+      activities: [],
+      totalCount: 0,
+      totalPages: 0,
+      currentPage: 1,
+      itemsPerPage: 10,
+      hasMore: false,
+      offset: 0
+    });
   }
 }

@@ -43,7 +43,7 @@ async function* fetchHistoryBatches(
     const activityRefs = data.map((a: any) => a.activity_reference_number);
     const { data: historyData, error: historyError } = await supabase
       .from("history")
-      .select("activity_reference_number, remarks")
+      .select("activity_reference_number, remarks, tsm_approved_status, tsm_approved_remarks")
       .in("activity_reference_number", activityRefs)
       .order("date_created", { ascending: false });
 
@@ -51,20 +51,26 @@ async function* fetchHistoryBatches(
       console.error("Error fetching history:", historyError);
     }
 
-    // Create a map of activity_ref -> remarks (first non-empty remark)
-    const remarksMap: Record<string, string> = {};
+    // Create a map of activity_ref -> { remarks, tsm_approved_status, tsm_approved_remarks }
+    const historyMap: Record<string, { remarks: string; tsm_approved_status: string; tsm_approved_remarks: string }> = {};
     if (historyData) {
       for (const h of historyData) {
-        if (h.remarks && h.remarks !== "-" && !remarksMap[h.activity_reference_number]) {
-          remarksMap[h.activity_reference_number] = h.remarks;
+        if (!historyMap[h.activity_reference_number]) {
+          historyMap[h.activity_reference_number] = {
+            remarks: h.remarks && h.remarks !== "-" ? h.remarks : "-",
+            tsm_approved_status: h.tsm_approved_status || "-",
+            tsm_approved_remarks: h.tsm_approved_remarks && h.tsm_approved_remarks !== "-" ? h.tsm_approved_remarks : "-",
+          };
         }
       }
     }
 
-    // Add remarks to activity data
+    // Add remarks, tsm_approved_status, and tsm_approved_remarks to activity data
     const dataWithRemarks = data.map((a: any) => ({
       ...a,
-      remarks: remarksMap[a.activity_reference_number] || "-",
+      remarks: historyMap[a.activity_reference_number]?.remarks || "-",
+      tsm_approved_status: historyMap[a.activity_reference_number]?.tsm_approved_status || "-",
+      tsm_approved_remarks: historyMap[a.activity_reference_number]?.tsm_approved_remarks || "-",
     }));
 
     yield dataWithRemarks;

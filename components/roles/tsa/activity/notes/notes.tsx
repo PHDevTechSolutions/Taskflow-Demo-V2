@@ -229,6 +229,14 @@ export const Notes: React.FC<NotesProps> = ({
   const [filterType, setFilterType] = useState("all");
   const [showFilters, setShowFilters] = useState(false);
 
+  // Pagination state
+  const [itemsPerPage] = useState(10); // Default to 10 items per page
+  const [totalCount, setTotalCount] = useState(0);
+  const [totalPages, setTotalPages] = useState(0);
+  const [hasMore, setHasMore] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+
   // Form state
   const [typeActivity, setTypeActivity] = useState("Documentation");
   const [remarks, setRemarks] = useState("");
@@ -240,32 +248,87 @@ export const Notes: React.FC<NotesProps> = ({
   const [totalHours, setTotalHours] = useState(0);
   const [overlappingEntries, setOverlappingEntries] = useState<string[]>([]);
 
-  // ─── Fetch ─────────────────────────────────────────────────────────────────
+  // ─── Fetch (paginated) ─────────────────────────────────────────────────────
 
-  const fetchNotes = useCallback(async () => {
+  const fetchNotes = useCallback(async (page: number = 1, loadMore: boolean = false) => {
     if (!referenceid) return;
-    setLoading(true);
+
+    // Set appropriate loading state
+    if (loadMore) {
+      setLoadingMore(true);
+    } else {
+      setLoading(true);
+    }
+
     try {
-      let q = supabase
-        .from("documentation")
-        .select("*")
-        .eq("referenceid", referenceid)
-        .order("date_created", { ascending: false });
+      const url = new URL("/api/activity/tsa/documentation/fetch", window.location.origin);
+      url.searchParams.append("referenceid", referenceid);
+      url.searchParams.append("page", String(page));
+      url.searchParams.append("limit", String(itemsPerPage));
 
-      if (dateCreatedFilterRange?.from)
-        q = q.gte("date_created", dateCreatedFilterRange.from.toISOString());
-      if (dateCreatedFilterRange?.to)
-        q = q.lte("date_created", dateCreatedFilterRange.to.toISOString());
+      // Add search term if present
+      if (searchQuery.trim()) {
+        url.searchParams.append("search", searchQuery.trim());
+      }
 
-      const { data, error } = await q;
-      if (error) throw error;
-      setNotes(data ?? []);
-    } catch {
-      notify.error("Failed to fetch notes");
+      // Add filter type if not "all"
+      if (filterType !== "all") {
+        url.searchParams.append("type", filterType);
+      }
+
+      // Add date range filter
+      if (dateCreatedFilterRange?.from) {
+        url.searchParams.append("from", dateCreatedFilterRange.from.toISOString());
+      }
+      if (dateCreatedFilterRange?.to) {
+        url.searchParams.append("to", dateCreatedFilterRange.to.toISOString());
+      }
+
+      const res = await fetch(url.toString());
+      if (!res.ok) throw new Error("Failed to fetch notes");
+      const data = await res.json();
+
+      if (loadMore && page > 1) {
+        // Append new data for load more
+        setNotes(prev => [...prev, ...(data.notes || [])]);
+      } else {
+        // Replace data for initial load or new search
+        setNotes(data.notes || []);
+      }
+
+      // Update pagination info
+      setTotalCount(data.totalCount || 0);
+      setTotalPages(data.totalPages || 0);
+      setHasMore(data.hasMore || false);
+      setCurrentPage(page);
+    } catch (err: any) {
+      notify.error(err.message || "Failed to fetch notes");
+      setNotes([]);
     } finally {
       setLoading(false);
+      setLoadingMore(false);
     }
-  }, [referenceid, dateCreatedFilterRange]);
+  }, [referenceid, itemsPerPage, searchQuery, filterType, dateCreatedFilterRange]);
+
+  // Search handler - only fetches when search button is clicked
+  const handleSearch = useCallback(() => {
+    setCurrentPage(1);
+    fetchNotes(1, false);
+  }, [fetchNotes]);
+
+  // Load more handler
+  const handleLoadMore = useCallback(() => {
+    if (hasMore && !loadingMore) {
+      const nextPage = currentPage + 1;
+      fetchNotes(nextPage, true);
+    }
+  }, [currentPage, hasMore, loadingMore, fetchNotes]);
+
+  // Reset page when search or filter changes
+  useEffect(() => {
+    setCurrentPage(1);
+    // The search will be triggered by the search button click
+  }, [searchQuery, filterType]);
 
   useEffect(() => { fetchNotes(); }, [fetchNotes]);
 
@@ -297,16 +360,8 @@ export const Notes: React.FC<NotesProps> = ({
     setOverlappingEntries([...new Set(overlaps)]);
   }, [notes]);
 
-  // Filter notes based on search and type
-  const filteredNotes = notes.filter(note => {
-    const matchesSearch = !searchQuery || 
-      note.type_activity.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      note.remarks.toLowerCase().includes(searchQuery.toLowerCase());
-    
-    const matchesType = filterType === "all" || note.type_activity === filterType;
-    
-    return matchesSearch && matchesType;
-  });
+  // Note: Filtering and pagination now handled by API for better performance
+  // notes array contains already filtered and paginated data from the server
 
   // Auto-suggest activity type based on remarks
   const suggestActivityType = (remarks: string): string => {
@@ -485,14 +540,32 @@ export const Notes: React.FC<NotesProps> = ({
           </div>
           
           {/* Search bar */}
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-3.5 h-3.5 text-zinc-400" />
-            <Input
-              placeholder="Search by type or remarks..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="rounded-none h-8 text-xs pl-9 border-zinc-200 focus:ring-0 focus:border-zinc-400"
-            />
+          <div className="relative flex gap-2">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-3.5 h-3.5 text-zinc-400" />
+              <Input
+                placeholder="Search by type or remarks..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    handleSearch();
+                  }
+                }}
+                className="rounded-none h-8 text-xs pl-9 border-zinc-200 focus:ring-0 focus:border-zinc-400"
+              />
+            </div>
+            <Button
+              onClick={handleSearch}
+              disabled={loading}
+              className="h-8 px-3 rounded-none bg-zinc-900 hover:bg-zinc-800 text-white text-xs font-medium"
+            >
+              {loading ? (
+                <Loader2 className="h-3 w-3 animate-spin" />
+              ) : (
+                "Search"
+              )}
+            </Button>
           </div>
         </div>
 
@@ -525,7 +598,12 @@ export const Notes: React.FC<NotesProps> = ({
               </div>
               <div className="flex items-center gap-2">
                 <Badge variant="outline" className="rounded-none bg-blue-50 text-blue-700 border-blue-200 text-[10px]">
-                  {filteredNotes.length} results
+                  {notes.length} records
+                  {totalCount > notes.length && (
+                    <span className="text-[9px] text-blue-600 ml-1">
+                      of {totalCount} total
+                    </span>
+                  )}
                 </Badge>
               </div>
             </div>
@@ -591,26 +669,14 @@ export const Notes: React.FC<NotesProps> = ({
                 </tr>
               </thead>
               <tbody>
-                {filteredNotes.map((n, idx) => {
+                {notes.map((n: NoteItem, idx: number) => {
                   const isSelected = selectedNote?.id === n.id;
                   return (
-                    <tr
-                      key={n.id}
-                      className={`border-b border-zinc-100 transition-colors ${isSelected
-                          ? "bg-zinc-50 border-l-4 border-l-zinc-900"
-                          : idx % 2 === 0
-                            ? "bg-white hover:bg-zinc-50/50"
-                            : "bg-zinc-50/30 hover:bg-zinc-50/50"
-                        }`}
-                    >
+                    <tr key={n.id} className={`border-b border-zinc-100 transition-colors ${isSelected ? "bg-zinc-50 border-l-4 border-l-zinc-900" : idx % 2 === 0 ? "bg-white hover:bg-zinc-50/50" : "bg-zinc-50/30 hover:bg-zinc-50/50"}`}>
                       <td className="px-3 py-3 font-bold text-zinc-800">{n.type_activity}</td>
                       <td className="px-3 py-3 text-zinc-600 italic truncate" title={n.remarks}>{truncate(n.remarks)}</td>
-                      <td className="px-3 py-3 font-mono text-[10px] text-zinc-500 whitespace-nowrap">
-                        {fmtDateTime(n.start_date)}
-                      </td>
-                      <td className="px-3 py-3 font-mono text-[10px] text-zinc-500 whitespace-nowrap">
-                        {fmtDateTime(n.end_date)}
-                      </td>
+                      <td className="px-3 py-3 font-mono text-[10px] text-zinc-500 whitespace-nowrap">{fmtDateTime(n.start_date)}</td>
+                      <td className="px-3 py-3 font-mono text-[10px] text-zinc-500 whitespace-nowrap">{fmtDateTime(n.end_date)}</td>
                       <td className="px-3 py-3">
                         <span className="inline-flex items-center gap-1 font-mono text-[10px] text-zinc-500">
                           <Clock className="w-3 h-3 text-zinc-400 shrink-0" />
@@ -619,18 +685,10 @@ export const Notes: React.FC<NotesProps> = ({
                       </td>
                       <td className="px-3 py-3">
                         <div className="flex items-center gap-1">
-                          <button
-                            title="Edit"
-                            onClick={() => loadIntoForm(n)}
-                            className="p-1.5 rounded-none border border-zinc-200 text-zinc-400 hover:text-blue-600 hover:border-blue-200 hover:bg-blue-50 transition-colors"
-                          >
+                          <button title="Edit" onClick={() => loadIntoForm(n)} className="p-1.5 rounded-none border border-zinc-200 text-zinc-400 hover:text-blue-600 hover:border-blue-200 hover:bg-blue-50 transition-colors">
                             <Pen className="w-3.5 h-3.5" />
                           </button>
-                          <button
-                            title="Delete"
-                            onClick={() => setDeleteNote(n)}
-                            className="p-1.5 rounded-none border border-zinc-200 text-zinc-400 hover:text-red-600 hover:border-red-200 hover:bg-red-50 transition-colors"
-                          >
+                          <button title="Delete" onClick={() => setDeleteNote(n)} className="p-1.5 rounded-none border border-zinc-200 text-zinc-400 hover:text-red-600 hover:border-red-200 hover:bg-red-50 transition-colors">
                             <Trash className="w-3.5 h-3.5" />
                           </button>
                         </div>
@@ -642,6 +700,26 @@ export const Notes: React.FC<NotesProps> = ({
             </table>
           )}
         </div>
+        
+        {/* Load More Button */}
+        {hasMore && (
+          <div className="px-4 py-3 border-t border-zinc-100 bg-zinc-50/50 flex justify-center">
+            <Button
+              onClick={handleLoadMore}
+              disabled={loadingMore}
+              className="h-9 px-6 rounded-none bg-zinc-900 hover:bg-zinc-800 text-white text-sm font-medium"
+            >
+              {loadingMore ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                  Loading...
+                </>
+              ) : (
+                "Load More"
+              )}
+            </Button>
+          </div>
+        )}
       </div>
 
       {/* ── Right: Form ─────────────────────────────────────────────────── */}

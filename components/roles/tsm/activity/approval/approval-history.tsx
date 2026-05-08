@@ -9,7 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
-import { ExternalLink, CheckCircle } from "lucide-react";
+import { MoreVertical } from "lucide-react";
 import Link from "next/link";
 import { type DateRange } from "react-day-picker";
 import { sileo } from "sileo";
@@ -23,7 +23,8 @@ interface HistoryItem {
   call_type: string;
   source: string;
   status: string;
-  tsm_approved_status?: string;
+  tsm_approved_status: string;
+  tsm_approved_remarks: string;
   date_created: string;
   referenceid: string;
   remarks: string;
@@ -141,23 +142,31 @@ export function ApprovalHistory({ history, dateCreatedFilterRange, onRefresh }: 
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHead className="text-xs font-bold uppercase">Ref #</TableHead>
+            <TableHead className="text-xs font-bold uppercase">Actions</TableHead>
             <TableHead className="text-xs font-bold uppercase">Company</TableHead>
             <TableHead className="text-xs font-bold uppercase">Contact</TableHead>
             <TableHead className="text-xs font-bold uppercase">Call Type</TableHead>
             <TableHead className="text-xs font-bold uppercase">Status</TableHead>
+            <TableHead className="text-xs font-bold uppercase">Remarks</TableHead>
             <TableHead className="text-xs font-bold uppercase">Date</TableHead>
-            <TableHead className="text-xs font-bold uppercase">Actions</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
           {filteredHistory.slice(0, visibleItems).map((item) => (
             <TableRow key={item.id}>
-              <TableCell className="text-xs font-medium">
-                {item.activity_reference_number}
+              <TableCell className="text-xs">
+                <div className="flex items-center gap-1">
+                  <Button
+                    className="rounded-none flex items-center gap-1 text-xs cursor-pointer"
+                    onClick={() => handleApprove(item)}
+                  >
+                   Actions <MoreVertical className="w-4 h-4" />
+                  </Button>
+                </div>
               </TableCell>
               <TableCell className="text-xs">
-                {item.company_name || "N/A"}
+                {item.company_name || "N/A"}<br />
+                {item.activity_reference_number}
               </TableCell>
               <TableCell className="text-xs">
                 <div className="flex flex-col">
@@ -170,24 +179,14 @@ export function ApprovalHistory({ history, dateCreatedFilterRange, onRefresh }: 
               </TableCell>
               <TableCell className="text-xs">
                 <Badge variant="secondary" className="text-xs">
-                  {item.status}
+                  {item.tsm_approved_status}
                 </Badge>
               </TableCell>
               <TableCell className="text-xs">
-                {item.date_created ? new Date(item.date_created).toLocaleDateString() : "—"}
+                {item.tsm_approved_remarks || "N/A"}
               </TableCell>
               <TableCell className="text-xs">
-                <div className="flex items-center gap-1">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="h-7 w-7 p-0 text-green-600 hover:text-green-700 hover:bg-green-50"
-                    onClick={() => handleApprove(item)}
-                    title="Approve"
-                  >
-                    <CheckCircle className="h-3 w-3" />
-                  </Button>
-                </div>
+                {item.date_created ? new Date(item.date_created).toLocaleDateString() : "—"}
               </TableCell>
             </TableRow>
           ))}
@@ -196,9 +195,9 @@ export function ApprovalHistory({ history, dateCreatedFilterRange, onRefresh }: 
 
       {filteredHistory.length > visibleItems && (
         <Button
-          variant="ghost"
+          variant="outline"
           size="sm"
-          className="w-full mt-2"
+          className="w-full rounded-none mt-2"
           onClick={() => setVisibleItems(prev => prev + 10)}
         >
           Load More ({filteredHistory.length - visibleItems} remaining)
@@ -222,7 +221,7 @@ export function ApprovalHistory({ history, dateCreatedFilterRange, onRefresh }: 
                 <label className="text-xs font-bold uppercase text-amber-700 block mb-1">
                   Agent Remarks
                 </label>
-                <p className="text-xs text-gray-700 italic">{selectedItem.remarks}</p>
+                <p className="text-xs text-gray-700 italic uppercase">{selectedItem.remarks}</p>
               </div>
             )}
             <div>

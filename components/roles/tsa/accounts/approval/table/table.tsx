@@ -263,8 +263,8 @@ export function RequestTable({
 
                                 {/* DETAILS */}
                                 <div className="flex flex-col gap-1 text-[11px]">
-                                    <div>
-                                        <span className="text-gray-500">Agent:</span> {agentMap[account.referenceid] || "-"}
+                                    <div className="flex gap-1">
+                                        <span className="text-gray-500">Agent:</span><p className="uppercase">{agentMap[account.referenceid] || "-"}</p>
                                     </div>
                                     <div>
                                         <span className="text-gray-500">Email:</span> {account.email_address}

@@ -270,8 +270,8 @@ export function AccountsCards({ posts = [], userDetails, setDateCreatedFilterRan
 
                                     {/* Transferred From */}
                                     <div>
-                                        <span className="text-gray-500">Transferred From</span>
-                                        <div className="font-medium">
+                                        <span className="text-gray-500 uppercase">Transferred From</span>
+                                        <div className="font-medium uppercase">
                                             {agentFrom
                                                 ? `${agentFrom.Firstname} ${agentFrom.Lastname}`
                                                 : "-"}
@@ -285,8 +285,8 @@ export function AccountsCards({ posts = [], userDetails, setDateCreatedFilterRan
 
                                     {/* Transferred To */}
                                     <div className="text-right">
-                                        <span className="text-gray-500">Transferred To</span>
-                                        <div className="text-blue-900 font-bold">
+                                        <span className="text-gray-500 uppercase">Transferred To</span>
+                                        <div className="text-blue-900 font-bold uppercase">
                                             {agentTo
                                                 ? `${agentTo.Firstname} ${agentTo.Lastname}`
                                                 : "-"}

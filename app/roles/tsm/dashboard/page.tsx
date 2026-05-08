@@ -47,6 +47,7 @@ function DashboardContent() {
     const [dateCreatedFilterRange, setDateCreatedFilterRangeAction] = React.useState<
         DateRange | undefined
     >(undefined);
+    const [activeTab, setActiveTab] = useState("tsm-report");
 
     const queryUserId = searchParams?.get("id") ?? "";
 
@@ -111,24 +112,29 @@ function DashboardContent() {
                                     </BreadcrumbItem>
                                 </BreadcrumbList>
                             </Breadcrumb>
+                            <Separator orientation="vertical" className="mr-2 data-[orientation=vertical]:h-4" />
+                            <div className="flex-1 max-w-md">
+                                <Tabs value={activeTab} onValueChange={setActiveTab} className="w-50">
+                                    <TabsList className="grid w-full grid-cols-2 h-8 rounded-full bg-gray-100">
+                                        <TabsTrigger value="tsm-report" className="rounded-s-full uppercase text-xs tracking-wider data-[state=active]:bg-gray-900 data-[state=active]:text-white">
+                                            TSM Report
+                                        </TabsTrigger>
+                                        <TabsTrigger value="tsa-report" className="rounded-e-full uppercase text-xs tracking-wider data-[state=active]:bg-gray-900 data-[state=active]:text-white">
+                                            TSA Report
+                                        </TabsTrigger>
+                                    </TabsList>
+                                </Tabs>
+                            </div>
                         </div>
                     </header>
 
                     <main className="flex flex-1 flex-col gap-4 p-4 overflow-auto">
                         <div>
-                            <Tabs defaultValue="tsm-report" className="w-full">
-                                <TabsList className="grid w-full grid-cols-2 h-10 rounded bg-gray-100">
-                                    <TabsTrigger value="tsm-report" className="rounded uppercase font-black text-xs tracking-wider data-[state=active]:bg-gray-900 data-[state=active]:text-white">
-                                        TSM Report
-                                    </TabsTrigger>
-                                    <TabsTrigger value="tsa-report" className="rounded uppercase font-black text-xs tracking-wider data-[state=active]:bg-gray-900 data-[state=active]:text-white">
-                                        TSA Report
-                                    </TabsTrigger>
-                                </TabsList>
-                                <TabsContent value="tsm-report" className="mt-4">
+                            <Tabs value={activeTab} className="w-full">
+                                <TabsContent value="tsm-report">
                                     <TSMReports />
                                 </TabsContent>
-                                <TabsContent value="tsa-report" className="mt-4">
+                                <TabsContent value="tsa-report">
                                     <TSAReports />
                                 </TabsContent>
                             </Tabs>

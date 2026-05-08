@@ -21,13 +21,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const offset = (pageNum - 1) * limitNum;
 
   try {
-    // Build base query for history table
+    // Build base query for history table - filter for ENDORSED quotations
     let query = supabase
       .from("history")
       .select("*", { count: "exact" })
       .eq("tsm", referenceid)
       .eq("type_activity", "Quotation Preparation")
-      .in("tsm_approved_status", ["Approved", "Approved By Sales Head"])
+      .eq("tsm_approved_status", "Endorsed to Sales Head")
       .order("date_updated", { ascending: false });
 
     // Apply search filter

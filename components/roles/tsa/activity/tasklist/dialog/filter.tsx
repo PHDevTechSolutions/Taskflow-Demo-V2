@@ -128,7 +128,7 @@ export const TaskListDialog: React.FC<TaskListDialogProps> = ({
 
         {/* Active filter badge */}
         {hasActiveFilters && (
-          <span className="absolute -top-1.5 -right-1.5 h-4 w-4 rounded-full bg-zinc-900 text-white text-[9px] font-bold flex items-center justify-center pointer-events-none">
+          <span className="absolute -top-1.5 -right-1.5 h-6 w-6 rounded-full bg-zinc-900 text-white text-[9px] font-bold flex items-center justify-center pointer-events-none">
             {activeCount}
           </span>
         )}

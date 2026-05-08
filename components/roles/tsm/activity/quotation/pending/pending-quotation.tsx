@@ -2,12 +2,11 @@
 
 import React, { useEffect, useState, useCallback, useMemo } from "react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { AlertCircleIcon, CheckCircle2Icon, Eye, Search, Loader2, FileX } from "lucide-react";
+import { AlertCircleIcon, CheckCircle2Icon, Eye, Search, Loader2, FileX, LoaderPinwheel } from "lucide-react";
 import { supabase } from "@/utils/supabase";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import TaskListEditDialog from "../../dialog/edit";
-import { ButtonGroup } from "@/components/ui/button-group";
 
 interface Completed {
     quotation_subject: string;
@@ -100,25 +99,47 @@ export const Scheduled: React.FC<ScheduledProps> = ({
     const [editOpen, setEditOpen] = useState(false);
     const [agents, setAgents] = useState<any[]>([]);
 
+    // Pagination state
+    const [itemsPerPage] = useState(10); // Default to 10 items per page
+    const [totalCount, setTotalCount] = useState(0);
+    const [totalPages, setTotalPages] = useState(0);
+    const [hasMore, setHasMore] = useState(false);
+    const [loadingMore, setLoadingMore] = useState(false);
+    const [currentPage, setCurrentPage] = useState(1);
+
     // -----------------------------
-    // FETCH ACTIVITIES
+    // FETCH ACTIVITIES (paginated)
     // -----------------------------
-    const fetchActivities = useCallback(async () => {
+    const fetchActivities = useCallback(async (page: number = 1, loadMore: boolean = false) => {
         if (!referenceid) return;
 
-        setLoading(true);
+        // Set appropriate loading state
+        if (loadMore) {
+            setLoadingMore(true);
+        } else {
+            setLoading(true);
+        }
         setError(null);
 
-        const from = dateCreatedFilterRange?.from
-            ? new Date(dateCreatedFilterRange.from).toISOString().slice(0, 10)
-            : null;
-        const to = dateCreatedFilterRange?.to
-            ? new Date(dateCreatedFilterRange.to).toISOString().slice(0, 10)
-            : null;
-
         try {
-            const url = new URL("/api/activity/tsm/quotation/fetch", window.location.origin);
+            const url = new URL("/api/activity/tsm/quotation/pending/fetch", window.location.origin);
             url.searchParams.append("referenceid", referenceid);
+            url.searchParams.append("page", String(page));
+            url.searchParams.append("limit", String(itemsPerPage));
+
+            // Add search term if present
+            if (searchTerm.trim()) {
+                url.searchParams.append("search", searchTerm.trim());
+            }
+
+            // Add date range filter
+            const from = dateCreatedFilterRange?.from
+                ? new Date(dateCreatedFilterRange.from).toISOString().slice(0, 10)
+                : null;
+            const to = dateCreatedFilterRange?.to
+                ? new Date(dateCreatedFilterRange.to).toISOString().slice(0, 10)
+                : null;
+
             if (from && to) {
                 url.searchParams.append("from", from);
                 url.searchParams.append("to", to);
@@ -127,13 +148,48 @@ export const Scheduled: React.FC<ScheduledProps> = ({
             const res = await fetch(url.toString());
             if (!res.ok) throw new Error(`Failed to fetch activities (${res.status})`);
             const data = await res.json();
-            setActivities(data.activities || []);
+
+            if (loadMore && page > 1) {
+                // Append new data for load more
+                setActivities(prev => [...prev, ...(data.activities || [])]);
+            } else {
+                // Replace data for initial load or new search
+                setActivities(data.activities || []);
+            }
+
+            // Update pagination info
+            setTotalCount(data.totalCount || 0);
+            setTotalPages(data.totalPages || 0);
+            setHasMore(data.hasMore || false);
+            setCurrentPage(page);
         } catch (err: any) {
             setError(err.message ?? "Unknown error");
+            setActivities([]);
         } finally {
             setLoading(false);
+            setLoadingMore(false);
         }
-    }, [referenceid, dateCreatedFilterRange]);
+    }, [referenceid, itemsPerPage, searchTerm, dateCreatedFilterRange]);
+
+    // Search handler - only fetches when search button is clicked
+    const handleSearch = useCallback(() => {
+        setCurrentPage(1);
+        fetchActivities(1, false);
+    }, [fetchActivities]);
+
+    // Load more handler
+    const handleLoadMore = useCallback(() => {
+        if (hasMore && !loadingMore) {
+            const nextPage = currentPage + 1;
+            fetchActivities(nextPage, true);
+        }
+    }, [currentPage, hasMore, loadingMore, fetchActivities]);
+
+    // Reset page when search or filter changes
+    useEffect(() => {
+        setCurrentPage(1);
+        // The search will be triggered by the search button click
+    }, [searchTerm]);
 
     // Fetch agents
     useEffect(() => {
@@ -148,7 +204,7 @@ export const Scheduled: React.FC<ScheduledProps> = ({
     useEffect(() => {
         if (!referenceid) return;
 
-        fetchActivities();
+        fetchActivities(1, false);
 
         const channel = supabase
             .channel(`history-${referenceid}`)
@@ -160,7 +216,7 @@ export const Scheduled: React.FC<ScheduledProps> = ({
                     table: "history",
                     filter: `tsm=eq.${referenceid}`,
                 },
-                () => { fetchActivities(); }
+                () => { fetchActivities(1, false); }
             )
             .subscribe();
 
@@ -168,31 +224,9 @@ export const Scheduled: React.FC<ScheduledProps> = ({
     }, [referenceid, fetchActivities]);
 
     // -----------------------------
-    // SORT & FILTER
+    // SORT & FILTER (removed - now handled server-side)
     // -----------------------------
-    const sortedActivities = useMemo(() => {
-        return [...activities].sort(
-            (a, b) =>
-                new Date(b.date_updated ?? b.date_created).getTime() -
-                new Date(a.date_updated ?? a.date_created).getTime()
-        );
-    }, [activities]);
-
-    const filteredActivities = useMemo(() => {
-        const search = searchTerm.toLowerCase().trim();
-        return sortedActivities
-            .filter(
-                (item) =>
-                    item.type_activity === "Quotation Preparation" &&
-                    item.tsm_approved_status === "Pending"
-            )
-            .filter((item) => {
-                if (!search) return true;
-                return Object.values(item).some(
-                    (val) => val !== null && val !== undefined && String(val).toLowerCase().includes(search)
-                );
-            });
-    }, [sortedActivities, searchTerm]);
+    // Client-side filtering removed - all filtering is now done by the API
 
     // -----------------------------
     // AGENT MAP
@@ -233,15 +267,37 @@ export const Scheduled: React.FC<ScheduledProps> = ({
     return (
         <>
             {/* Search Bar */}
-            <div className="mb-4 relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
-                <Input
-                    type="text"
-                    placeholder="Search quotations..."
-                    className="pl-9 rounded-none text-xs h-9 border-gray-200 focus-visible:ring-1 focus-visible:ring-gray-400"
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                />
+            <div className="mb-4 flex items-center gap-4">
+                <div className="relative flex-1 max-w-md">
+                    <Input
+                        type="text"
+                        placeholder="Search quotations, companies, agents..."
+                        className="input input-bordered input-sm w-full rounded-none pl-9"
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                        onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                                handleSearch();
+                            }
+                        }}
+                    />
+                    <div className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                        </svg>
+                    </div>
+                </div>
+                <Button
+                    onClick={handleSearch}
+                    disabled={loading}
+                    className="h-9 px-4 rounded-none bg-zinc-900 hover:bg-zinc-800 text-white text-sm font-medium"
+                >
+                    {loading ? (
+                        <div className="w-4 h-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                    ) : (
+                        "Search"
+                    )}
+                </Button>
             </div>
 
             {/* Loading State */}
@@ -262,7 +318,7 @@ export const Scheduled: React.FC<ScheduledProps> = ({
             )}
 
             {/* Empty State */}
-            {!loading && !error && filteredActivities.length === 0 && (
+            {!loading && !error && activities.length === 0 && (
                 <div className="flex flex-col items-center justify-center py-16 text-gray-400">
                     <FileX className="w-10 h-10 mb-3 opacity-30" />
                     <p className="text-xs font-semibold uppercase tracking-wide">No pending quotations</p>
@@ -273,10 +329,15 @@ export const Scheduled: React.FC<ScheduledProps> = ({
             )}
 
             {/* Record Count */}
-            {!loading && filteredActivities.length > 0 && (
+            {!loading && activities.length > 0 && (
                 <div className="mb-3 flex items-center justify-between">
                     <span className="text-[11px] font-bold text-gray-500 uppercase tracking-wide">
-                        {filteredActivities.length} Record{filteredActivities.length !== 1 ? "s" : ""}
+                        Showing {activities.length} records
+                        {totalCount > activities.length && (
+                            <span className="text-gray-400 ml-1">
+                                of {totalCount} total
+                            </span>
+                        )}
                     </span>
                     <span className="text-[10px] text-amber-600 font-semibold uppercase bg-amber-50 px-2 py-0.5 border border-amber-200">
                         Pending Approval
@@ -286,8 +347,9 @@ export const Scheduled: React.FC<ScheduledProps> = ({
 
             {/* Cards */}
             {!loading && (
+                <>
                 <div className="h-[500px] overflow-y-auto space-y-3 pr-1">
-                    {filteredActivities.map((item) => {
+                    {activities.map((item: Completed) => {
                         const agent = agentMap[item.referenceid?.toLowerCase() ?? ""];
                         return (
                             <div
@@ -300,7 +362,7 @@ export const Scheduled: React.FC<ScheduledProps> = ({
                                 <div className="pl-4 pr-3 pt-3 pb-3">
                                     {/* Header Row */}
                                     <div className="flex justify-between items-start mb-2.5">
-                                        <div className="flex items-center gap-2">
+                                        <div className="flex items-center gap-2 uppercase">
                                             {agent?.profilePicture ? (
                                                 <img
                                                     src={agent.profilePicture}
@@ -374,6 +436,24 @@ export const Scheduled: React.FC<ScheduledProps> = ({
                         );
                     })}
                 </div>
+
+                {/* Load More Button */}
+                {hasMore && (
+                    <div className="flex justify-center mt-4">
+                        <Button
+                            onClick={handleLoadMore}
+                            disabled={loadingMore}
+                            className="h-9 px-6 rounded-none bg-zinc-900 hover:bg-zinc-800 text-white text-sm font-medium"
+                        >
+                            {loadingMore ? <LoaderPinwheel className="animate-spin" /> : null} {loadingMore ? (
+                                "Loading..."
+                            ) : (
+                                "Load More"
+                            )}
+                        </Button>
+                    </div>
+                )}
+                </>
             )}
 
             {/* Edit Dialog */}
@@ -382,7 +462,7 @@ export const Scheduled: React.FC<ScheduledProps> = ({
                     item={editItem}
                     onClose={closeEditDialog}
                     onSave={() => {
-                        fetchActivities();
+                        fetchActivities(1, false);
                         closeEditDialog();
                     }}
                     firstname={firstname}
