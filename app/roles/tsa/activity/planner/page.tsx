@@ -48,8 +48,11 @@ interface Account {
   date_created: string; date_updated: string; contact_person: string;
   contact_number: string; email_address: string; address: string;
   delivery_address: string; region: string; industry: string;
-  status?: string; company_group?: string;
+  status: string; company_group?: string;
   account_reference_number: string;
+  tsm: string; // Add missing fields for Scheduled component
+  manager: string;
+  next_available_date?: string | null; // Add missing field for Scheduled component
 }
 
 interface SupervisorDetails {
@@ -760,6 +763,7 @@ function DashboardContent() {
     managerDetails: userDetails.managerDetails ?? null,
     tsmDetails: userDetails.tsmDetails ?? null,
     signature: userDetails.signature,
+    accounts: posts, // Pass accounts data to avoid duplicate fetching
   };
 
   return (

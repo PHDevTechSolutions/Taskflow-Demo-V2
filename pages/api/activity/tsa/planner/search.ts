@@ -66,9 +66,11 @@ export default async function handler(
 
     // Also search by quotation_number and so_number in history
     // This finds activities where the search term matches quotation or SO numbers
+    // Filter by referenceid to avoid cross-user data and improve performance
     const { data: historySearchData, error: historySearchError } = await supabase
       .from("history")
       .select("activity_reference_number, quotation_number, so_number")
+      .eq("referenceid", referenceid)
       .or(`quotation_number.ilike.%${searchTerm}%,so_number.ilike.%${searchTerm}%`);
 
     if (historySearchError) throw historySearchError;

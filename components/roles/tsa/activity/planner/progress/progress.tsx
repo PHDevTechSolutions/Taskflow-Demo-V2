@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback, useRef } from "react";
 import {
   Accordion,
   AccordionItem,
@@ -183,6 +183,9 @@ export const Progress: React.FC<NewTaskProps> = ({
     return () => clearTimeout(timer);
   }, [searchTerm]);
 
+  // Ref to always access latest fetchAllData without re-creating subscriptions
+  const fetchAllDataRef = useRef<() => void>(() => {});
+
   const fetchAllData = useCallback(() => {
     if (!referenceid) {
       setActivities([]);
@@ -239,13 +242,17 @@ export const Progress: React.FC<NewTaskProps> = ({
       });
   }, [referenceid, dateCreatedFilterRange, debouncedSearchTerm]);
 
+  // Keep ref in sync
+  useEffect(() => {
+    fetchAllDataRef.current = fetchAllData;
+  }, [fetchAllData]);
+
+  // Realtime subscriptions — only depend on referenceid, use ref for callback
   useEffect(() => {
     if (!referenceid) return;
 
-    // Initial fetch
-    fetchAllData();
+    fetchAllDataRef.current();
 
-    // Subscribe realtime for activities
     const activityChannel = supabase
       .channel(`activity-${referenceid}`)
       .on(
@@ -256,14 +263,10 @@ export const Progress: React.FC<NewTaskProps> = ({
           table: "activity",
           filter: `referenceid=eq.${referenceid}`,
         },
-        (payload) => {
-          console.log("Activity realtime update:", payload);
-          fetchAllData();
-        },
+        () => fetchAllDataRef.current(),
       )
       .subscribe();
 
-    // Subscribe realtime for history
     const historyChannel = supabase
       .channel(`history-${referenceid}`)
       .on(
@@ -274,10 +277,7 @@ export const Progress: React.FC<NewTaskProps> = ({
           table: "history",
           filter: `referenceid=eq.${referenceid}`,
         },
-        (payload) => {
-          console.log("History realtime update:", payload);
-          fetchAllData();
-        },
+        () => fetchAllDataRef.current(),
       )
       .subscribe();
 
@@ -288,7 +288,7 @@ export const Progress: React.FC<NewTaskProps> = ({
       historyChannel.unsubscribe();
       supabase.removeChannel(historyChannel);
     };
-  }, [referenceid, fetchAllData]);
+  }, [referenceid]);
 
   // Trigger fetch when debounced search term changes
   useEffect(() => {

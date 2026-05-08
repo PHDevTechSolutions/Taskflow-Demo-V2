@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback, useRef } from "react";
 import { Accordion, AccordionItem, AccordionTrigger, AccordionContent, } from "@/components/ui/accordion";
 import { CheckCircle2Icon, AlertCircleIcon, Clock, CheckCircle2, AlertCircle, PhoneOutgoing, PackageCheck, ReceiptText, Activity, ThumbsUp, Check, Repeat, MoreVertical, ThumbsDown, Dot, Filter, Lock, MessageSquare } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -140,6 +140,11 @@ export const Overdue: React.FC<ScheduledProps> = ({
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("All");
   const [tsmFeedbackOpen, setTsmFeedbackOpen] = useState<string | null>(null);
+  const BATCH_SIZE = 5;
+  const [displayedCount, setDisplayedCount] = useState(BATCH_SIZE);
+
+  // Ref to always access latest fetchAllData without re-creating subscriptions
+  const fetchAllDataRef = useRef<() => void>(() => {});
 
   const fetchAllData = useCallback(() => {
     if (!referenceid) {
@@ -185,10 +190,16 @@ export const Overdue: React.FC<ScheduledProps> = ({
       });
   }, [referenceid, dateCreatedFilterRange]);
 
+  // Keep ref in sync
+  useEffect(() => {
+    fetchAllDataRef.current = fetchAllData;
+  }, [fetchAllData]);
+
+  // Realtime subscriptions — only depend on referenceid, use ref for callback
   useEffect(() => {
     if (!referenceid) return;
 
-    fetchAllData();
+    fetchAllDataRef.current();
 
     const activityChannel = supabase
       .channel(`activity-${referenceid}`)
@@ -200,7 +211,7 @@ export const Overdue: React.FC<ScheduledProps> = ({
           table: "activity",
           filter: `referenceid=eq.${referenceid}`,
         },
-        () => fetchAllData(),
+        () => fetchAllDataRef.current(),
       )
       .subscribe();
 
@@ -214,7 +225,7 @@ export const Overdue: React.FC<ScheduledProps> = ({
           table: "history",
           filter: `referenceid=eq.${referenceid}`,
         },
-        () => fetchAllData(),
+        () => fetchAllDataRef.current(),
       )
       .subscribe();
 
@@ -225,7 +236,7 @@ export const Overdue: React.FC<ScheduledProps> = ({
       historyChannel.unsubscribe();
       supabase.removeChannel(historyChannel);
     };
-  }, [referenceid, fetchAllData]);
+  }, [referenceid]);
 
   const mergedActivities = activities
     // FIX: whitelist — only show Assisted, Quote-Done, SO-Done
@@ -300,6 +311,11 @@ export const Overdue: React.FC<ScheduledProps> = ({
   useEffect(() => {
     onCountChange?.(filteredActivities.length);
   }, [filteredActivities]);
+
+  // Reset pagination when search or filter changes
+  useEffect(() => {
+    setDisplayedCount(BATCH_SIZE);
+  }, [searchTerm, statusFilter]);
 
   const openCancelledDialog = (id: string) => {
     setSelectedActivityId(id);
@@ -731,7 +747,7 @@ export const Overdue: React.FC<ScheduledProps> = ({
               No scheduled activities found.
             </p>
           ) : (
-            filteredActivities.map((item) => {
+            filteredActivities.slice(0, displayedCount).map((item) => {
               const badgeProps = getBadgeProps(item.status);
               const statusStyles = getStatusStyles(item.status);
 
@@ -1172,6 +1188,18 @@ export const Overdue: React.FC<ScheduledProps> = ({
             })
           )}
         </Accordion>
+
+        {filteredActivities.length > displayedCount && (
+          <div className="flex justify-center py-4 mt-2">
+            <Button
+              variant="outline"
+              className="rounded-none text-xs"
+              onClick={() => setDisplayedCount(prev => prev + BATCH_SIZE)}
+            >
+              Load More ({filteredActivities.length - displayedCount} remaining)
+            </Button>
+          </div>
+        )}
       </div>
 
       <DoneDialog

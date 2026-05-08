@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState, useCallback, useMemo } from "react";
+import React, { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from "@/components/ui/accordion";
 import { CheckCircle2Icon, AlertCircleIcon, CheckCircle2, AlertCircle, PhoneOutgoing, PackageCheck, ReceiptText, Activity, ThumbsUp, Check, Repeat, MoreVertical, ThumbsDown, Dot, Filter, Plus, MessageSquare } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -169,6 +169,9 @@ export const Scheduled: React.FC<ScheduledProps> = ({
   const [tsmFeedbackOpen, setTsmFeedbackOpen] = useState<string | null>(null);
   const SCHEDULED_BATCH_SIZE = 10; // Show 10 initially, load more +10
   const [displayedScheduledCount, setDisplayedScheduledCount] = useState(SCHEDULED_BATCH_SIZE);
+  const CLUSTER_BATCH_SIZE = 5; // Show 5 initially per cluster, load more +5
+  const [displayedTodayCount, setDisplayedTodayCount] = useState(CLUSTER_BATCH_SIZE);
+  const [displayedAvailableCount, setDisplayedAvailableCount] = useState(CLUSTER_BATCH_SIZE);
 
   // Debounce search term to avoid excessive API calls
   useEffect(() => {
@@ -188,6 +191,9 @@ export const Scheduled: React.FC<ScheduledProps> = ({
     const uniqueNumber = String(Date.now()).slice(-10);
     return `${firstInitial}${lastInitial}-${region}-${uniqueNumber}`;
   };
+
+  // Ref to always access latest fetchAllData without re-creating subscriptions
+  const fetchAllDataRef = useRef<() => void>(() => {});
 
   // Fetch activities and history
   const fetchAllData = useCallback(() => {
@@ -233,6 +239,11 @@ export const Scheduled: React.FC<ScheduledProps> = ({
       });
   }, [referenceid, debouncedSearchTerm]);
 
+  // Keep ref in sync
+  useEffect(() => {
+    fetchAllDataRef.current = fetchAllData;
+  }, [fetchAllData]);
+
   // Fetch accounts for cluster series
   const fetchAccounts = useCallback(async () => {
     if (!referenceid) {
@@ -258,10 +269,11 @@ export const Scheduled: React.FC<ScheduledProps> = ({
     }
   }, [referenceid]);
 
+  // Realtime subscriptions — only depend on referenceid, use ref for callback
   useEffect(() => {
     if (!referenceid) return;
 
-    fetchAllData();
+    fetchAllDataRef.current();
     fetchAccounts();
 
     const activityChannel = supabase
@@ -269,7 +281,7 @@ export const Scheduled: React.FC<ScheduledProps> = ({
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "activity", filter: `referenceid=eq.${referenceid}` },
-        () => fetchAllData()
+        () => fetchAllDataRef.current()
       )
       .subscribe();
 
@@ -278,7 +290,7 @@ export const Scheduled: React.FC<ScheduledProps> = ({
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "history", filter: `referenceid=eq.${referenceid}` },
-        () => fetchAllData()
+        () => fetchAllDataRef.current()
       )
       .subscribe();
 
@@ -288,7 +300,7 @@ export const Scheduled: React.FC<ScheduledProps> = ({
       historyChannel.unsubscribe();
       supabase.removeChannel(historyChannel);
     };
-  }, [referenceid, fetchAllData, fetchAccounts]);
+  }, [referenceid, fetchAccounts]);
 
   // Trigger fetch when debounced search term changes
   useEffect(() => {
@@ -432,6 +444,12 @@ export const Scheduled: React.FC<ScheduledProps> = ({
   useEffect(() => {
     setDisplayedScheduledCount(SCHEDULED_BATCH_SIZE);
   }, [debouncedSearchTerm, statusFilter]);
+
+  // Reset cluster pagination when accounts data changes
+  useEffect(() => {
+    setDisplayedTodayCount(CLUSTER_BATCH_SIZE);
+    setDisplayedAvailableCount(CLUSTER_BATCH_SIZE);
+  }, [accounts]);
 
   useEffect(() => {
     onCountChange?.(filteredActivities.length);
@@ -959,20 +977,24 @@ export const Scheduled: React.FC<ScheduledProps> = ({
         <Separator className="my-4" />
 
         {/* ─── OB Calls Account for Today (Cluster Series) ───────────────── */}
-        {totalTodayCount > 0 && firstTodayCluster && (
+        {totalTodayCount > 0 && firstTodayCluster && (() => {
+          const todayAccounts = groupedToday[firstTodayCluster];
+          const displayedTodayAccounts = todayAccounts.slice(0, displayedTodayCount);
+          const hasMoreToday = todayAccounts.length > displayedTodayCount;
+          return (
           <section>
-            <h2 className="text-xs font-bold mb-4">OB Calls Account for Today ({groupedToday[firstTodayCluster].length})</h2>
+            <h2 className="text-xs font-bold mb-4">OB Calls Account for Today ({todayAccounts.length})</h2>
 
             <Alert className="font-mono rounded-xl shadow-lg mb-2">
               <CheckCircle2 />
               <AlertTitle className="text-xs font-bold">CLUSTER SERIES: {firstTodayCluster.toUpperCase()}</AlertTitle>
               <AlertDescription className="text-xs italic">
-                {groupedToday[firstTodayCluster].length} account{groupedToday[firstTodayCluster].length !== 1 ? "s" : ""} scheduled for today
+                {todayAccounts.length} account{todayAccounts.length !== 1 ? "s" : ""} scheduled for today
               </AlertDescription>
             </Alert>
 
             <Accordion type="single" collapsible className="w-full">
-              {groupedToday[firstTodayCluster].map((account) => (
+              {displayedTodayAccounts.map((account) => (
                 <AccordionItem key={account.id} value={account.id} className="border border-green-300 rounded-sm mb-2 uppercase">
                   <div className="flex justify-between items-center p-2 select-none">
                     <AccordionTrigger className="flex-1 text-xs font-semibold font-mono">
@@ -1018,13 +1040,30 @@ export const Scheduled: React.FC<ScheduledProps> = ({
                 </AccordionItem>
               ))}
             </Accordion>
+
+            {hasMoreToday && (
+              <div className="flex justify-center py-3 mt-2">
+                <Button
+                  variant="outline"
+                  className="rounded-none text-xs"
+                  onClick={() => setDisplayedTodayCount(prev => prev + CLUSTER_BATCH_SIZE)}
+                >
+                  Load More ({todayAccounts.length - displayedTodayCount} remaining)
+                </Button>
+              </div>
+            )}
           </section>
-        )}
+          );
+        })()}
 
         {/* ─── Available OB Calls ───────────────────────────────────────── */}
-        {totalAvailableCount > 0 && firstAvailableCluster && (
+        {totalAvailableCount > 0 && firstAvailableCluster && (() => {
+          const availableAccounts = groupedNull[firstAvailableCluster];
+          const displayedAvailableAccounts = availableAccounts.slice(0, displayedAvailableCount);
+          const hasMoreAvailable = availableAccounts.length > displayedAvailableCount;
+          return (
           <section>
-            <h2 className="text-xs font-bold mb-4">Available OB Calls ({groupedNull[firstAvailableCluster].length})</h2>
+            <h2 className="text-xs font-bold mb-4">Available OB Calls ({availableAccounts.length})</h2>
 
             <Alert className="font-mono rounded-xl shadow-lg mb-2">
               <CheckCircle2 />
@@ -1035,7 +1074,7 @@ export const Scheduled: React.FC<ScheduledProps> = ({
             </Alert>
 
             <Accordion type="single" collapsible className="w-full border rounded-none shadow-sm border-blue-200 uppercase">
-              {groupedNull[firstAvailableCluster].map((account) => (
+              {displayedAvailableAccounts.map((account) => (
                 <AccordionItem key={account.id} value={account.id}>
                   <div className="flex justify-between items-center p-2 select-none">
                     <AccordionTrigger className="flex-1 text-xs font-semibold font-mono">
@@ -1081,8 +1120,21 @@ export const Scheduled: React.FC<ScheduledProps> = ({
                 </AccordionItem>
               ))}
             </Accordion>
+
+            {hasMoreAvailable && (
+              <div className="flex justify-center py-3 mt-2">
+                <Button
+                  variant="outline"
+                  className="rounded-none text-xs"
+                  onClick={() => setDisplayedAvailableCount(prev => prev + CLUSTER_BATCH_SIZE)}
+                >
+                  Load More ({availableAccounts.length - displayedAvailableCount} remaining)
+                </Button>
+              </div>
+            )}
           </section>
-        )}
+          );
+        })()}
       </div>
 
       <DoneDialog open={dialogDoneOpen} onOpenChange={setDialogDoneOpen} onConfirm={async () => {}} loading={updatingId !== null} />
