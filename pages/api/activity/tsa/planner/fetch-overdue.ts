@@ -6,24 +6,24 @@ const PAGE_SIZE = 10;
 const MAX_TOTAL = 50;
 const IN_CHUNK_SIZE = 500;
 
+// Only these statuses qualify as "overdue" — filter server-side so pagination
+// counts are accurate and ghost items don't appear after Load More.
+const ALLOWED_STATUSES = ["Assisted", "Quote-Done"];
+
 // ─── History fetcher ──────────────────────────────────────────────────────────
 async function fetchHistoryForActivities(activityRefs: string[]) {
   if (!activityRefs.length) return [];
-
   const uniqueRefs = [...new Set(activityRefs)];
   const allHistory: any[] = [];
-
   for (let i = 0; i < uniqueRefs.length; i += IN_CHUNK_SIZE) {
     const chunk = uniqueRefs.slice(i, i + IN_CHUNK_SIZE);
     const { data, error } = await supabase
       .from("history")
       .select("*")
       .in("activity_reference_number", chunk);
-
     if (error) throw error;
     if (data) allHistory.push(...data);
   }
-
   return allHistory;
 }
 
@@ -53,7 +53,12 @@ export default async function handler(
   // Clamp so we never overshoot MAX_TOTAL
   const limit = Math.min(PAGE_SIZE, MAX_TOTAL - offset);
 
-  // ─── Date filter on scheduled_date ─────────────────────────────────────────
+  // ─── Today's date (server-side, PH timezone) ──────────────────────────────
+  // scheduled_date < today means overdue.
+  const todayStr = new Date()
+    .toLocaleDateString("en-CA", { timeZone: "Asia/Manila" }); // "YYYY-MM-DD"
+
+  // ─── Optional date filter on scheduled_date ───────────────────────────────
   let scheduledFrom: string | undefined;
   let scheduledTo: string | undefined;
 
@@ -61,7 +66,9 @@ export default async function handler(
     scheduledFrom = from.length > 10 ? from.slice(0, 10) : from;
   }
   if (typeof to === "string" && to) {
-    scheduledTo = to.length > 10 ? to.slice(0, 10) : to;
+    // Cap the upper bound at yesterday — never include today or future dates.
+    const toNormalized = to.length > 10 ? to.slice(0, 10) : to;
+    scheduledTo = toNormalized < todayStr ? toNormalized : undefined;
   }
 
   try {
@@ -69,9 +76,18 @@ export default async function handler(
       .from("activity")
       .select("*")
       .eq("referenceid", referenceid)
-      .order("scheduled_date", { ascending: false })  // Newest scheduled first
+      // FIX 1: Only fetch allowed statuses server-side so pagination is accurate.
+      // Previously, all statuses were fetched and filtered client-side, which made
+      // has_more=true even when no visible items remained → ghost items after Load More.
+      .in("status", ALLOWED_STATUSES)
+      // FIX 2: Only fetch past scheduled dates (overdue) server-side.
+      // The frontend previously filtered `scheduled_date >= today` client-side,
+      // same problem — items fetched but invisible, inflating has_more.
+      .lt("scheduled_date", todayStr)
+      .order("scheduled_date", { ascending: false })
       .range(offset, offset + limit - 1);
 
+    // Optional date range (already capped to past dates above)
     if (scheduledFrom) query = query.gte("scheduled_date", scheduledFrom);
     if (scheduledTo)   query = query.lte("scheduled_date", scheduledTo);
 
@@ -79,6 +95,7 @@ export default async function handler(
     if (actError) throw actError;
 
     const activityList = activities ?? [];
+
     const activityRefs = activityList
       .map((a: any) => a.activity_reference_number)
       .filter(Boolean);
@@ -87,7 +104,7 @@ export default async function handler(
 
     const nextOffset = offset + activityList.length;
 
-    // has_more = fetched a full page AND haven't hit the 50-record cap yet
+    // has_more: fetched a full page AND haven't hit the 50-record cap yet.
     const has_more = activityList.length === limit && nextOffset < MAX_TOTAL;
 
     return res.status(200).json({

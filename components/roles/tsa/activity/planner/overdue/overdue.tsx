@@ -26,7 +26,7 @@ import { supabase } from "@/utils/supabase";
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
 
-// ─── Interfaces (unchanged) ───────────────────────────────────────────────────
+// ─── Interfaces ───────────────────────────────────────────────────────────────
 interface SupervisorDetails {
   firstname: string | null;
   lastname: string | null;
@@ -102,8 +102,6 @@ function toLocalDateString(date: Date | string | null | undefined): string {
   if (isNaN(d.getTime())) return "";
   return d.toLocaleDateString("en-CA");
 }
-
-const ALLOWED_STATUSES = ["Assisted", "Quote-Done"];
 
 export const Overdue: React.FC<ScheduledProps> = ({
   referenceid,
@@ -202,7 +200,7 @@ export const Overdue: React.FC<ScheduledProps> = ({
       .finally(() => setInitialLoading(false));
   }, [referenceid, buildUrl]);
 
-  // ─── Load More — fetches next page and APPENDS ────────────────────────────
+  // ─── Load More ────────────────────────────────────────────────────────────
   const loadMore = useCallback(() => {
     if (loadingMore || !hasMore) return;
 
@@ -214,8 +212,16 @@ export const Overdue: React.FC<ScheduledProps> = ({
         return res.json();
       })
       .then((data) => {
-        setActivities((prev) => [...prev, ...(data.activities ?? [])]);
-        setHistory((prev) => [...prev, ...(data.history ?? [])]);
+        setActivities((prev) => {
+          const existingIds = new Set(prev.map((a) => a.id));
+          const newItems = (data.activities ?? []).filter((a: Activity) => !existingIds.has(a.id));
+          return [...prev, ...newItems];
+        });
+        setHistory((prev) => {
+          const existingIds = new Set(prev.map((h) => h.id));
+          const newItems = (data.history ?? []).filter((h: HistoryItem) => !existingIds.has(h.id));
+          return [...prev, ...newItems];
+        });
         setHasMore(data.has_more ?? false);
         setNextOffset(data.next_offset ?? nextOffset + (data.activities?.length ?? 0));
       })
@@ -234,13 +240,13 @@ export const Overdue: React.FC<ScheduledProps> = ({
     fetchInitialRef.current();
 
     const activityChannel = supabase
-      .channel(`activity-${referenceid}`)
+      .channel(`activity-overdue-${referenceid}`)
       .on("postgres_changes", { event: "*", schema: "public", table: "activity", filter: `referenceid=eq.${referenceid}` },
         () => fetchInitialRef.current())
       .subscribe();
 
     const historyChannel = supabase
-      .channel(`history-${referenceid}`)
+      .channel(`history-overdue-${referenceid}`)
       .on("postgres_changes", { event: "*", schema: "public", table: "history", filter: `referenceid=eq.${referenceid}` },
         () => fetchInitialRef.current())
       .subscribe();
@@ -258,42 +264,41 @@ export const Overdue: React.FC<ScheduledProps> = ({
     if (referenceid) fetchInitial();
   }, [dateCreatedFilterRange, referenceid]); // eslint-disable-line
 
-  // ─── Merge + filter (client-side: overdue date + search + status) ─────────
-  const mergedActivities = activities
-    .filter((a) => ALLOWED_STATUSES.includes(a.status))
-    .map((activity) => ({
-      ...activity,
-      relatedHistoryItems: history.filter(
-        (h) => h.activity_reference_number === activity.activity_reference_number,
-      ),
-    }));
+  // ─── Merge + client-side filter (search & status only) ───────────────────
+  // NOTE: Status and overdue-date filtering are now done server-side.
+  // Client-side only handles: search term and status dropdown filter.
+  const mergedActivities = activities.map((activity) => ({
+    ...activity,
+    relatedHistoryItems: history.filter(
+      (h) => h.activity_reference_number === activity.activity_reference_number,
+    ),
+  }));
 
   const filteredActivities = mergedActivities
     .filter((item) => {
-      const itemScheduledDate = toLocalDateString(item.scheduled_date);
-
-      // Only past dates (overdue)
-      if (itemScheduledDate >= todayStr) return false;
-
-      if (searchTerm.trim() !== "") {
-        // Skip date filter when searching
-      } else {
-        if (dateCreatedFilterRange?.from) {
-          const fromStr = toLocalDateString(dateCreatedFilterRange.from);
-          const toStr = dateCreatedFilterRange.to
-            ? toLocalDateString(dateCreatedFilterRange.to)
-            : fromStr;
-          if (itemScheduledDate < fromStr || itemScheduledDate > toStr) return false;
-        }
+      // If status is Assisted, only show items where at least one history
+      // item has call_type === "For Sched" — otherwise exclude.
+      if (item.status === "Assisted") {
+        const hasForSched = item.relatedHistoryItems.some(
+          (h) => h.call_type?.trim() === "For Sched",
+        );
+        if (!hasForSched) return false;
       }
 
+      // Status dropdown filter (client-side — fast, no extra request needed)
       if (statusFilter !== "All" && item.status !== statusFilter) return false;
 
+      // Search filter
       if (searchTerm.trim() !== "") {
         const termLower = searchTerm.toLowerCase();
-        const activityValues = Object.values(item).map((v) => v != null ? v.toString() : "").join(" ").toLowerCase();
+        const activityValues = Object.values(item)
+          .map((v) => (v != null ? v.toString() : ""))
+          .join(" ")
+          .toLowerCase();
         if (activityValues.includes(termLower)) return true;
-        const historyValues = item.relatedHistoryItems.map((h) => Object.values(h).map((v) => v != null ? v.toString() : "").join(" ").toLowerCase()).join(" ");
+        const historyValues = item.relatedHistoryItems
+          .map((h) => Object.values(h).map((v) => (v != null ? v.toString() : "")).join(" ").toLowerCase())
+          .join(" ");
         if (historyValues.includes(termLower)) return true;
         return false;
       }
@@ -306,7 +311,7 @@ export const Overdue: React.FC<ScheduledProps> = ({
     onCountChange?.(filteredActivities.length);
   }, [filteredActivities.length]); // eslint-disable-line
 
-  // ─── Style helpers (unchanged) ────────────────────────────────────────────
+  // ─── Style helpers ────────────────────────────────────────────────────────
   type BadgeVariant = "secondary" | "outline" | "destructive" | "default" | null | undefined;
   function getBadgeProps(status: string): { variant: BadgeVariant; className?: string } {
     switch (status) {
@@ -327,7 +332,7 @@ export const Overdue: React.FC<ScheduledProps> = ({
     }
   }
 
-  // ─── Dialog handlers (unchanged) ─────────────────────────────────────────
+  // ─── Dialog handlers ──────────────────────────────────────────────────────
   const openCancelledDialog = (id: string) => { setSelectedActivityId(id); setDialogOpen(true); };
   const openDoneDialog = (id: string) => { setSelectedActivityId(id); setDialogDoneOpen(true); };
   const openDeliveredDialog = (id: string) => { setSelectedActivityId(id); setDialogDeliveredOpen(true); };
@@ -427,7 +432,7 @@ export const Overdue: React.FC<ScheduledProps> = ({
       const to = dateCreatedFilterRange.to ? toLocalDateString(dateCreatedFilterRange.to) : from;
       return from === to ? `Scheduled: ${from}` : `Scheduled: ${from} → ${to}`;
     }
-    return `Scheduled today: ${todayStr}`;
+    return `Overdue as of: ${todayStr}`;
   })();
 
   return (
@@ -451,7 +456,7 @@ export const Overdue: React.FC<ScheduledProps> = ({
             <DropdownMenuItem onClick={() => setStatusFilter("All")}>
               <span className="w-2 h-2 rounded-full bg-gray-400 mr-2" /> All
             </DropdownMenuItem>
-            {Array.from(new Set(filteredActivities.map((a) => a.status))).map((status) => {
+            {Array.from(new Set(mergedActivities.map((a) => a.status))).map((status) => {
               const { badgeClass } = getStatusStyles(status);
               return (
                 <DropdownMenuItem key={status} onClick={() => setStatusFilter(status)} className="flex items-center gap-2">
@@ -475,7 +480,7 @@ export const Overdue: React.FC<ScheduledProps> = ({
           <>
             <Accordion type="single" collapsible className="w-full">
               {filteredActivities.length === 0 ? (
-                <p className="text-muted-foreground text-xs px-2">No scheduled activities found.</p>
+                <p className="text-muted-foreground text-xs px-2">No overdue activities found.</p>
               ) : (
                 filteredActivities.map((item) => {
                   const badgeProps = getBadgeProps(item.status);
@@ -650,7 +655,7 @@ export const Overdue: React.FC<ScheduledProps> = ({
               )}
             </Accordion>
 
-            {/* ─── Load More: fetches next 10 from server ─── */}
+            {/* ─── Load More ─── */}
             {hasMore && (
               <div className="flex justify-center py-4 mt-4">
                 <Button variant="outline" className="rounded-none text-xs" onClick={loadMore} disabled={loadingMore}>
@@ -659,7 +664,7 @@ export const Overdue: React.FC<ScheduledProps> = ({
                       <LoaderPinwheel className="animate-spin h-3 w-3" /> Loading...
                     </span>
                   ) : (
-                    `Load More (${50 - nextOffset} remaining of 50 max)`
+                    "Load More"
                   )}
                 </Button>
               </div>

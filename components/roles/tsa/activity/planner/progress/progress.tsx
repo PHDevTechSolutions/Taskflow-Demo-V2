@@ -82,6 +82,7 @@ interface HistoryItem {
   tsm_approved_status: string;
   tsm_approved_remarks?: string | null;
   quotation_status: string;
+  quotation_status_sub: string;
   status?: string;
 }
 
@@ -714,6 +715,19 @@ export const Progress: React.FC<NewTaskProps> = ({
                             <strong>Call Status:</strong>{" "}
                             <span className="uppercase">
                               {item.relatedHistoryItems.map((h) => h.call_status ?? "-").filter((v) => v !== "-").join(", ")}
+                            </span>
+                          </p>
+                        )}
+                        {item.relatedHistoryItems.some((h) => h.quotation_status && h.quotation_status !== "-") && (
+                          <p>
+                            <strong>Quotation Status:</strong>{" "}
+                            <span className="uppercase">
+                              {Array.from(new Set(item.relatedHistoryItems.map((h) => h.quotation_status ?? "-").filter((v) => v !== "-"))).join(", ")}
+                              {item.relatedHistoryItems.some((h) => h.quotation_status_sub && h.quotation_status_sub !== "-") && (
+                                <span className="ml-1 text-blue-600">
+                                  ({Array.from(new Set(item.relatedHistoryItems.map((h) => h.quotation_status_sub ?? "-").filter((v) => v !== "-"))).join(", ")})
+                                </span>
+                              )}
                             </span>
                           </p>
                         )}

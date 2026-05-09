@@ -3,8 +3,6 @@ import type { NextApiRequest, NextApiResponse } from "next";
 import { supabase } from "@/utils/supabase";
 
 const BATCH_SIZE = 5000;
-
-// Based on overdue.tsx: only these statuses are considered overdue
 const ALLOWED_STATUSES = ["Assisted", "Quote-Done"];
 
 function toLocalDateString(date: Date | string | null | undefined): string {
@@ -16,78 +14,102 @@ function toLocalDateString(date: Date | string | null | undefined): string {
 
 /* ------------------ Fetch overdue activities ------------------ */
 async function fetchOverdueActivities(referenceid: string) {
-  console.log("📌 fetchOverdueActivities:", { referenceid });
+  const todayStr = new Date().toLocaleDateString("en-CA", {
+    timeZone: "Asia/Manila",
+  });
 
   let allActivities: any[] = [];
   let offset = 0;
 
-  const todayStr = toLocalDateString(new Date());
-
   while (true) {
-    try {
-      const { data, error } = await supabase
-        .from("activity")
-        .select("*")
-        .eq("referenceid", referenceid)
-        .in("status", ALLOWED_STATUSES) // Only show statuses that can be overdue
-        .range(offset, offset + BATCH_SIZE - 1);
+    const { data, error } = await supabase
+      .from("activity")
+      .select("*")
+      .eq("referenceid", referenceid)
+      .in("status", ALLOWED_STATUSES)
+      .lt("scheduled_date", todayStr) // server-side: past dates only
+      .range(offset, offset + BATCH_SIZE - 1);
 
-      if (error) throw error;
-      if (!data || data.length === 0) break;
+    if (error) throw error;
+    if (!data || data.length === 0) break;
 
-      // Only past dates, exclude today/future
-      const filtered = data.filter((a) => {
-        const itemScheduledDate = toLocalDateString(a.scheduled_date);
-        
-        // ❗ ALWAYS exclude TODAY (based on overdue.tsx)
-        if (itemScheduledDate === todayStr) {
-          return false;
-        }
-
-        // past only (still safe)
-        if (itemScheduledDate > todayStr) {
-          return false;
-        }
-
-        return true;
-      });
-
-      allActivities.push(...filtered);
-
-      if (data.length < BATCH_SIZE) break;
-      offset += BATCH_SIZE;
-    } catch (err) {
-      console.error("❌ Error fetching overdue activities batch:", offset, err);
-      throw err;
-    }
+    allActivities.push(...data);
+    if (data.length < BATCH_SIZE) break;
+    offset += BATCH_SIZE;
   }
 
-  console.log("✅ Total overdue activities fetched:", allActivities.length);
   return allActivities;
 }
 
-/* ------------------ API Handler ------------------ */
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  console.log("📥 fetch-activity called with query:", req.query);
+/* ------------------ Fetch history for activity refs ------------------ */
+async function fetchHistoryForActivities(activityRefs: string[]) {
+  if (!activityRefs.length) return [];
 
+  const uniqueRefs = [...new Set(activityRefs)];
+  const allHistory: any[] = [];
+
+  for (let i = 0; i < uniqueRefs.length; i += BATCH_SIZE) {
+    const chunk = uniqueRefs.slice(i, i + BATCH_SIZE);
+    const { data, error } = await supabase
+      .from("history")
+      .select("activity_reference_number, call_type")
+      .in("activity_reference_number", chunk);
+
+    if (error) throw error;
+    if (data) allHistory.push(...data);
+  }
+
+  return allHistory;
+}
+
+/* ------------------ API Handler ------------------ */
+export default async function handler(
+  req: NextApiRequest,
+  res: NextApiResponse,
+) {
   const { referenceid } = req.query;
 
   if (!referenceid || typeof referenceid !== "string") {
-    console.warn("⚠️ Missing or invalid referenceid parameter");
     return res.status(400).json({ message: "Missing or invalid referenceid" });
   }
 
   try {
-    // 1️⃣ Fetch overdue activities (past days only)
+    // 1️⃣ Fetch overdue activities (past dates, allowed statuses only)
     const overdueActivities = await fetchOverdueActivities(referenceid);
 
-    console.log("✅ Overdue activities to return:", overdueActivities.length);
+    if (!overdueActivities.length) {
+      return res.status(200).json({ activities: [] });
+    }
 
-    return res.status(200).json({
-      activities: overdueActivities,
+    // 2️⃣ Fetch history (call_type only — lightweight) for all activity refs
+    const activityRefs = overdueActivities
+      .map((a) => a.activity_reference_number)
+      .filter(Boolean);
+
+    const historyItems = await fetchHistoryForActivities(activityRefs);
+
+    // Build a lookup: activity_reference_number → call_type[]
+    const callTypeMap = new Map<string, string[]>();
+    for (const h of historyItems) {
+      if (!h.activity_reference_number) continue;
+      const existing = callTypeMap.get(h.activity_reference_number) ?? [];
+      existing.push(h.call_type?.trim() ?? "");
+      callTypeMap.set(h.activity_reference_number, existing);
+    }
+
+    // 3️⃣ Apply the same filter as the frontend:
+    // Assisted items must have at least one history row with call_type === "For Sched"
+    const filtered = overdueActivities.filter((a) => {
+      if (a.status === "Assisted") {
+        const callTypes = callTypeMap.get(a.activity_reference_number) ?? [];
+        return callTypes.includes("For Sched");
+      }
+      return true; // Quote-Done passes through
     });
+
+    return res.status(200).json({ activities: filtered });
   } catch (err: any) {
-    console.error("🔥 fetch-activity handler error:", err);
+    console.error("[fetch-activity] handler error:", err);
     return res.status(500).json({ message: err.message || "Server error" });
   }
 }

@@ -70,6 +70,7 @@ export default async function handler(
       .from("activity")
       .select("*")
       .eq("referenceid", referenceid)
+      .not("status", "in", '("Completed","Delivered")')
       .order("date_updated", { ascending: false })
       .range(offset, offset + limit - 1); // offset-based page
 
