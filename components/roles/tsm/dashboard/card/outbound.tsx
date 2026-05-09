@@ -334,6 +334,8 @@ export function OutboundCard({ history, agents }: OutboundCardProps) {
 
   /* ---- Grand totals (visible agents only) ---- */
   const grandTotals = useMemo(() => {
+    // Only include agents with name info in totals
+    const visibleAgents = statsByAgent.filter((s) => agentMap.has(s.agentID));
     const t = {
       touchbaseCount: 0,
       touchbaseSuccessful: 0,

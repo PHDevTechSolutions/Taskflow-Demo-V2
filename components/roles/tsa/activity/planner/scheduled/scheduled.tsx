@@ -648,7 +648,6 @@ export const Scheduled: React.FC<ScheduledProps> = ({
       <p className="text-[10px] text-muted-foreground mb-1 px-1">{activeDateLabel}</p>
 
       <div className="max-h-[70vh] overflow-auto space-y-6 custom-scrollbar">
-
         {/* ─── Scheduled Activities ──────────────────────────────────────── */}
         <section>
           <h2 className="text-xs font-bold mb-4">Scheduled Activities ({filteredActivities.length})</h2>
