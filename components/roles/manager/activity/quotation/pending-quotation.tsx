@@ -3,7 +3,7 @@
 import React, { useEffect, useState, useCallback, useMemo } from "react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from "@/components/ui/dropdown-menu";
-import { AlertCircleIcon, CheckCircle2Icon, Eye, MoreVertical, FileX, Loader2, Clock, CheckCircle, XCircle, Users, TrendingUp, Filter } from "lucide-react";
+import { AlertCircleIcon, CheckCircle2Icon, Eye, MoreVertical, FileX, Loader2, Clock, CheckCircle, XCircle, Users, TrendingUp, Filter, LoaderPinwheel } from "lucide-react";
 import { supabase } from "@/utils/supabase";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -114,14 +114,27 @@ export const PendingQuotation: React.FC<CompletedProps> = ({
     const [editOpen, setEditOpen] = useState(false);
     const [showTSMStats, setShowTSMStats] = useState(false);
 
-    // Fetch activities
-    const fetchActivities = useCallback(async () => {
+    // Pagination state
+    const [itemsPerPage] = useState(10);
+    const [totalCount, setTotalCount] = useState(0);
+    const [totalPages, setTotalPages] = useState(0);
+    const [hasMore, setHasMore] = useState(false);
+    const [loadingMore, setLoadingMore] = useState(false);
+    const [currentPage, setCurrentPage] = useState(1);
+
+    // Fetch activities (paginated)
+    const fetchActivities = useCallback(async (page: number = 1, loadMore: boolean = false) => {
         if (!referenceid) {
             setActivities([]);
             return;
         }
 
-        setLoading(true);
+        // Set appropriate loading state
+        if (loadMore) {
+            setLoadingMore(true);
+        } else {
+            setLoading(true);
+        }
         setError(null);
 
         try {
@@ -132,21 +145,73 @@ export const PendingQuotation: React.FC<CompletedProps> = ({
                 ? toLocalYMD(new Date(dateCreatedFilterRange.to))
                 : null;
 
-            const url = new URL("/api/activity/manager/quotation/fetch", window.location.origin);
+            const url = new URL("/api/activity/manager/quotation/pending/fetch", window.location.origin);
             url.searchParams.append("referenceid", referenceid);
+            url.searchParams.append("page", String(page));
+            url.searchParams.append("limit", String(itemsPerPage));
+
+            // Add search term if present
+            if (searchTerm.trim()) {
+                url.searchParams.append("search", searchTerm.trim());
+            }
+
+            // Add status filter
+            if (statusFilter !== "all") {
+                url.searchParams.append("status", statusFilter);
+            }
+
+            // Add TSM filter
+            if (selectedTSM !== "all") {
+                url.searchParams.append("tsm", selectedTSM);
+            }
+
             if (from) url.searchParams.append("from", from);
             if (to) url.searchParams.append("to", to);
 
             const res = await fetch(url.toString());
             if (!res.ok) throw new Error("Failed to fetch activities");
             const data = await res.json();
-            setActivities(data.activities || []);
+
+            if (loadMore && page > 1) {
+                // Append new data for load more
+                setActivities(prev => [...prev, ...(data.activities || [])]);
+            } else {
+                // Replace data for initial load or new search
+                setActivities(data.activities || []);
+            }
+
+            // Update pagination info
+            setTotalCount(data.totalCount || 0);
+            setTotalPages(data.totalPages || 0);
+            setHasMore(data.hasMore || false);
+            setCurrentPage(page);
         } catch (err: any) {
             setError(err.message ?? "Unknown error");
+            setActivities([]);
         } finally {
             setLoading(false);
+            setLoadingMore(false);
         }
-    }, [referenceid, dateCreatedFilterRange]);
+    }, [referenceid, itemsPerPage, searchTerm, statusFilter, selectedTSM, dateCreatedFilterRange]);
+
+    // Search handler - only fetches when search button is clicked
+    const handleSearch = useCallback(() => {
+        setCurrentPage(1);
+        fetchActivities(1, false);
+    }, [fetchActivities]);
+
+    // Load more handler
+    const handleLoadMore = useCallback(() => {
+        if (hasMore && !loadingMore) {
+            const nextPage = currentPage + 1;
+            fetchActivities(nextPage, true);
+        }
+    }, [currentPage, hasMore, loadingMore, fetchActivities]);
+
+    // Reset page when search or filter changes
+    useEffect(() => {
+        setCurrentPage(1);
+    }, [searchTerm, statusFilter, selectedTSM]);
 
     // Fetch agents
     useEffect(() => {
@@ -171,7 +236,7 @@ export const PendingQuotation: React.FC<CompletedProps> = ({
     useEffect(() => {
         if (!referenceid) return;
 
-        fetchActivities();
+        fetchActivities(1, false);
 
         const channel = supabase
             .channel(`history-manager-${referenceid}`)
@@ -183,39 +248,21 @@ export const PendingQuotation: React.FC<CompletedProps> = ({
                     table: "history",
                     filter: `manager=eq.${referenceid}`,
                 },
-                () => { fetchActivities(); }
+                () => { fetchActivities(1, false); }
             )
             .subscribe();
 
         return () => { supabase.removeChannel(channel); };
     }, [referenceid, fetchActivities]);
 
-    // Sort activities
-    const sortedActivities = useMemo(() => {
-        return [...activities].sort(
-            (a, b) =>
-                new Date(b.date_updated ?? b.date_created).getTime() -
-                new Date(a.date_updated ?? a.date_created).getTime()
-        );
-    }, [activities]);
+    // Client-side sorting and filtering removed - now handled server-side
+    // Activities are already sorted by date_updated DESC from the API
 
-    // Base filtered activities
-    const baseFilteredActivities = useMemo(() => {
-        return sortedActivities.filter((item) => {
-            const status = String(item.tsm_approved_status ?? "").trim().toLowerCase();
-            return (
-                status === "pending" ||
-                status === "endorsed to sales head" ||
-                status === "endorsed to saleshead"
-            );
-        }).filter((item) => String(item.type_activity ?? "").trim().toLowerCase() === "quotation preparation");
-    }, [sortedActivities]);
-
-    // TSM Statistics
+    // TSM Statistics (from current page data)
     const tsmStats = useMemo(() => {
         const statsMap = new Map<string, TSMStat>();
 
-        baseFilteredActivities.forEach((item) => {
+        activities.forEach((item) => {
             const tsmId = item.tsm || "unknown";
             const tsmName = item.tsm_name || "Unknown TSM";
             const status = String(item.tsm_approved_status ?? "").trim().toLowerCase();
@@ -241,52 +288,25 @@ export const PendingQuotation: React.FC<CompletedProps> = ({
         });
 
         return Array.from(statsMap.values()).sort((a, b) => b.total - a.total);
-    }, [baseFilteredActivities]);
+    }, [activities]);
 
-    // Overall statistics
+    // Overall statistics (from total count)
     const stats = useMemo(() => {
-        const pending = baseFilteredActivities.filter(
+        const pending = activities.filter(
             (item) => String(item.tsm_approved_status ?? "").trim().toLowerCase() === "pending"
         ).length;
 
-        const endorsedToSalesHead = baseFilteredActivities.filter((item) => {
+        const endorsedToSalesHead = activities.filter((item) => {
             const status = String(item.tsm_approved_status ?? "").trim().toLowerCase();
             return status === "endorsed to sales head" || status === "endorsed to saleshead";
         }).length;
 
         return {
-            total: baseFilteredActivities.length,
+            total: totalCount,
             pending,
             endorsedToSalesHead,
         };
-    }, [baseFilteredActivities]);
-
-    // Final filtered activities
-    const filteredActivities = useMemo(() => {
-        const search = searchTerm.toLowerCase().trim();
-        return baseFilteredActivities
-            .filter((item) => {
-                if (statusFilter === "all") return true;
-                const status = String(item.tsm_approved_status ?? "").trim().toLowerCase();
-                if (statusFilter === "pending") {
-                    return status === "pending";
-                }
-                if (statusFilter === "endorsed") {
-                    return status === "endorsed to sales head" || status === "endorsed to saleshead";
-                }
-                return true;
-            })
-            .filter((item) => {
-                if (selectedTSM === "all") return true;
-                return item.tsm === selectedTSM;
-            })
-            .filter((item) => {
-                if (!search) return true;
-                return Object.values(item).some(
-                    (val) => val !== null && val !== undefined && String(val).toLowerCase().includes(search)
-                );
-            });
-    }, [baseFilteredActivities, searchTerm, statusFilter, selectedTSM]);
+    }, [activities, totalCount]);
 
     // Agent map
     const agentMap = useMemo(() => {
@@ -460,14 +480,32 @@ export const PendingQuotation: React.FC<CompletedProps> = ({
 
             {/* Search and Filters - Mobile Responsive */}
             <div className="mb-4 space-y-3">
-                {/* Search Input */}
-                <Input
-                    type="text"
-                    placeholder="Search quotations..."
-                    className="input input-bordered input-sm w-full rounded-none text-xs sm:text-sm"
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                />
+                {/* Search Input with Button */}
+                <div className="flex items-center gap-2">
+                    <Input
+                        type="text"
+                        placeholder="Search quotations..."
+                        className="input input-bordered input-sm flex-1 rounded-none text-xs sm:text-sm"
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                        onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                                handleSearch();
+                            }
+                        }}
+                    />
+                    <Button
+                        onClick={handleSearch}
+                        disabled={loading}
+                        className="h-9 px-4 rounded-none bg-zinc-900 hover:bg-zinc-800 text-white text-sm font-medium"
+                    >
+                        {loading ? (
+                            <div className="w-4 h-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                        ) : (
+                            "Search"
+                        )}
+                    </Button>
+                </div>
 
                 {/* Filter Buttons */}
                 <div className="flex flex-wrap items-center gap-2">
@@ -476,7 +514,10 @@ export const PendingQuotation: React.FC<CompletedProps> = ({
                         <span className="font-semibold">Status:</span>
                     </div>
                     <Button
-                        onClick={() => setStatusFilter("all")}
+                        onClick={() => {
+                            setStatusFilter("all");
+                            fetchActivities(1, false);
+                        }}
                         className={`rounded-none text-[10px] sm:text-xs px-3 py-2 flex-1 sm:flex-initial ${
                             statusFilter === "all"
                                 ? "bg-blue-600 text-white hover:bg-blue-700"
@@ -486,7 +527,10 @@ export const PendingQuotation: React.FC<CompletedProps> = ({
                         All ({stats.total})
                     </Button>
                     <Button
-                        onClick={() => setStatusFilter("pending")}
+                        onClick={() => {
+                            setStatusFilter("pending");
+                            fetchActivities(1, false);
+                        }}
                         className={`rounded-none text-[10px] sm:text-xs px-3 py-2 flex-1 sm:flex-initial ${
                             statusFilter === "pending"
                                 ? "bg-gray-600 text-white hover:bg-gray-700"
@@ -496,7 +540,10 @@ export const PendingQuotation: React.FC<CompletedProps> = ({
                         Pending ({stats.pending})
                     </Button>
                     <Button
-                        onClick={() => setStatusFilter("endorsed")}
+                        onClick={() => {
+                            setStatusFilter("endorsed");
+                            fetchActivities(1, false);
+                        }}
                         className={`rounded-none text-[10px] sm:text-xs px-3 py-2 flex-1 sm:flex-initial ${
                             statusFilter === "endorsed"
                                 ? "bg-orange-600 text-white hover:bg-orange-700"
@@ -549,7 +596,7 @@ export const PendingQuotation: React.FC<CompletedProps> = ({
             )}
 
             {/* Empty State */}
-            {!loading && !error && filteredActivities.length === 0 && (
+            {!loading && !error && activities.length === 0 && (
                 <div className="flex flex-col items-center justify-center py-16 text-gray-400 border border-dashed border-gray-200 rounded-sm bg-gray-50">
                     <FileX className="w-12 h-12 mb-3 opacity-25" />
                     <p className="text-sm font-bold uppercase tracking-wide text-gray-400 text-center px-4">
@@ -566,14 +613,20 @@ export const PendingQuotation: React.FC<CompletedProps> = ({
             )}
 
             {/* Total Records */}
-            {!loading && filteredActivities.length > 0 && (
+            {!loading && activities.length > 0 && (
                 <div className="mb-2 text-xs font-bold">
-                    Showing {filteredActivities.length} of {stats.total} quotation{filteredActivities.length !== 1 ? "s" : ""}
+                    Showing {activities.length} records
+                    {totalCount > activities.length && (
+                        <span className="text-gray-500 ml-2">
+                            of {totalCount} total
+                        </span>
+                    )}
                 </div>
             )}
 
             {/* Table - Mobile Responsive with Horizontal Scroll */}
-            {!loading && filteredActivities.length > 0 && (
+            {!loading && activities.length > 0 && (
+                <>
                 <div className="overflow-x-auto -mx-4 sm:mx-0">
                     <div className="inline-block min-w-full align-middle">
                         <div className="overflow-hidden border-x border-gray-200 sm:rounded-sm">
@@ -595,7 +648,7 @@ export const PendingQuotation: React.FC<CompletedProps> = ({
                                 </TableHeader>
 
                                 <TableBody>
-                                    {filteredActivities.map((item) => {
+                                    {activities.map((item: Completed) => {
                                         const agent = agentMap[item.referenceid?.toLowerCase() ?? ""];
                                         return (
                                             <TableRow key={item.id} className="hover:bg-gray-50">
@@ -720,6 +773,24 @@ export const PendingQuotation: React.FC<CompletedProps> = ({
                         </div>
                     </div>
                 </div>
+
+                {/* Load More Button */}
+                {hasMore && (
+                    <div className="flex justify-center mt-4">
+                        <Button
+                            onClick={handleLoadMore}
+                            disabled={loadingMore}
+                            className="h-9 px-6 rounded-none bg-zinc-900 hover:bg-zinc-800 text-white text-sm font-medium"
+                        >
+                            {loadingMore ? <LoaderPinwheel className="animate-spin" /> : null} {loadingMore ? (
+                                "Loading..."
+                            ) : (
+                                "Load More"
+                            )}
+                        </Button>
+                    </div>
+                )}
+                </>
             )}
 
             {/* Edit Dialog */}
@@ -728,7 +799,7 @@ export const PendingQuotation: React.FC<CompletedProps> = ({
                     item={editItem}
                     onClose={closeEditDialog}
                     onSave={() => {
-                        fetchActivities();
+                        fetchActivities(1, false);
                         closeEditDialog();
                     }}
                     firstname={firstname}

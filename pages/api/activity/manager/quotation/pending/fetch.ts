@@ -1,0 +1,188 @@
+import type { NextApiRequest, NextApiResponse } from "next";
+import { supabase } from "@/utils/supabase";
+import { connectToDatabase } from "@/lib/mongodb";
+
+export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+  const { 
+    referenceid, 
+    from, 
+    to, 
+    limit = "10",
+    page = "1",
+    search,
+    status,
+    tsm
+  } = req.query;
+
+  if (!referenceid || typeof referenceid !== "string") {
+    return res.status(400).json({ message: "Missing or invalid referenceid" });
+  }
+
+  // Parse pagination parameters
+  const pageNum = Math.max(1, parseInt(typeof page === "string" ? page : "1", 10));
+  const limitNum = Math.min(Math.max(1, parseInt(typeof limit === "string" ? limit : "10", 10)), 50);
+  const offset = (pageNum - 1) * limitNum;
+
+  try {
+    // Build base query for history table - filter for PENDING and ENDORSED quotations
+    let query = supabase
+      .from("history")
+      .select("*", { count: "exact" })
+      .eq("manager", referenceid)
+      .eq("type_activity", "Quotation Preparation")
+      .or("tsm_approved_status.eq.Pending,tsm_approved_status.eq.Endorsed to Sales Head,tsm_approved_status.eq.Endorsed to SalesHead")
+      .order("date_updated", { ascending: false });
+
+    // Apply search filter
+    if (search && typeof search === "string") {
+      const searchTerm = search.trim();
+      if (searchTerm) {
+        query = query.or(`quotation_number.ilike.%${searchTerm}%,company_name.ilike.%${searchTerm}%,remarks.ilike.%${searchTerm}%`);
+      }
+    }
+
+    // Apply status filter
+    if (status && typeof status === "string") {
+      if (status === "pending") {
+        query = query.eq("tsm_approved_status", "Pending");
+      } else if (status === "endorsed") {
+        query = query.or("tsm_approved_status.eq.Endorsed to Sales Head,tsm_approved_status.eq.Endorsed to SalesHead");
+      }
+    }
+
+    // Apply TSM filter
+    if (tsm && typeof tsm === "string" && tsm !== "all") {
+      query = query.eq("tsm", tsm);
+    }
+
+    // Apply date range filter
+    if (from && typeof from === "string") {
+      query = query.gte("date_created", from);
+    }
+    if (to && typeof to === "string") {
+      query = query.lte("date_created", to);
+    }
+
+    // Apply pagination
+    query = query.range(offset, offset + limitNum - 1);
+
+    // Execute query
+    const { data, error, count: totalCount } = await query;
+
+    if (error) {
+      console.error("History query error:", error);
+      throw error;
+    }
+
+    // Filter out items without meaningful data
+    const filteredData = (data || []).filter((item: any) => {
+      const columnsToCheck = ["activity_reference_number", "referenceid", "quotation_number", "quotation_amount"];
+      return columnsToCheck.some((col) => {
+        const val = item[col];
+        if (val === null || val === undefined) return false;
+        if (typeof val === "string") return val.trim() !== "";
+        if (typeof val === "number") return !isNaN(val);
+        return Boolean(val);
+      });
+    });
+
+    // Fetch signatory data for all quotations
+    const quotationNumbers = filteredData
+      .map((item: any) => item.quotation_number)
+      .filter(Boolean);
+
+    const signatoryMap = new Map<string, any>();
+    if (quotationNumbers.length > 0) {
+      const { data: signatories } = await supabase
+        .from("signatory")
+        .select("*")
+        .in("quotation_number", quotationNumbers);
+
+      signatories?.forEach((sig: any) => {
+        signatoryMap.set(sig.quotation_number, sig);
+      });
+    }
+
+    // Fetch TSM and Agent names from MongoDB
+    const db = await connectToDatabase();
+    
+    // Get all unique TSM and Agent reference IDs
+    const tsmIds = [...new Set(filteredData.map((item: any) => item.tsm).filter(Boolean))];
+    const agentIds = [...new Set(filteredData.map((item: any) => item.referenceid).filter(Boolean))];
+    
+    // Fetch TSM data
+    const tsmMap = new Map<string, any>();
+    if (tsmIds.length > 0) {
+      const tsmUsers = await db
+        .collection("users")
+        .find({ ReferenceID: { $in: tsmIds } })
+        .project({ ReferenceID: 1, Firstname: 1, Lastname: 1, _id: 0 })
+        .toArray();
+      
+      tsmUsers.forEach((tsm: any) => {
+        tsmMap.set(tsm.ReferenceID, `${tsm.Firstname} ${tsm.Lastname}`);
+      });
+    }
+    
+    // Fetch Agent data
+    const agentMap = new Map<string, any>();
+    if (agentIds.length > 0) {
+      const agentUsers = await db
+        .collection("users")
+        .find({ ReferenceID: { $in: agentIds } })
+        .project({ ReferenceID: 1, Firstname: 1, Lastname: 1, _id: 0 })
+        .toArray();
+      
+      agentUsers.forEach((agent: any) => {
+        agentMap.set(agent.ReferenceID, `${agent.Firstname} ${agent.Lastname}`);
+      });
+    }
+
+    // Merge signatory data and user names with history data
+    const mergedData = filteredData.map((item: any) => ({
+      ...item,
+      ...signatoryMap.get(item.quotation_number),
+      tsm_name: tsmMap.get(item.tsm) || "Unknown TSM",
+      agent_name: agentMap.get(item.referenceid) || "Unknown Agent",
+    }));
+
+    // Calculate pagination info
+    const totalPages = Math.ceil((totalCount || 0) / limitNum);
+    const hasMore = pageNum < totalPages;
+
+    // Validate and sanitize response data
+    const safeResponse = {
+      activities: mergedData || [],
+      totalCount: Math.max(0, totalCount || 0),
+      totalPages: Math.max(0, totalPages),
+      currentPage: Math.max(1, pageNum),
+      itemsPerPage: Math.max(1, limitNum),
+      hasMore: Boolean(hasMore),
+      offset: Math.max(0, offset),
+      search_applied: {
+        query: typeof search === 'string' ? search.trim() : null,
+        status: status || null,
+        tsm: tsm || null,
+        date_range: {
+          from: from || null,
+          to: to || null
+        }
+      },
+      cached: false
+    };
+
+    return res.status(200).json(safeResponse);
+  } catch (err: any) {
+    console.error("Server error:", err);
+    return res.status(500).json({ 
+      message: err.message || "Server error",
+      activities: [],
+      totalCount: 0,
+      totalPages: 0,
+      currentPage: 1,
+      itemsPerPage: 10,
+      hasMore: false,
+      offset: 0
+    });
+  }
+}
