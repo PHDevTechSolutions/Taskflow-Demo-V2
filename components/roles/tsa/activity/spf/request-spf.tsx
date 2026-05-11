@@ -254,7 +254,22 @@ const SPF: React.FC<SPFProps> = ({ referenceid, tsm, manager, prepared_by }) => 
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [accountsLoading, setAccountsLoading] = useState(false);
+    // SPF Records search
     const [searchTerm, setSearchTerm] = useState("");
+    const searchTermRef = useRef(searchTerm);
+
+    // Accounts search
+    const [accountsSearchTerm, setAccountsSearchTerm] = useState("");
+    const accountsSearchTermRef = useRef(accountsSearchTerm);
+
+    // Update refs when search terms change
+    useEffect(() => {
+        searchTermRef.current = searchTerm;
+    }, [searchTerm]);
+
+    useEffect(() => {
+        accountsSearchTermRef.current = accountsSearchTerm;
+    }, [accountsSearchTerm]);
 
     // Set search term if highlight is present
     useEffect(() => {
@@ -263,14 +278,21 @@ const SPF: React.FC<SPFProps> = ({ referenceid, tsm, manager, prepared_by }) => 
         }
     }, [highlight]);
 
-    // Pagination state
-    const [accountsPage, setAccountsPage] = useState(1);
+    // SPF Records pagination state
     const [recordsPage, setRecordsPage] = useState(1);
     const [itemsPerPage] = useState(10); // Default to 10 items per page
     const [totalCount, setTotalCount] = useState(0);
     const [totalPages, setTotalPages] = useState(0);
     const [hasMore, setHasMore] = useState(false);
     const [loadingMore, setLoadingMore] = useState(false);
+
+    // Accounts pagination state
+    const [accountsPage, setAccountsPage] = useState(1);
+    const [accountsPerPage] = useState(20); // Initial 20 accounts
+    const [accountsLoadMoreCount] = useState(10); // Load 10 more each time
+    const [accountsTotalCount, setAccountsTotalCount] = useState(0);
+    const [accountsHasMore, setAccountsHasMore] = useState(false);
+    const [accountsLoadingMore, setAccountsLoadingMore] = useState(false);
 
     // Dialog state
     const [dialogOpen, setDialogOpen] = useState(false);
@@ -288,22 +310,76 @@ const SPF: React.FC<SPFProps> = ({ referenceid, tsm, manager, prepared_by }) => 
 
     const endTimerRef = useRef<number | null>(null);
 
-    // ─── Fetch accounts (all, not paginated on API level) ────────────────────────
+    // ─── Fetch accounts (paginated with search) ────────────────────────
+
+    const fetchAccounts = useCallback(async (page: number = 1, loadMore: boolean = false) => {
+        if (!referenceid) return;
+
+        if (loadMore) {
+            setAccountsLoadingMore(true);
+        } else {
+            setAccountsLoading(true);
+        }
+
+        try {
+            const url = new URL("/api/com-fetch-cluster-account", window.location.origin);
+            url.searchParams.append("referenceid", referenceid);
+            url.searchParams.append("page", String(page));
+            // First page: 20 items, subsequent pages: 10 more
+            const limit = page === 1 ? accountsPerPage : accountsLoadMoreCount;
+            url.searchParams.append("limit", String(limit));
+
+            // Add search term if present
+            if (accountsSearchTermRef.current.trim()) {
+                url.searchParams.append("search", accountsSearchTermRef.current.trim());
+            }
+
+            const res = await fetch(url.toString());
+            if (!res.ok) throw new Error("Failed to fetch accounts");
+            const data = await res.json();
+
+            const active = (data.data || []).filter(
+                (a: any) => a.status?.toLowerCase() === "active"
+            );
+
+            if (loadMore && page > 1) {
+                // Append new data for load more
+                setAllAccounts(prev => [...prev, ...active]);
+            } else {
+                // Replace data for initial load or new search
+                setAllAccounts(active);
+            }
+
+            // Update pagination info
+            setAccountsTotalCount(data.totalCount || 0);
+            setAccountsHasMore(data.hasMore || false);
+            setAccountsPage(page);
+        } catch (err) {
+            console.error("Accounts fetch error:", err);
+            if (!loadMore) setAllAccounts([]);
+        } finally {
+            setAccountsLoading(false);
+            setAccountsLoadingMore(false);
+        }
+    }, [referenceid, accountsPerPage, accountsLoadMoreCount]);
 
     useEffect(() => {
-        if (!referenceid) return;
-        setAccountsLoading(true);
-        fetch(`/api/com-fetch-cluster-account?referenceid=${encodeURIComponent(referenceid)}`)
-            .then((r) => r.json())
-            .then((data) => {
-                const active = (data.data || []).filter(
-                    (a: any) => a.status?.toLowerCase() === "active"
-                );
-                setAllAccounts(active);
-            })
-            .catch(console.error)
-            .finally(() => setAccountsLoading(false));
-    }, [referenceid]);
+        fetchAccounts();
+    }, [referenceid, fetchAccounts]);
+
+    // Accounts search handler - only fetches when search button is clicked
+    const handleAccountsSearch = useCallback(() => {
+        setAccountsPage(1);
+        fetchAccounts(1, false);
+    }, [fetchAccounts]);
+
+    // Accounts load more handler
+    const handleAccountsLoadMore = useCallback(() => {
+        if (accountsHasMore && !accountsLoadingMore) {
+            const nextPage = accountsPage + 1;
+            fetchAccounts(nextPage, true);
+        }
+    }, [accountsPage, accountsHasMore, accountsLoadingMore, fetchAccounts]);
 
     // ─── Fetch SPF records (paginated) ─────────────────────────────────────────────
 
@@ -325,8 +401,8 @@ const SPF: React.FC<SPFProps> = ({ referenceid, tsm, manager, prepared_by }) => 
             url.searchParams.append("limit", String(itemsPerPage));
 
             // Add search term if present
-            if (searchTerm.trim()) {
-                url.searchParams.append("search", searchTerm.trim());
+            if (searchTermRef.current.trim()) {
+                url.searchParams.append("search", searchTermRef.current.trim());
             }
 
             const res = await fetch(url.toString());
@@ -353,7 +429,7 @@ const SPF: React.FC<SPFProps> = ({ referenceid, tsm, manager, prepared_by }) => 
             setLoading(false);
             setLoadingMore(false);
         }
-    }, [referenceid, itemsPerPage, searchTerm]);
+    }, [referenceid, itemsPerPage]);
 
     useEffect(() => {
         fetchActivities();
@@ -371,7 +447,7 @@ const SPF: React.FC<SPFProps> = ({ referenceid, tsm, manager, prepared_by }) => 
             )
             .subscribe();
         return () => { supabase.removeChannel(channel); };
-    }, [referenceid, fetchActivities]);
+    }, [referenceid]);
 
     // ─── SPF number generator ────────────────────────────────────────────────────
 
@@ -584,35 +660,6 @@ const SPF: React.FC<SPFProps> = ({ referenceid, tsm, manager, prepared_by }) => 
     return (
         <div className="space-y-4">
 
-            {/* ── Search bar ──────────────────────────────────────────────────── */}
-            <div className="relative max-w-md flex gap-2">
-                <div className="relative flex-1">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400 pointer-events-none" />
-                    <Input
-                        className="pl-9 h-10 text-sm rounded-none border-zinc-200 focus:ring-0 focus:border-zinc-400 transition-all"
-                        placeholder="Search SPF numbers, customers, contacts…"
-                        value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
-                        onKeyDown={(e) => {
-                            if (e.key === 'Enter') {
-                                handleSearch();
-                            }
-                        }}
-                    />
-                </div>
-                <Button
-                    onClick={handleSearch}
-                    disabled={loading}
-                    className="h-10 px-4 rounded-none bg-zinc-900 hover:bg-zinc-800 text-white text-sm font-medium"
-                >
-                    {loading ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : (
-                        "Search"
-                    )}
-                </Button>
-            </div>
-
             <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 items-start">
 
                 {/* ── Accounts panel ──────────────────────────────────────────────── */}
@@ -624,8 +671,48 @@ const SPF: React.FC<SPFProps> = ({ referenceid, tsm, manager, prepared_by }) => 
                                 Accounts
                             </h3>
                             <p className="text-[11px] text-zinc-400">
-                                {allAccounts.length} accounts
+                                {allAccounts.filter((acc: Account) => {
+                                    if (!accountsSearchTerm.trim()) return true;
+                                    const search = accountsSearchTerm.toLowerCase();
+                                    return (
+                                        acc.company_name?.toLowerCase().includes(search) ||
+                                        acc.contact_person?.toLowerCase().includes(search) ||
+                                        acc.address?.toLowerCase().includes(search)
+                                    );
+                                }).length} shown / {accountsTotalCount || allAccounts.length} total accounts
+                                {accountsSearchTerm.trim() && " (filtered)"}
                             </p>
+                        </div>
+                    </div>
+
+                    {/* Accounts Search Bar */}
+                    <div className="p-3 border-b border-zinc-100">
+                        <div className="relative flex gap-2">
+                            <div className="relative flex-1">
+                                <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-zinc-400 pointer-events-none" />
+                                <Input
+                                    className="pl-7 h-8 text-xs rounded-none border-zinc-200 focus:ring-0 focus:border-zinc-400 transition-all"
+                                    placeholder="Search company name..."
+                                    value={accountsSearchTerm}
+                                    onChange={(e) => setAccountsSearchTerm(e.target.value)}
+                                    onKeyDown={(e) => {
+                                        if (e.key === 'Enter') {
+                                            handleAccountsSearch();
+                                        }
+                                    }}
+                                />
+                            </div>
+                            <Button
+                                onClick={handleAccountsSearch}
+                                disabled={accountsLoading}
+                                className="h-8 px-3 rounded-none bg-zinc-900 hover:bg-zinc-800 text-white text-xs font-medium"
+                            >
+                                {accountsLoading ? (
+                                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                ) : (
+                                    "Search"
+                                )}
+                            </Button>
                         </div>
                     </div>
 
@@ -640,7 +727,18 @@ const SPF: React.FC<SPFProps> = ({ referenceid, tsm, manager, prepared_by }) => 
                                 <p className="text-xs font-semibold text-center">No accounts found</p>
                             </div>
                         ) : (
-                            allAccounts.map((acc: Account, i: number) => (
+                            allAccounts
+                                .filter((acc: Account) => {
+                                    // If searching, only show matching accounts
+                                    if (!accountsSearchTerm.trim()) return true;
+                                    const search = accountsSearchTerm.toLowerCase();
+                                    return (
+                                        acc.company_name?.toLowerCase().includes(search) ||
+                                        acc.contact_person?.toLowerCase().includes(search) ||
+                                        acc.address?.toLowerCase().includes(search)
+                                    );
+                                })
+                                .map((acc: Account, i: number) => (
                                 <div key={acc.id || i} className="p-3 hover:bg-zinc-50 transition-colors">
                                     <div className="flex items-start justify-between gap-2 mb-2">
                                         <div className="min-w-0 flex-1">
@@ -667,13 +765,33 @@ const SPF: React.FC<SPFProps> = ({ referenceid, tsm, manager, prepared_by }) => 
                             ))
                         )}
                     </div>
+
+                    {/* Accounts Load More Button */}
+                    {accountsHasMore && (
+                        <div className="px-3 py-3 border-t border-zinc-100 bg-zinc-50/50 flex justify-center">
+                            <Button
+                                onClick={handleAccountsLoadMore}
+                                disabled={accountsLoadingMore}
+                                className="h-8 px-4 rounded-none bg-zinc-900 hover:bg-zinc-800 text-white text-xs font-medium"
+                            >
+                                {accountsLoadingMore ? (
+                                    <>
+                                        <Loader2 className="h-3.5 w-3.5 animate-spin mr-2" />
+                                        Loading...
+                                    </>
+                                ) : (
+                                    "Load More"
+                                )}
+                            </Button>
+                        </div>
+                    )}
                 </div>
 
                 {/* ── SPF Records table ────────────────────────────────────────────── */}
                 <div className="col-span-3 border border-zinc-200 bg-white rounded-none overflow-hidden shadow-sm flex flex-col">
                     <div className="flex items-center gap-3 px-4 py-3 border-b border-zinc-100 bg-zinc-50/50">
                         <FileText className="w-4 h-4 text-zinc-400" />
-                        <div className="flex-1">
+                        <div className="flex-1 min-w-0">
                             <h3 className="text-xs font-bold uppercase tracking-widest text-zinc-500">
                                 SPF Records
                             </h3>
@@ -685,6 +803,34 @@ const SPF: React.FC<SPFProps> = ({ referenceid, tsm, manager, prepared_by }) => 
                                     </span>
                                 )}
                             </p>
+                        </div>
+                        {/* SPF Records Search Bar */}
+                        <div className="relative flex gap-2 max-w-xs">
+                            <div className="relative flex-1">
+                                <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-zinc-400 pointer-events-none" />
+                                <Input
+                                    className="pl-7 h-8 text-xs rounded-none border-zinc-200 focus:ring-0 focus:border-zinc-400 transition-all"
+                                    placeholder="Search SPF records..."
+                                    value={searchTerm}
+                                    onChange={(e) => setSearchTerm(e.target.value)}
+                                    onKeyDown={(e) => {
+                                        if (e.key === 'Enter') {
+                                            handleSearch();
+                                        }
+                                    }}
+                                />
+                            </div>
+                            <Button
+                                onClick={handleSearch}
+                                disabled={loading}
+                                className="h-8 px-3 rounded-none bg-zinc-900 hover:bg-zinc-800 text-white text-xs font-medium"
+                            >
+                                {loading ? (
+                                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                ) : (
+                                    "Search"
+                                )}
+                            </Button>
                         </div>
                     </div>
 
