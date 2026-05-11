@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useState, useCallback } from "react";
-import { Dialog, DialogContent } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -938,6 +938,7 @@ function StepperView({
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!v) onClose(); }}>
       <DialogContent className="sm:max-w-2xl rounded-lg p-0 overflow-hidden">
+        <DialogTitle className="sr-only">{isEditMode ? "Edit SPF Record" : "New SPF Request"}</DialogTitle>
         {/* Stepper Header */}
         <div className="bg-white border-b border-gray-200">
           <div className="flex items-center justify-between px-6 py-5">

@@ -8,6 +8,11 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import TaskListEditDialog from "../../dialog/edit";
 
+interface RevisedQuotation {
+    quotation_number: string;
+    date_updated: string;
+}
+
 interface Completed {
     quotation_subject: string;
     quotation_vatable: string;
@@ -62,6 +67,9 @@ interface Completed {
     manager_name: string;
 
     vat_type: string;
+
+    // Revised quotation data
+    revised_quotation?: RevisedQuotation | null;
 }
 
 interface ScheduledProps {
@@ -420,7 +428,9 @@ export const Scheduled: React.FC<ScheduledProps> = ({
                                         </div>
                                         <div>
                                             <span className="font-semibold text-gray-500">Date: </span>
-                                            <span className="font-mono text-[10px] text-gray-600">{item.date_created.slice(0, 10)}</span>
+                                            <span className="font-mono text-[10px] text-gray-600">
+                                                {(item.revised_quotation?.date_updated || item.date_updated || item.date_created).slice(0, 10)}
+                                            </span>
                                         </div>
                                     </div>
 

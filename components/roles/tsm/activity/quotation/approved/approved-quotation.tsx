@@ -19,6 +19,11 @@ interface SupervisorDetails {
     contact: string;
 }
 
+interface RevisedQuotation {
+    quotation_number: string;
+    date_updated: string;
+}
+
 interface Completed {
     tsm_name: string | undefined;
     agent_name: string | undefined;
@@ -53,7 +58,7 @@ interface Completed {
     tsm_approved_status: string;
     tsm_approval_date: string;
     tsm_remarks: string;
-    
+
     manager_approval_date: string;
     manager_remarks: string;
     delivery_fee: string;
@@ -65,6 +70,9 @@ interface Completed {
     agent_contact_number: string;
     agent_email_address: string;
     manager_name: string;
+
+    // Revised quotation data
+    revised_quotation?: RevisedQuotation | null;
 }
 
 interface CompletedProps {
@@ -390,7 +398,7 @@ export const ApprovedQuotation: React.FC<CompletedProps> = ({
                                 <TableHead>Company</TableHead>
                                 <TableHead>Date Approved</TableHead>
                                 <TableHead>Contact #</TableHead>
-                                <TableHead>Date Created</TableHead>
+                                <TableHead>Date Updated</TableHead>
                             </TableRow>
                         </TableHeader>
 
@@ -527,7 +535,7 @@ export const ApprovedQuotation: React.FC<CompletedProps> = ({
                                         <TableCell>{displayValue(item.contact_number)}</TableCell>
 
                                         <TableCell>
-                                            {new Date(item.date_updated ?? item.date_created).toLocaleDateString("en-PH", {
+                                            {new Date(item.revised_quotation?.date_updated ?? item.date_updated ?? item.date_created).toLocaleDateString("en-PH", {
                                                 timeZone: "Asia/Manila",
                                             })}
                                         </TableCell>

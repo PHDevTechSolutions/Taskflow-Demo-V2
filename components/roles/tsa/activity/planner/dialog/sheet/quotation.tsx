@@ -2851,6 +2851,8 @@ Procurement
                 <></>
               )}
 
+              {/**/}
+
               <FieldLabel className="font-bold">Remarks</FieldLabel>
               <Textarea
                 value={remarks}

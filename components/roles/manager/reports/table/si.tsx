@@ -74,14 +74,23 @@ function computeDuration(start?: string, end?: string): string {
 }
 
 function toPlainDate(value: Date | string): string {
-  const d = typeof value === "string" ? new Date(value) : value;
+  // If already a string (from date picker), extract YYYY-MM-DD directly
+  if (typeof value === "string") {
+    // Handle ISO string format: 2025-04-01T00:00:00.000Z or 2025-04-01
+    return value.slice(0, 10);
+  }
+  // If Date object, use local time to avoid UTC offset shifting the date
+  const d = value;
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
 const recordDateStr = (v: string | null | undefined): string | null => {
   if (!v) return null;
-  const s = String(v).slice(0, 10);
-  return s === "1970-01-01" ? null : s;
+  // For literal dates without time (e.g., "2025-03-31"), extract directly
+  // This avoids any timezone conversion issues
+  const s = v.slice(0, 10);
+  if (s === "1970-01-01" || s === "0000-00-00" || !/\d{4}-\d{2}-\d{2}/.test(s)) return null;
+  return s;
 };
 const displayDate = (v: string | null | undefined) => recordDateStr(v) ?? "-";
 
@@ -200,6 +209,20 @@ export const SITable: React.FC<SIProps> = ({ referenceid, dateCreatedFilterRange
       summaryMap.set(tsmId, { tsmId, tsmName: `${tsm.Firstname} ${tsm.Lastname}`, soCount: 0, deliveredCount: 0, totalSIAmount: 0 });
     });
 
+    // Date range strings for filtering
+    const fromStr = dateCreatedFilterRange?.from ? toPlainDate(dateCreatedFilterRange.from) : null;
+    const toStr = dateCreatedFilterRange?.to ? toPlainDate(dateCreatedFilterRange.to) : null;
+
+    // Helper to check if delivery_date is in range
+    const inDateRange = (si: SI): boolean => {
+      if (!fromStr && !toStr) return true;
+      const d = recordDateStr(si.delivery_date);
+      if (!d) return false;
+      if (fromStr && d < fromStr) return false;
+      if (toStr && d > toStr) return false;
+      return true;
+    };
+
     // Count SO per TSM
     soRecords.forEach((so: SORecord) => {
       const agent = agentMap[so.referenceid?.toLowerCase() ?? ""];
@@ -208,8 +231,8 @@ export const SITable: React.FC<SIProps> = ({ referenceid, dateCreatedFilterRange
       summaryMap.get(tsmId)!.soCount += 1;
     });
 
-    // Count Delivered / Closed Transaction per TSM directly from activities
-    activities.forEach((si: SI) => {
+    // Count Delivered / Closed Transaction per TSM directly from activities (with date filter)
+    activities.filter(inDateRange).forEach((si: SI) => {
       const agent = agentMap[si.referenceid?.toLowerCase() ?? ""];
       const tsmId = (agent?.TSM ?? si.tsm ?? "").toLowerCase();
       if (!tsmId || !summaryMap.has(tsmId)) return;
@@ -219,16 +242,26 @@ export const SITable: React.FC<SIProps> = ({ referenceid, dateCreatedFilterRange
     });
 
     return Array.from(summaryMap.values()).sort((a: { soCount: number }, b: { soCount: number }) => b.soCount - a.soCount);
-  }, [activities, soRecords, agentMap, tsmAgents]);
+  }, [activities, soRecords, agentMap, tsmAgents, dateCreatedFilterRange]);
 
   // ─── Expanded TSA details ────────────────────────────────────────────────────
   const expandedTsaGroups = useMemo(() => {
     if (!expandedTsmId) return [];
 
+    const fromStr = dateCreatedFilterRange?.from ? toPlainDate(dateCreatedFilterRange.from) : null;
+    const toStr = dateCreatedFilterRange?.to ? toPlainDate(dateCreatedFilterRange.to) : null;
+
     const rowsForTsm = activities.filter((item: SI) => {
       const agent = agentMap[item.referenceid?.toLowerCase() ?? ""];
       const derivedTsmId = (agent?.TSM ?? item.tsm ?? "").toLowerCase();
-      return derivedTsmId === expandedTsmId;
+      if (derivedTsmId !== expandedTsmId) return false;
+      // Filter by delivery_date range
+      if (!fromStr && !toStr) return true;
+      const d = recordDateStr(item.delivery_date);
+      if (!d) return false;
+      if (fromStr && d < fromStr) return false;
+      if (toStr && d > toStr) return false;
+      return true;
     });
 
     const byTsa = new Map<string, { tsaName: string; rows: SI[] }>();
@@ -241,7 +274,7 @@ export const SITable: React.FC<SIProps> = ({ referenceid, dateCreatedFilterRange
     });
 
     return Array.from(byTsa.values()).sort((a: { rows: SI[] }, b: { rows: SI[] }) => b.rows.length - a.rows.length);
-  }, [expandedTsmId, activities, agentMap]);
+  }, [expandedTsmId, activities, agentMap, dateCreatedFilterRange]);
 
   // ─── Filtered rows for detail table ─────────────────────────────────────────
   const filtered = useMemo(() => {

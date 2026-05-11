@@ -86,10 +86,24 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       });
     }
 
-    // Merge signatory data with history data
+    // Fetch revised_quotations data for all quotations
+    const revisedMap = new Map<string, any>();
+    if (quotationNumbers.length > 0) {
+      const { data: revisedQuotation } = await supabase
+        .from("revised_quotations")
+        .select("quotation_number, date_updated")
+        .in("quotation_number", quotationNumbers);
+
+      revisedQuotation?.forEach((rev: any) => {
+        revisedMap.set(rev.quotation_number, rev);
+      });
+    }
+
+    // Merge signatory and revised data with history data
     const mergedData = filteredData.map((item: any) => ({
       ...item,
       ...signatoryMap.get(item.quotation_number),
+      revised_quotation: revisedMap.get(item.quotation_number) || null,
     }));
 
     // Calculate pagination info
