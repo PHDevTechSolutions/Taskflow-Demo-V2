@@ -1696,12 +1696,13 @@ export default function TaskListEditDialog({
             .main-table th { padding: 6px 8px; font-size: 8.5px; font-weight: 900; color: white; background: ${PRIMARY_CHARCOAL}; text-transform: uppercase; border-right: 1px solid #374151; letter-spacing: 0.04em; }
             .main-table th:last-child { border-right: none; }
             .main-table td { padding: 8px; vertical-align: top; border-right: 1px solid #d1d5db; border-bottom: 1px solid #d1d5db; font-size: 9px; }
+            .main-table tr { page-break-inside: avoid; }
             .main-table td:last-child { border-right: none; }
             .item-no { color: #9ca3af; font-weight: 700; text-align: center; font-size: 11px; vertical-align: middle; }
             .qty-col { font-weight: 900; text-align: center; font-size: 12px; color: ${PRIMARY_CHARCOAL}; vertical-align: middle; }
             .product-title { font-weight: 900; text-transform: uppercase; font-size: 9.5px; margin: 0 0 2px 0; color: ${PRIMARY_CHARCOAL}; line-height: 1.3; }
             .sku-text { color: #2563eb; font-weight: 700; font-size: 8px; margin: 0 0 4px 0; }
-            .desc-text { font-size: 8px; color: #374151; line-height: 1.3; margin: 0; }
+            .desc-text { font-size: 8px; color: #374151; line-height: 1.3; margin: 0; page-break-inside: avoid; }
             .desc-remarks { background: #fed7aa; padding: 2px 5px; text-transform: uppercase; color: #7c2d12; display: inline-block; font-weight: 900; font-size: 7.5px; margin-top: 3px; }
             .price-col { font-size: 9.5px; font-weight: 600; text-align: right; color: #374151; vertical-align: middle; padding-right: 8px; }
             .total-col { font-size: 9.5px; font-weight: 900; text-align: right; color: ${PRIMARY_CHARCOAL}; vertical-align: middle; padding-right: 8px; }
@@ -1932,8 +1933,8 @@ export default function TaskListEditDialog({
           totalContent = `₱${item.totalAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}${savingsHtml}`;
         }
 
-        // ===== SECTION-AWARE INTELLIGENT PAGE SPLITTING =====
-        // Strategy: Try full item first. If it doesn't fit, split into sections
+        // ===== INTELLIGENT PAGE SPLITTING =====
+        // Strategy: Treat each product as an unbreakable unit. If it doesn't fit, move to next page.
         const usablePageHeight = pdfHeight - 50;
 
         const formatDescriptionByStyle = (descContent: string, style: string): string => {
@@ -2031,152 +2032,25 @@ export default function TaskListEditDialog({
           </tr></table></div>`;
         };
 
-        // Step 1: Try rendering the FULL item first
+        // Step 1: Try rendering the complete product
         const fullRowBlock = await renderBlock(buildFullRowHtml(item.product_description || ''));
 
-        // Step 2: If it fits on current page, place it and continue
+        // Step 2: If it fits on current page, place it and continue to next product
         if (currentY + fullRowBlock.h <= usablePageHeight) {
           pdf.addImage(fullRowBlock.img, "JPEG", 0, currentY, pdfWidth, fullRowBlock.h);
           currentY += fullRowBlock.h;
           continue;
         }
 
-        // Step 3: Full item doesn't fit - split into sections
-        const parseSections = (html: string): string[] => {
-          if (!html) return [];
-          const parts = html.split(/(?=<div[^>]*background:#121212[^>]*>)/i);
-          return parts.map(s => s.trim()).filter(Boolean);
-        };
-
-        const sections = parseSections(item.product_description || '');
-        if (sections.length === 0) {
-          // No sections to split - put on new page
-          finalizeCurrentPage();
-          pdf.addPage([612, 936]);
-          pageCount++;
-          currentY = await initiateNewPage();
-          pdf.addImage(headerBlock.img, "JPEG", 0, currentY, pdfWidth, headerBlock.h);
-          currentY += 28;
-          pdf.addImage(fullRowBlock.img, "JPEG", 0, currentY, pdfWidth, fullRowBlock.h);
-          currentY += fullRowBlock.h;
-          continue;
-        }
-
-        // Step 4: Measure each section in real table context
-        type MeasuredSection = { html: string; h: number };
-        const measuredSections: MeasuredSection[] = [];
-
-        for (const section of sections) {
-  const formattedSection = formatDescriptionByStyle(section, pdfDescriptionStyle);
-  const sectionBlock = await renderBlock(`
-    <div class="content-area">
-    <table class="main-table" style="border:1.5px solid black;border-top:none;">
-    <tr>
-    <td style="width:35px;">&nbsp;</td>
-    <td style="width:40px;">&nbsp;</td>
-    <td style="width:105px;">&nbsp;</td>
-    <td style="padding:8px 10px;vertical-align:top;">
-      <div class="desc-text">${formattedSection}</div>
-    </td>
-    <td style="width:60px;">&nbsp;</td>
-    ${showDiscount ? `<td style="width:80px;">&nbsp;</td><td style="width:80px;">&nbsp;</td>` : ""}
-    <td style="width:90px;">&nbsp;</td>
-    </tr></table></div>`);
-  measuredSections.push({ html: formattedSection, h: sectionBlock.h });
-}
-
-        // Step 5: Measure overhead (title, photo, prices)
-        const overheadBlock = await renderBlock(`
-          <div class="content-area">
-          <table class="main-table" style="border:1.5px solid black;border-top:none;">
-          <tr>
-          <td style="width:35px;" class="item-no">${index + 1}</td>
-          <td style="width:40px;" class="qty-col">${item.qty}</td>
-          <td style="width:105px;padding:8px;text-align:center;vertical-align:top;">
-          <img src="${item.photo}" style="mix-blend-mode:multiply;width:82px;height:82px;object-fit:contain;display:block;margin:0 auto;">
-          </td>
-          <td style="padding:8px 10px;vertical-align:top;">
-          <div style="display:flex;align-items:center;flex-wrap:wrap;gap:4px;margin-bottom:4px;">
-            <p class="product-title" style="margin:0;">${item.title}</p>
-            ${badges.join('')}
-          </div>
-          ${item.sku ? `<p class="sku-text">ITEM CODE: ${item.sku}</p>` : ""}
-          ${item.procurementLeadTime ? `<div style="display:inline-flex;align-items:center;gap:4px;margin:3px 0 4px;"><span style="font-size:8px;font-weight:900;text-transform:uppercase;color:#6b7280;">Lead Time:</span><span style="font-size:9px;font-weight:700;color:#b45309;background:#fff7ed;border:1px solid #fed7aa;padding:1px 6px;">${item.procurementLeadTime}</span></div>` : ""}
-          </td>
-          <td style="width:60px;text-align:center;" class="price-col">${unitPriceContent}</td>
-          ${showDiscount ? `<td style="width:80px;text-align:center;font-weight:700;">${discContent}</td>
-          <td style="width:80px;text-align:center;font-weight:600;">${discountPriceContent}</td>` : ""}
-          <td style="width:90px;text-align:center;" class="total-col">${totalContent}</td>
-          </tr></table></div>`);
-        const topOverheadH = overheadBlock.h;
-
-        // Step 6: Bin-pack sections into page groups
-        type PageGroup = { sections: string[]; isFirst: boolean };
-        const pageGroups: PageGroup[] = [];
-
-        const headerHeight = 28;
-        const freshPageAvailable = usablePageHeight - headerHeight;
-
-        let currentGroup: string[] = [];
-        let currentGroupH = 0;
-        let isFirstGroup = true;
-
-        for (const section of measuredSections) {
-          const overhead = isFirstGroup && currentGroup.length === 0 ? topOverheadH : 0;
-          const projectedH = overhead + currentGroupH + section.h;
-          const available = isFirstGroup ? (usablePageHeight - currentY) : freshPageAvailable;
-
-          if (currentGroup.length > 0 && projectedH > available) {
-            pageGroups.push({ sections: [...currentGroup], isFirst: isFirstGroup });
-            isFirstGroup = false;
-            currentGroup = [section.html];
-            currentGroupH = section.h;
-          } else {
-            currentGroup.push(section.html);
-            currentGroupH += section.h;
-          }
-        }
-        if (currentGroup.length > 0) {
-          pageGroups.push({ sections: currentGroup, isFirst: isFirstGroup });
-        }
-
-        // Step 7: Render each group
-        let isFirstPg = true;
-        for (const group of pageGroups) {
-          const combinedDesc = group.sections.join('\n');
-          const groupHtml = group.isFirst
-            ? buildFullRowHtml(combinedDesc)
-            : `<div class="content-area">
-            <table class="main-table" style="border:1.5px solid black;border-top:none;">
-            <tr>
-            <td style="width:35px;" class="item-no">&nbsp;</td>
-            <td style="width:40px;" class="qty-col">&nbsp;</td>
-            <td style="width:105px;padding:8px;">&nbsp;</td>
-            <td style="padding:8px 10px;vertical-align:top;">
-            <div class="desc-text">${combinedDesc}</div>
-            </td>
-            <td style="width:60px;" class="price-col">&nbsp;</td>
-            ${showDiscount ? `<td style="width:80px;">&nbsp;</td><td style="width:80px;">&nbsp;</td>` : ""}
-            <td style="width:90px;" class="total-col">&nbsp;</td>
-            </tr></table></div>`;
-
-          const groupBlock = await renderBlock(groupHtml);
-          const spaceNeeded = groupBlock.h;
-          const spaceAvailable = isFirstPg ? (usablePageHeight - currentY) : freshPageAvailable;
-
-          if (!isFirstPg || currentY + spaceNeeded > usablePageHeight) {
-            if (!isFirstPg) finalizeCurrentPage();
-            pdf.addPage([612, 936]);
-            pageCount++;
-            currentY = await initiateNewPage();
-            pdf.addImage(headerBlock.img, "JPEG", 0, currentY, pdfWidth, headerBlock.h);
-            currentY += headerHeight;
-          }
-
-          pdf.addImage(groupBlock.img, "JPEG", 0, currentY, pdfWidth, groupBlock.h);
-          currentY += groupBlock.h;
-          isFirstPg = false;
-        }
+        // Step 3: Product doesn't fit - move entire product to new page
+        finalizeCurrentPage();
+        pdf.addPage([612, 936]);
+        pageCount++;
+        currentY = await initiateNewPage();
+        pdf.addImage(headerBlock.img, "JPEG", 0, currentY, pdfWidth, headerBlock.h);
+        currentY += 28;
+        pdf.addImage(fullRowBlock.img, "JPEG", 0, currentY, pdfWidth, fullRowBlock.h);
+        currentY += fullRowBlock.h;
       }
 
       // ✅ Helper (put above this block if possible)
