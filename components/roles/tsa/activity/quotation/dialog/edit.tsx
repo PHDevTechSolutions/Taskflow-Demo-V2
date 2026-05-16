@@ -4695,7 +4695,7 @@ ${payload.whtType && payload.whtType !== "none"
                 <span className="text-[11px] font-bold uppercase tracking-wider">Review Quotation</span>
               </Button>
 
-              {(ApprovedStatus === "Approved" || ApprovedStatus === "Approved By Sales Head") && !hasDeleted && !hasUnsavedChanges() && (
+              {(ApprovedStatus === "Approved" || ApprovedStatus === "Approved By Sales Head") && (
                 <>
                   <Button
                     type="button"
