@@ -1696,12 +1696,13 @@ export default function TaskListEditDialog({
             .main-table th { padding: 6px 8px; font-size: 8.5px; font-weight: 900; color: white; background: ${PRIMARY_CHARCOAL}; text-transform: uppercase; border-right: 1px solid #374151; letter-spacing: 0.04em; }
             .main-table th:last-child { border-right: none; }
             .main-table td { padding: 8px; vertical-align: top; border-right: 1px solid #d1d5db; border-bottom: 1px solid #d1d5db; font-size: 9px; }
+            .main-table tr { page-break-inside: avoid; }
             .main-table td:last-child { border-right: none; }
             .item-no { color: #9ca3af; font-weight: 700; text-align: center; font-size: 11px; vertical-align: middle; }
             .qty-col { font-weight: 900; text-align: center; font-size: 12px; color: ${PRIMARY_CHARCOAL}; vertical-align: middle; }
             .product-title { font-weight: 900; text-transform: uppercase; font-size: 9.5px; margin: 0 0 2px 0; color: ${PRIMARY_CHARCOAL}; line-height: 1.3; }
             .sku-text { color: #2563eb; font-weight: 700; font-size: 8px; margin: 0 0 4px 0; }
-            .desc-text { font-size: 8px; color: #374151; line-height: 1.3; margin: 0; }
+            .desc-text { font-size: 8px; color: #374151; line-height: 1.3; margin: 0; page-break-inside: avoid; }
             .desc-remarks { background: #fed7aa; padding: 2px 5px; text-transform: uppercase; color: #7c2d12; display: inline-block; font-weight: 900; font-size: 7.5px; margin-top: 3px; }
             .price-col { font-size: 9.5px; font-weight: 600; text-align: right; color: #374151; vertical-align: middle; padding-right: 8px; }
             .total-col { font-size: 9.5px; font-weight: 900; text-align: right; color: ${PRIMARY_CHARCOAL}; vertical-align: middle; padding-right: 8px; }
@@ -1932,8 +1933,8 @@ export default function TaskListEditDialog({
           totalContent = `₱${item.totalAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}${savingsHtml}`;
         }
 
-        // ===== SECTION-AWARE INTELLIGENT PAGE SPLITTING =====
-        // Strategy: Try full item first. If it doesn't fit, split into sections
+        // ===== INTELLIGENT PAGE SPLITTING =====
+        // Strategy: Treat each product as an unbreakable unit. If it doesn't fit, move to next page.
         const usablePageHeight = pdfHeight - 50;
 
         const formatDescriptionByStyle = (descContent: string, style: string): string => {
@@ -2031,152 +2032,25 @@ export default function TaskListEditDialog({
           </tr></table></div>`;
         };
 
-        // Step 1: Try rendering the FULL item first
+        // Step 1: Try rendering the complete product
         const fullRowBlock = await renderBlock(buildFullRowHtml(item.product_description || ''));
 
-        // Step 2: If it fits on current page, place it and continue
+        // Step 2: If it fits on current page, place it and continue to next product
         if (currentY + fullRowBlock.h <= usablePageHeight) {
           pdf.addImage(fullRowBlock.img, "JPEG", 0, currentY, pdfWidth, fullRowBlock.h);
           currentY += fullRowBlock.h;
           continue;
         }
 
-        // Step 3: Full item doesn't fit - split into sections
-        const parseSections = (html: string): string[] => {
-          if (!html) return [];
-          const parts = html.split(/(?=<div[^>]*background:#121212[^>]*>)/i);
-          return parts.map(s => s.trim()).filter(Boolean);
-        };
-
-        const sections = parseSections(item.product_description || '');
-        if (sections.length === 0) {
-          // No sections to split - put on new page
-          finalizeCurrentPage();
-          pdf.addPage([612, 936]);
-          pageCount++;
-          currentY = await initiateNewPage();
-          pdf.addImage(headerBlock.img, "JPEG", 0, currentY, pdfWidth, headerBlock.h);
-          currentY += 28;
-          pdf.addImage(fullRowBlock.img, "JPEG", 0, currentY, pdfWidth, fullRowBlock.h);
-          currentY += fullRowBlock.h;
-          continue;
-        }
-
-        // Step 4: Measure each section in real table context
-        type MeasuredSection = { html: string; h: number };
-        const measuredSections: MeasuredSection[] = [];
-
-        for (const section of sections) {
-  const formattedSection = formatDescriptionByStyle(section, pdfDescriptionStyle);
-  const sectionBlock = await renderBlock(`
-    <div class="content-area">
-    <table class="main-table" style="border:1.5px solid black;border-top:none;">
-    <tr>
-    <td style="width:35px;">&nbsp;</td>
-    <td style="width:40px;">&nbsp;</td>
-    <td style="width:105px;">&nbsp;</td>
-    <td style="padding:8px 10px;vertical-align:top;">
-      <div class="desc-text">${formattedSection}</div>
-    </td>
-    <td style="width:60px;">&nbsp;</td>
-    ${showDiscount ? `<td style="width:80px;">&nbsp;</td><td style="width:80px;">&nbsp;</td>` : ""}
-    <td style="width:90px;">&nbsp;</td>
-    </tr></table></div>`);
-  measuredSections.push({ html: formattedSection, h: sectionBlock.h });
-}
-
-        // Step 5: Measure overhead (title, photo, prices)
-        const overheadBlock = await renderBlock(`
-          <div class="content-area">
-          <table class="main-table" style="border:1.5px solid black;border-top:none;">
-          <tr>
-          <td style="width:35px;" class="item-no">${index + 1}</td>
-          <td style="width:40px;" class="qty-col">${item.qty}</td>
-          <td style="width:105px;padding:8px;text-align:center;vertical-align:top;">
-          <img src="${item.photo}" style="mix-blend-mode:multiply;width:82px;height:82px;object-fit:contain;display:block;margin:0 auto;">
-          </td>
-          <td style="padding:8px 10px;vertical-align:top;">
-          <div style="display:flex;align-items:center;flex-wrap:wrap;gap:4px;margin-bottom:4px;">
-            <p class="product-title" style="margin:0;">${item.title}</p>
-            ${badges.join('')}
-          </div>
-          ${item.sku ? `<p class="sku-text">ITEM CODE: ${item.sku}</p>` : ""}
-          ${item.procurementLeadTime ? `<div style="display:inline-flex;align-items:center;gap:4px;margin:3px 0 4px;"><span style="font-size:8px;font-weight:900;text-transform:uppercase;color:#6b7280;">Lead Time:</span><span style="font-size:9px;font-weight:700;color:#b45309;background:#fff7ed;border:1px solid #fed7aa;padding:1px 6px;">${item.procurementLeadTime}</span></div>` : ""}
-          </td>
-          <td style="width:60px;text-align:center;" class="price-col">${unitPriceContent}</td>
-          ${showDiscount ? `<td style="width:80px;text-align:center;font-weight:700;">${discContent}</td>
-          <td style="width:80px;text-align:center;font-weight:600;">${discountPriceContent}</td>` : ""}
-          <td style="width:90px;text-align:center;" class="total-col">${totalContent}</td>
-          </tr></table></div>`);
-        const topOverheadH = overheadBlock.h;
-
-        // Step 6: Bin-pack sections into page groups
-        type PageGroup = { sections: string[]; isFirst: boolean };
-        const pageGroups: PageGroup[] = [];
-
-        const headerHeight = 28;
-        const freshPageAvailable = usablePageHeight - headerHeight;
-
-        let currentGroup: string[] = [];
-        let currentGroupH = 0;
-        let isFirstGroup = true;
-
-        for (const section of measuredSections) {
-          const overhead = isFirstGroup && currentGroup.length === 0 ? topOverheadH : 0;
-          const projectedH = overhead + currentGroupH + section.h;
-          const available = isFirstGroup ? (usablePageHeight - currentY) : freshPageAvailable;
-
-          if (currentGroup.length > 0 && projectedH > available) {
-            pageGroups.push({ sections: [...currentGroup], isFirst: isFirstGroup });
-            isFirstGroup = false;
-            currentGroup = [section.html];
-            currentGroupH = section.h;
-          } else {
-            currentGroup.push(section.html);
-            currentGroupH += section.h;
-          }
-        }
-        if (currentGroup.length > 0) {
-          pageGroups.push({ sections: currentGroup, isFirst: isFirstGroup });
-        }
-
-        // Step 7: Render each group
-        let isFirstPg = true;
-        for (const group of pageGroups) {
-          const combinedDesc = group.sections.join('\n');
-          const groupHtml = group.isFirst
-            ? buildFullRowHtml(combinedDesc)
-            : `<div class="content-area">
-            <table class="main-table" style="border:1.5px solid black;border-top:none;">
-            <tr>
-            <td style="width:35px;" class="item-no">&nbsp;</td>
-            <td style="width:40px;" class="qty-col">&nbsp;</td>
-            <td style="width:105px;padding:8px;">&nbsp;</td>
-            <td style="padding:8px 10px;vertical-align:top;">
-            <div class="desc-text">${combinedDesc}</div>
-            </td>
-            <td style="width:60px;" class="price-col">&nbsp;</td>
-            ${showDiscount ? `<td style="width:80px;">&nbsp;</td><td style="width:80px;">&nbsp;</td>` : ""}
-            <td style="width:90px;" class="total-col">&nbsp;</td>
-            </tr></table></div>`;
-
-          const groupBlock = await renderBlock(groupHtml);
-          const spaceNeeded = groupBlock.h;
-          const spaceAvailable = isFirstPg ? (usablePageHeight - currentY) : freshPageAvailable;
-
-          if (!isFirstPg || currentY + spaceNeeded > usablePageHeight) {
-            if (!isFirstPg) finalizeCurrentPage();
-            pdf.addPage([612, 936]);
-            pageCount++;
-            currentY = await initiateNewPage();
-            pdf.addImage(headerBlock.img, "JPEG", 0, currentY, pdfWidth, headerBlock.h);
-            currentY += headerHeight;
-          }
-
-          pdf.addImage(groupBlock.img, "JPEG", 0, currentY, pdfWidth, groupBlock.h);
-          currentY += groupBlock.h;
-          isFirstPg = false;
-        }
+        // Step 3: Product doesn't fit - move entire product to new page
+        finalizeCurrentPage();
+        pdf.addPage([612, 936]);
+        pageCount++;
+        currentY = await initiateNewPage();
+        pdf.addImage(headerBlock.img, "JPEG", 0, currentY, pdfWidth, headerBlock.h);
+        currentY += 28;
+        pdf.addImage(fullRowBlock.img, "JPEG", 0, currentY, pdfWidth, fullRowBlock.h);
+        currentY += fullRowBlock.h;
       }
 
       // ✅ Helper (put above this block if possible)
@@ -2435,7 +2309,18 @@ ${payload.whtType && payload.whtType !== "none"
       currentY += logisticsBlock.h;
 
       const termsAndSigBlock = await renderBlock(
-        `<div class="content-area" style="padding-top:0;"><div class="terms-grid"><div class="terms-label">Payment:</div><div class="terms-val"><p><strong style="color:red;">For Cash on Delivery (COD)</strong></p><p><strong>NOTE: Orders below 10,000 pesos can be paid in cash at the time of delivery.</strong></p><p><strong>BANK DETAILS</strong></p><p><b>Payee to: </b><strong>${isEcoshift ? "ECOSHIFT CORPORATION" : "DISRUPTIVE SOLUTIONS INC."}</strong></p><div class="bank-grid" style="display:flex;gap:20px;"><div><strong>BANK: METROBANK</strong><br/>Account Name: ${isEcoshift ? "ECOSHIFT CORPORATION" : "DISRUPTIVE SOLUTIONS INC."}<br/>Account Number: ${isEcoshift ? "243-7-243805100" : "243-7-24354164-2"}</div><div><strong>BANK: BDO</strong><br/>Account Name: ${isEcoshift ? "ECOSHIFT CORPORATION" : "DISRUPTIVE SOLUTIONS INC."}<br/>Account Number: ${isEcoshift ? "0021-8801-7271" : "0021-8801-9258"}</div></div></div><div class="terms-label">DELIVERY:</div><div class="terms-val terms-highlight"><p>Delivery/Pick up is subject to confirmation.</p></div><div class="terms-label">Validity:</div><div class="terms-val"><p class="text-red-strong"><u>Thirty (30) calendar days from the date of this offer.</u></p></div>
+        `<div class="content-area" style="padding-top:0;">
+        <div class="terms-grid">
+        <div class="terms-label">Payment:</div>
+        <div class="terms-val">
+        <p><strong style="color:red;">For Cash on Delivery (COD)</strong></p>
+        <p><strong>NOTE: Orders below 10,000 pesos can be paid in cash at the time of delivery.</strong></p>
+        <p><strong>BANK DETAILS</strong></p>
+        <p><b>Payee to: </b><strong>${isEcoshift ? "ECOSHIFT CORPORATION" : "DISRUPTIVE SOLUTIONS INC."}</strong></p>
+        <div class="bank-grid" style="display:flex;gap:20px;">
+        <div><strong>BANK: METROBANK</strong><br/>Account Name: ${isEcoshift ? "ECOSHIFT CORPORATION" : "DISRUPTIVE SOLUTIONS INC."}<br/>Account Number: ${isEcoshift ? "243-7-243805100" : "243-7-24354164-2"}</div>
+        <div><strong>BANK: BDO</strong><br/>Account Name: ${isEcoshift ? "ECOSHIFT CORPORATION" : "DISRUPTIVE SOLUTIONS INC."}<br/>Account Number: ${isEcoshift ? "0021-8801-7271" : "0021-8801-9258"}</div></div></div>
+        <div class="terms-label">DELIVERY:</div><div class="terms-val terms-highlight"><p>Delivery/Pick up is subject to confirmation.</p></div><div class="terms-label">Validity:</div><div class="terms-val"><p class="text-red-strong"><u>Thirty (30) calendar days from the date of this offer.</u></p></div>
         <div class="terms-label">CANCELLATION:</div>
         <div class="terms-val terms-highlight">
         <p>1. Above quoted items are non-cancellable.</p>
@@ -3027,30 +2912,67 @@ ${payload.whtType && payload.whtType !== "none"
                                             specsHtml += `</table>`;
                                           });
                                         }
+
+                                        // Normalize all item code variants from itemCodes (object/array) + itemCode (string fallback)
+                                        const rawItemCodes = data.itemCodes;
+                                        const fallbackCode = data.itemCode || "";
+                                        const allCodes: string[] = [];
+
+                                        if (rawItemCodes && typeof rawItemCodes === "object" && !Array.isArray(rawItemCodes)) {
+                                          Object.values(rawItemCodes as Record<string, string>).forEach((c) => {
+                                            if (c && String(c).trim()) allCodes.push(String(c).trim());
+                                          });
+                                        } else if (Array.isArray(rawItemCodes)) {
+                                          rawItemCodes.forEach((entry: any) => {
+                                            const c = entry?.code ?? entry?.itemCode ?? entry;
+                                            if (c && String(c).trim()) allCodes.push(String(c).trim());
+                                          });
+                                        } else if (typeof rawItemCodes === "string" && rawItemCodes.trim()) {
+                                          rawItemCodes.split(",").forEach((c) => {
+                                            if (c.trim()) allCodes.push(c.trim());
+                                          });
+                                        }
+
+                                        if (allCodes.length === 0 && fallbackCode.trim()) {
+                                          allCodes.push(fallbackCode.trim());
+                                        }
+
+                                        const defaultSku = allCodes[0] || fallbackCode;
+                                        const allCodesText = allCodes.join(" ");
+
+                                        const tempSearchMetadata = (
+                                          data.name +
+                                          " " +
+                                          allCodesText +
+                                          " " +
+                                          rawSpecsText
+                                        ).toUpperCase();
+
                                         return {
                                           id: doc.id,
                                           title: data.name || "No Name",
-                                          price:
-                                            data.salePrice || data.regularPrice || 0,
+                                          price: data.salePrice || data.regularPrice || 0,
                                           description: specsHtml,
-                                          images: data.mainImage
-                                            ? [{ src: data.mainImage }]
-                                            : [],
-                                          skus: data.itemCode ? [data.itemCode] : [],
+                                          images: data.mainImage ? [{ src: data.mainImage }] : [],
+                                          skus: defaultSku ? [defaultSku] : [],
                                           discount: 0,
-                                          tempSearchMetadata: (
-                                            data.name +
-                                            " " +
-                                            (data.itemCode || "") +
-                                            " " +
-                                            rawSpecsText
-                                          ).toUpperCase(),
+                                          tempSearchMetadata,
                                         };
                                       })
                                       .filter((p) =>
                                         p.tempSearchMetadata.includes(searchUpper),
                                       );
-                                    setSearchResults(firebaseResults);
+
+                                    // Deduplicate by doc ID — same product can appear
+                                    // multiple times if Firebase returns duplicate snapshots
+                                    const seen = new Set<string>();
+                                    const dedupedResults = firebaseResults.filter((p) => {
+                                      if (seen.has(p.id)) return false;
+                                      seen.add(p.id);
+                                      return true;
+                                    });
+
+                                    setSearchResults(dedupedResults);
                                   }
                                 } catch (err) {
                                   console.error("Search error:", err);
