@@ -13,7 +13,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     let query = supabase.from("history").select("*");
 
     // If the user is not a Super Admin or Procurement department, filter by referenceid
-    const isSuperAdmin = role === "Super Admin";
+    const isSuperAdmin = role === "SuperAdmin";
     const isProcurement = department === "Procurement";
 
     if (!isSuperAdmin && !isProcurement) {

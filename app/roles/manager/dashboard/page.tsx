@@ -20,6 +20,7 @@ import { Breadcrumb, BreadcrumbItem, BreadcrumbList, BreadcrumbPage } from "@/co
 import { Separator } from "@/components/ui/separator";
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import ProtectedPageWrapper from "@/components/protected-page-wrapper";
+import { ReportSummary } from "@/components/roles/manager/dashboard/report-summary";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -1595,6 +1596,9 @@ function DashboardContent() {
                       ))}
                     </div>
                   </SectionCard>
+
+                  {/* Report Summary */}
+                  
                 </ul>
               </div>
 
@@ -1687,6 +1691,12 @@ function DashboardContent() {
                 );
               })()}
             </div>
+          </main>
+
+          {/* Report Summary */}
+
+          <main className="flex flex-1 flex-col gap-4 p-4 overflow-auto">
+            <ReportSummary />
           </main>
         </SidebarInset>
       </ProtectedPageWrapper>

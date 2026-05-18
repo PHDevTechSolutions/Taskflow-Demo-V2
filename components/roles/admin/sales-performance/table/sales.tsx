@@ -402,7 +402,7 @@ export const SalesTable: React.FC<SalesProps> = ({
       url.searchParams.append("role", userDetails.role);
     }
     const isProcurement = userDetails.department === "Procurement";
-    const isSuperAdmin = userDetails.role === 'Super Admin';
+    const isSuperAdmin = userDetails.role === 'SuperAdmin';
     
     if (isProcurement) {
       url.searchParams.append("department", "Procurement");
@@ -436,7 +436,7 @@ export const SalesTable: React.FC<SalesProps> = ({
 
   useEffect(() => {
     const isProcurement = userDetails.department === "Procurement";
-    const isSuperAdmin = userDetails.role === 'Super Admin';
+    const isSuperAdmin = userDetails.role === 'SuperAdmin';
     
     if (!userDetails.referenceid && !isSuperAdmin && !isProcurement) return;
     const url = new URL("/api/fetch-admin-all-user", window.location.origin);
