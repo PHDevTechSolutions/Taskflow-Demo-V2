@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useMemo, useState, useEffect } from "react";
+import React, { useMemo, useState, useEffect, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import {
   useReactTable,
@@ -49,8 +49,6 @@ import { AccountsActiveFilter } from "../filter";
 import { AccountsActiveDeleteDialog } from "../../../activity/planner/dialog/delete";
 import { TransferDialog } from "../dialog/transfer";
 
-// ─── Cluster config ───────────────────────────────────────────────────────────
-
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface Account {
   id: string;
@@ -95,8 +93,8 @@ const CLUSTER_CONFIG: Record<
   string,
   { color: string; bg: string; textColor: string }
 > = {
-  "top 50": { color: "#f59e0b", bg: "#fef3c7", textColor: "#92400e" },
-  "next 30": { color: "#3b82f6", bg: "#dbeafe", textColor: "#1e40af" },
+  "top 50":     { color: "#f59e0b", bg: "#fef3c7", textColor: "#92400e" },
+  "next 30":    { color: "#3b82f6", bg: "#dbeafe", textColor: "#1e40af" },
   "balance 20": { color: "#8b5cf6", bg: "#ede9fe", textColor: "#5b21b6" },
   "new client": { color: "#10b981", bg: "#d1fae5", textColor: "#065f46" },
   "tsa client": { color: "#ef4444", bg: "#fee2e2", textColor: "#991b1b" },
@@ -113,13 +111,164 @@ function getClusterStyle(typeClient: string) {
   );
 }
 
-// ─── Status badge ─────────────────────────────────────────────────────────────
+// ─── Status styles ────────────────────────────────────────────────────────────
 const STATUS_STYLES: Record<string, string> = {
-  active: "bg-emerald-100 text-emerald-800 border-emerald-200",
-  pending: "bg-amber-100 text-amber-800 border-amber-200",
+  active:   "bg-emerald-100 text-emerald-800 border-emerald-200",
+  pending:  "bg-amber-100 text-amber-800 border-amber-200",
   inactive: "bg-red-100 text-red-800 border-red-200",
 };
 
+// ─── Audit log helper ─────────────────────────────────────────────────────────
+type AuditEventType =
+  | "table_viewed"
+  | "tab_hidden"
+  | "tab_visible"
+  | "window_blurred"
+  | "window_focused"
+  | "table_scrolled"
+  | "copy_attempted";
+
+async function sendAuditLog(
+  referenceid: string,
+  event_type: AuditEventType,
+  metadata: Record<string, unknown> = {}
+) {
+  try {
+    const res = await fetch("/api/screenshot-log", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      keepalive: true,
+      body: JSON.stringify({
+        referenceid,
+        event_type,
+        page: "accounts-table",
+        metadata: {
+          ...metadata,
+          user_agent: navigator.userAgent,
+          timestamp: new Date().toISOString(),
+        },
+      }),
+    });
+
+    if (!res.ok) {
+      const text = await res.text();
+      console.error(`[audit-log] HTTP ${res.status} — ${event_type}:`, text);
+    } else {
+      console.log(`[audit-log] ✓ saved — ${event_type}`);
+    }
+  } catch (err) {
+    console.error(`[audit-log] fetch failed — ${event_type}:`, err);
+  }
+}
+
+// ─── Visible rows snapshot helper ────────────────────────────────────────────
+// Returns company names of table rows currently visible in the viewport.
+function getVisibleCompanyNames(tableEl: HTMLDivElement): string[] {
+  const viewportTop    = window.scrollY;
+  const viewportBottom = viewportTop + window.innerHeight;
+  const names: string[] = [];
+
+  // Each data row has a <tr> — grab the first <p> inside (company name cell)
+  const rows = tableEl.querySelectorAll("tbody tr");
+  rows.forEach((row) => {
+    const rect = row.getBoundingClientRect();
+    const absTop    = rect.top + window.scrollY;
+    const absBottom = rect.bottom + window.scrollY;
+    // Row is at least partially visible
+    if (absBottom > viewportTop && absTop < viewportBottom) {
+      const nameEl = row.querySelector("td p.font-semibold");
+      if (nameEl?.textContent) names.push(nameEl.textContent.trim());
+    }
+  });
+  return names;
+}
+
+// ─── useAuditLogger hook ──────────────────────────────────────────────────────
+function useAuditLogger(
+  referenceid: string,
+  tableRef: React.RefObject<HTMLDivElement | null>
+) {
+  const lastScrollLog = useRef<number>(0);
+  const lastBlurAt    = useRef<number>(0);
+  const lastFocusAt   = useRef<number>(0);
+
+  useEffect(() => {
+    if (!referenceid) return;
+
+    // Fire once per session
+    sendAuditLog(referenceid, "table_viewed");
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "hidden") {
+        // Snapshot visible rows when tab is hidden
+        const visible = tableRef.current
+          ? getVisibleCompanyNames(tableRef.current)
+          : [];
+        sendAuditLog(referenceid, "tab_hidden", {
+          visible_companies: visible,
+          scroll_y: window.scrollY,
+        });
+      } else {
+        sendAuditLog(referenceid, "tab_visible");
+      }
+    };
+
+    const handleBlur = () => {
+      const now = Date.now();
+      if (now - lastBlurAt.current < 1000) return;
+      lastBlurAt.current = now;
+
+      // Snapshot which companies were visible at the moment of blur
+      const visible = tableRef.current
+        ? getVisibleCompanyNames(tableRef.current)
+        : [];
+
+      sendAuditLog(referenceid, "window_blurred", {
+        note: "Window lost focus — possible screenshot tool or Alt+Tab",
+        visible_companies: visible,
+        scroll_y: window.scrollY,
+        viewport_height: window.innerHeight,
+      });
+    };
+
+    const handleFocus = () => {
+      const now = Date.now();
+      if (now - lastFocusAt.current < 1000) return;
+      lastFocusAt.current = now;
+      sendAuditLog(referenceid, "window_focused");
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    window.addEventListener("blur", handleBlur);
+    window.addEventListener("focus", handleFocus);
+
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      window.removeEventListener("blur", handleBlur);
+      window.removeEventListener("focus", handleFocus);
+    };
+  }, [referenceid, tableRef]);
+
+  // Scroll — throttled to once per 5s, also snapshots visible rows
+  useEffect(() => {
+    const el = tableRef.current;
+    if (!el || !referenceid) return;
+
+    const handleScroll = () => {
+      const now = Date.now();
+      if (now - lastScrollLog.current < 5000) return;
+      lastScrollLog.current = now;
+      const visible = getVisibleCompanyNames(el);
+      sendAuditLog(referenceid, "table_scrolled", {
+        scroll_y: window.scrollY,
+        visible_companies: visible,
+      });
+    };
+
+    el.addEventListener("scroll", handleScroll, { passive: true });
+    return () => el.removeEventListener("scroll", handleScroll);
+  }, [referenceid, tableRef]);
+}
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 export function AccountsTable({
@@ -129,8 +278,68 @@ export function AccountsTable({
   onRefreshAccountsAction,
 }: AccountsTableProps) {
   const router = useRouter();
+  const tableRef = useRef<HTMLDivElement>(null);
   const [localPosts, setLocalPosts] = useState<Account[]>(posts);
   useEffect(() => setLocalPosts(posts), [posts]);
+
+  // ── Audit logging ─────────────────────────────────────────────────────────
+  useAuditLogger(userDetails.referenceid, tableRef);
+
+  // ── Copy & screenshot protection ─────────────────────────────────────────
+  useEffect(() => {
+    const el = tableRef.current;
+    if (!el) return;
+
+    const handleCopy = (e: ClipboardEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      // Log the attempt
+      sendAuditLog(userDetails.referenceid, "copy_attempted", {
+        note: "Ctrl+C or copy blocked",
+      });
+    };
+
+    const handleContextMenu = (e: MouseEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+    };
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const ctrl = e.ctrlKey || e.metaKey;
+      if (ctrl && (e.key === "c" || e.key === "C")) {
+        e.preventDefault();
+        e.stopPropagation();
+        sendAuditLog(userDetails.referenceid, "copy_attempted", {
+          note: "Ctrl+C blocked",
+        });
+      }
+      if (ctrl && (e.key === "a" || e.key === "A")) {
+        e.preventDefault();
+        e.stopPropagation();
+      }
+      if (ctrl && (e.key === "x" || e.key === "X")) {
+        e.preventDefault();
+        e.stopPropagation();
+      }
+      if (e.key === "PrintScreen") {
+        e.preventDefault();
+        navigator.clipboard?.writeText("").catch(() => {});
+        sendAuditLog(userDetails.referenceid, "window_blurred", {
+          note: "PrintScreen key pressed",
+        });
+      }
+    };
+
+    el.addEventListener("copy", handleCopy);
+    el.addEventListener("contextmenu", handleContextMenu);
+    el.addEventListener("keydown", handleKeyDown, true);
+
+    return () => {
+      el.removeEventListener("copy", handleCopy);
+      el.removeEventListener("contextmenu", handleContextMenu);
+      el.removeEventListener("keydown", handleKeyDown, true);
+    };
+  }, [userDetails.referenceid]);
 
   // ── Table styles from API ─────────────────────────────────────────────────
   const [tableStyles, setTableStyles] = useState({
@@ -149,7 +358,8 @@ export function AccountsTable({
     toolbar_bg: "#f9fafb",
     tr_hover_bg: "#f9fafb",
     table_border: "#e5e7eb",
-    table_shadow: "0 4px 6px -1px rgba(0,0,0,0.07), 0 10px 15px -3px rgba(0,0,0,0.07), 0 0 0 1px rgba(0,0,0,0.04)",
+    table_shadow:
+      "0 4px 6px -1px rgba(0,0,0,0.07), 0 10px 15px -3px rgba(0,0,0,0.07), 0 0 0 1px rgba(0,0,0,0.04)",
     td_font_size: "13",
     tfoot_border: "#e5e7eb",
     th_font_size: "12",
@@ -180,10 +390,10 @@ export function AccountsTable({
       .then((data) => {
         if (data?.table_styles) setTableStyles(data.table_styles);
       })
-      .catch(() => { }); // silently fall back to defaults
+      .catch(() => {});
   }, []);
 
-  // ─── Stat Card ────────────────────────────────────────────────────────────────
+  // ─── Stat Card ────────────────────────────────────────────────────────────
   function StatCard({
     icon: Icon,
     label,
@@ -202,8 +412,11 @@ export function AccountsTable({
     return (
       <div
         className="relative overflow-hidden border bg-white p-5 shadow-sm transition-all duration-200 hover:shadow-md hover:-translate-y-0.5"
-        style={{ borderLeftColor: accent, borderLeftWidth: 3, borderRadius: `${tableStyles.table_border_radius}px`, }}
-
+        style={{
+          borderLeftColor: accent,
+          borderLeftWidth: 3,
+          borderRadius: `${tableStyles.table_border_radius}px`,
+        }}
       >
         <div
           className="absolute -right-4 -top-4 h-20 w-20 rounded-none opacity-10"
@@ -274,17 +487,22 @@ export function AccountsTable({
 
   function StatusBadge({ value }: { value: string }) {
     const key = value?.toLowerCase() ?? "";
-    const cls = STATUS_STYLES[key] ?? "bg-gray-100 text-gray-700 border-gray-200";
+    const cls =
+      STATUS_STYLES[key] ?? "bg-gray-100 text-gray-700 border-gray-200";
     return (
       <span
         className={`inline-flex items-center gap-1 px-2 py-1 uppercase text-[11px] font-semibold border ${cls}`}
-        style={{ borderRadius: `${tableStyles.table_border_radius}px`, }}
+        style={{ borderRadius: `${tableStyles.table_border_radius}px` }}
       >
         <span
-          className="w-1.5 h-1.5 "
+          className="w-1.5 h-1.5"
           style={{
             background:
-              key === "active" ? "#10b981" : key === "pending" ? "#f59e0b" : "#ef4444",
+              key === "active"
+                ? "#10b981"
+                : key === "pending"
+                ? "#f59e0b"
+                : "#ef4444",
           }}
         />
         {value ?? "—"}
@@ -294,15 +512,26 @@ export function AccountsTable({
 
   // ── Filtered + sorted data ────────────────────────────────────────────────
   const filteredData = useMemo(() => {
-    const allowedTypes = ["top 50", "next 30", "balance 20", "tsa client", "csr client", "new client"];
-    const excludedStatuses = ["removed", "approved for deletion", "subject for transfer"];
+    const allowedTypes = [
+      "top 50",
+      "next 30",
+      "balance 20",
+      "tsa client",
+      "csr client",
+      "new client",
+    ];
+    const excludedStatuses = [
+      "removed",
+      "approved for deletion",
+      "subject for transfer",
+    ];
 
     let data = localPosts.filter(
       (item) =>
         item.status &&
         item.type_client &&
         !excludedStatuses.includes(item.status.toLowerCase()) &&
-        allowedTypes.includes(item.type_client.toLowerCase()),
+        allowedTypes.includes(item.type_client.toLowerCase())
     );
 
     data = data.filter((item) => {
@@ -311,7 +540,7 @@ export function AccountsTable({
         Object.values(item).some(
           (val) =>
             val != null &&
-            String(val).toLowerCase().includes(globalFilter.toLowerCase()),
+            String(val).toLowerCase().includes(globalFilter.toLowerCase())
         );
       const matchesType =
         typeFilter === "all" ||
@@ -325,14 +554,17 @@ export function AccountsTable({
         regionFilter === "all" || item.region === regionFilter;
       let matchesNextAvailableDate = true;
       if (nextAvailableDateRange?.from) {
-        const itemDate = item.next_available_date ? new Date(item.next_available_date) : null;
+        const itemDate = item.next_available_date
+          ? new Date(item.next_available_date)
+          : null;
         if (itemDate) {
           const fromDate = new Date(nextAvailableDateRange.from);
           fromDate.setHours(0, 0, 0, 0);
           if (nextAvailableDateRange.to) {
             const toDate = new Date(nextAvailableDateRange.to);
             toDate.setHours(23, 59, 59, 999);
-            matchesNextAvailableDate = itemDate >= fromDate && itemDate <= toDate;
+            matchesNextAvailableDate =
+              itemDate >= fromDate && itemDate <= toDate;
           } else {
             matchesNextAvailableDate = itemDate >= fromDate;
           }
@@ -340,21 +572,49 @@ export function AccountsTable({
           matchesNextAvailableDate = false;
         }
       }
-      return matchesSearch && matchesType && matchesStatus && matchesIndustry && matchesRegion && matchesNextAvailableDate;
+      return (
+        matchesSearch &&
+        matchesType &&
+        matchesStatus &&
+        matchesIndustry &&
+        matchesRegion &&
+        matchesNextAvailableDate
+      );
     });
 
     data = data.sort((a, b) => {
-      if (alphabeticalFilter === "asc") return a.company_name.localeCompare(b.company_name);
-      if (alphabeticalFilter === "desc") return b.company_name.localeCompare(a.company_name);
+      if (alphabeticalFilter === "asc")
+        return a.company_name.localeCompare(b.company_name);
+      if (alphabeticalFilter === "desc")
+        return b.company_name.localeCompare(a.company_name);
       if (dateCreatedFilter === "asc")
-        return new Date(a.date_created).getTime() - new Date(b.date_created).getTime();
+        return (
+          new Date(a.date_created).getTime() -
+          new Date(b.date_created).getTime()
+        );
       if (dateCreatedFilter === "desc")
-        return new Date(b.date_created).getTime() - new Date(a.date_created).getTime();
-      return new Date(b.date_updated).getTime() - new Date(a.date_updated).getTime();
+        return (
+          new Date(b.date_created).getTime() -
+          new Date(a.date_created).getTime()
+        );
+      return (
+        new Date(b.date_updated).getTime() -
+        new Date(a.date_updated).getTime()
+      );
     });
 
     return data;
-  }, [localPosts, globalFilter, typeFilter, statusFilter, industryFilter, alphabeticalFilter, dateCreatedFilter, regionFilter, nextAvailableDateRange]);
+  }, [
+    localPosts,
+    globalFilter,
+    typeFilter,
+    statusFilter,
+    industryFilter,
+    alphabeticalFilter,
+    dateCreatedFilter,
+    regionFilter,
+    nextAvailableDateRange,
+  ]);
 
   // ── Stats ─────────────────────────────────────────────────────────────────
   const stats = useMemo(() => {
@@ -382,7 +642,7 @@ export function AccountsTable({
             onCheckedChange={(v) => table.toggleAllPageRowsSelected(!!v)}
             aria-label="Select all"
             className="h-5 w-5 p-0 hover:bg-blue-50 hover:text-blue-600 border border-zinc-200 transition-all group/edit"
-            style={{ borderRadius: `${tableStyles.table_border_radius}px`, }}
+            style={{ borderRadius: `${tableStyles.table_border_radius}px` }}
           />
         ),
         cell: ({ row }) => (
@@ -391,7 +651,7 @@ export function AccountsTable({
             onCheckedChange={(v) => row.toggleSelected(!!v)}
             aria-label={`Select ${row.original.company_name}`}
             className="h-5 w-5 p-0 hover:bg-blue-50 hover:text-blue-600 border border-zinc-200 transition-all group/edit"
-            style={{ borderRadius: `${tableStyles.table_border_radius}px`, }}
+            style={{ borderRadius: `${tableStyles.table_border_radius}px` }}
           />
         ),
         enableSorting: false,
@@ -405,7 +665,7 @@ export function AccountsTable({
             variant="ghost"
             size="sm"
             className="h-8 w-8 p-0 hover:bg-blue-50 hover:text-blue-600 border border-zinc-200 transition-all group/edit"
-            style={{ borderRadius: `${tableStyles.table_border_radius}px`, }}
+            style={{ borderRadius: `${tableStyles.table_border_radius}px` }}
             onClick={() => {
               setEditingAccount(row.original);
               setIsEditDialogOpen(true);
@@ -421,15 +681,18 @@ export function AccountsTable({
         cell: ({ row }) => {
           const count = activityCounts[row.original.id];
           if (count === undefined) {
-            return <span className="text-[11px] text-slate-300 font-mono">—</span>;
+            return (
+              <span className="text-[11px] text-slate-300 font-mono">—</span>
+            );
           }
           return (
             <span
-              className={`inline-flex items-center justify-center min-w-[24px] px-2 py-0.5 text-[11px] font-bold border ${count > 0
-                ? "bg-blue-50 text-blue-700 border-blue-200"
-                : "bg-zinc-50 text-zinc-400 border-zinc-200"
-                }`}
-              style={{ borderRadius: `${tableStyles.table_border_radius}px`, }}
+              className={`inline-flex items-center justify-center min-w-[24px] px-2 py-0.5 text-[11px] font-bold border ${
+                count > 0
+                  ? "bg-blue-50 text-blue-700 border-blue-200"
+                  : "bg-zinc-50 text-zinc-400 border-zinc-200"
+              }`}
+              style={{ borderRadius: `${tableStyles.table_border_radius}px` }}
             >
               {count}
             </span>
@@ -444,7 +707,9 @@ export function AccountsTable({
             <p className="font-semibold text-slate-800 text-[13px] uppercase leading-tight">
               {row.original.company_name}
             </p>
-            <p className="text-[11px] text-slate-400 mt-0.5">{row.original.region}</p>
+            <p className="text-[11px] text-slate-400 mt-0.5">
+              {row.original.region}
+            </p>
             {row.original.account_reference_number && (
               <p className="text-[10px] text-slate-300 font-mono mt-0.5 tracking-wide">
                 {row.original.account_reference_number}
@@ -457,17 +722,25 @@ export function AccountsTable({
         id: "contact",
         header: "Contact",
         cell: ({ row }) => {
-          const persons = tryParseJSON(row.original.contact_person) ??
-            row.original.contact_person?.split(",").map((v) => v.trim()) ?? [];
-          const numbers = tryParseJSON(row.original.contact_number) ??
-            row.original.contact_number?.split(",").map((v) => v.trim()) ?? [];
+          const persons =
+            tryParseJSON(row.original.contact_person) ??
+            row.original.contact_person?.split(",").map((v) => v.trim()) ??
+            [];
+          const numbers =
+            tryParseJSON(row.original.contact_number) ??
+            row.original.contact_number?.split(",").map((v) => v.trim()) ??
+            [];
           return (
             <div className="min-w-[160px] space-y-0.5">
               {persons.slice(0, 2).map((p: string, i: number) => (
                 <div key={i}>
-                  <p className="text-[12px] font-medium text-slate-700 uppercase">{p}</p>
+                  <p className="text-[12px] font-medium text-slate-700 uppercase">
+                    {p}
+                  </p>
                   {numbers[i] && (
-                    <p className="text-[11px] text-slate-400 font-mono">{numbers[i]}</p>
+                    <p className="text-[11px] text-slate-400 font-mono">
+                      {numbers[i]}
+                    </p>
                   )}
                 </div>
               ))}
@@ -493,15 +766,24 @@ export function AccountsTable({
         accessorKey: "email_address",
         header: "Email",
         cell: ({ row }) => {
-          const emails = tryParseJSON(row.original.email_address) ??
-            row.original.email_address?.split(",").map((v) => v.trim()) ?? [];
+          const emails =
+            tryParseJSON(row.original.email_address) ??
+            row.original.email_address?.split(",").map((v) => v.trim()) ??
+            [];
           return (
             <div className="min-w-[160px] space-y-0.5">
               {emails.slice(0, 1).map((e: string, i: number) => (
-                <p key={i} className="text-[11px] text-slate-500 truncate max-w-[180px]">{e}</p>
+                <p
+                  key={i}
+                  className="text-[11px] text-slate-500 truncate max-w-[180px]"
+                >
+                  {e}
+                </p>
               ))}
               {emails.length > 1 && (
-                <span className="text-[10px] text-slate-400">+{emails.length - 1} more</span>
+                <span className="text-[10px] text-slate-400">
+                  +{emails.length - 1} more
+                </span>
               )}
             </div>
           );
@@ -528,7 +810,7 @@ export function AccountsTable({
                 background: style.bg,
                 color: style.textColor,
                 borderColor: style.color + "40",
-                borderRadius: `${tableStyles.table_border_radius}px`
+                borderRadius: `${tableStyles.table_border_radius}px`,
               }}
             >
               {row.original.type_client}
@@ -541,10 +823,12 @@ export function AccountsTable({
         header: "Next Call",
         cell: ({ row }) => {
           const dateValue = row.original.next_available_date;
-          if (!dateValue || dateValue === "—") return <span className="text-[11px] text-slate-400">—</span>;
+          if (!dateValue || dateValue === "—")
+            return <span className="text-[11px] text-slate-400">—</span>;
           try {
             const date = new Date(dateValue);
-            if (isNaN(date.getTime())) return <span className="text-[11px] text-slate-400">—</span>;
+            if (isNaN(date.getTime()))
+              return <span className="text-[11px] text-slate-400">—</span>;
             return (
               <p className="text-[11px] text-slate-500 uppercase font-medium">
                 {format(date, "MMM dd, yyyy")}
@@ -583,10 +867,12 @@ export function AccountsTable({
         header: "Date Created",
         cell: ({ row }) => {
           const dateValue = row.original.date_created;
-          if (!dateValue || dateValue === "—") return <span className="text-[11px] text-slate-400">—</span>;
+          if (!dateValue || dateValue === "—")
+            return <span className="text-[11px] text-slate-400">—</span>;
           try {
             const date = new Date(dateValue);
-            if (isNaN(date.getTime())) return <span className="text-[11px] text-slate-400">—</span>;
+            if (isNaN(date.getTime()))
+              return <span className="text-[11px] text-slate-400">—</span>;
             return (
               <p className="text-[11px] text-slate-500 uppercase font-medium">
                 {format(date, "MMM dd, yyyy")}
@@ -598,12 +884,15 @@ export function AccountsTable({
         },
       },
     ],
-    [activityCounts],
+    [activityCounts]
   );
 
   // ── Search debounce ───────────────────────────────────────────────────────
   useEffect(() => {
-    if (!globalFilter) { setIsFiltering(false); return; }
+    if (!globalFilter) {
+      setIsFiltering(false);
+      return;
+    }
     setIsFiltering(true);
     const t = setTimeout(() => setIsFiltering(false), 300);
     return () => clearTimeout(t);
@@ -621,30 +910,43 @@ export function AccountsTable({
     getPaginationRowModel: getPaginationRowModel(),
   });
 
-  const selectedAccountIds = Object.keys(rowSelection).filter((id) => rowSelection[id]);
+  const selectedAccountIds = Object.keys(rowSelection).filter(
+    (id) => rowSelection[id]
+  );
 
   // ── Fetch agents ──────────────────────────────────────────────────────────
   useEffect(() => {
     if (!userDetails.referenceid) return;
-    fetch(`/api/fetch-all-user-transfer?id=${encodeURIComponent(userDetails.referenceid)}`)
-      .then((res) => { if (!res.ok) throw new Error(); return res.json(); })
+    fetch(
+      `/api/fetch-all-user-transfer?id=${encodeURIComponent(
+        userDetails.referenceid
+      )}`
+    )
+      .then((res) => {
+        if (!res.ok) throw new Error();
+        return res.json();
+      })
       .then(setAgents)
       .catch(console.error);
   }, [userDetails.referenceid]);
 
-  // ── Fetch activity counts for all visible accounts (debug column) ─────────
+  // ── Fetch activity counts ─────────────────────────────────────────────────
   useEffect(() => {
     if (!filteredData.length) return;
     const counts: Record<string, number> = {};
     Promise.all(
       filteredData.map(async (acc) => {
         const params = new URLSearchParams();
-        if (acc.account_reference_number) params.set("account_reference_number", acc.account_reference_number);
-        else if (acc.company_name) params.set("company_name", acc.company_name);
+        if (acc.account_reference_number)
+          params.set("account_reference_number", acc.account_reference_number);
+        else if (acc.company_name)
+          params.set("company_name", acc.company_name);
         else return;
         params.set("referenceid", userDetails.referenceid);
         try {
-          const res = await fetch(`/api/activity/tsa/historical/fetch-by-account?${params}`);
+          const res = await fetch(
+            `/api/activity/tsa/historical/fetch-by-account?${params}`
+          );
           if (res.ok) {
             const json = await res.json();
             counts[acc.id] = (json.activities || []).length;
@@ -666,8 +968,6 @@ export function AccountsTable({
       return;
     }
 
-    // Snapshot accounts from localPosts at call time — passed in as IDs,
-    // resolved here before any re-render can change localPosts reference.
     const snapshot = localPosts.filter((acc) => accountIds.includes(acc.id));
     if (!snapshot.length) {
       setLoadingHistoricalData(false);
@@ -681,7 +981,10 @@ export function AccountsTable({
         snapshot.map(async (acc) => {
           const params = new URLSearchParams();
           if (acc.account_reference_number) {
-            params.set("account_reference_number", acc.account_reference_number);
+            params.set(
+              "account_reference_number",
+              acc.account_reference_number
+            );
           } else if (acc.company_name) {
             params.set("company_name", acc.company_name);
           } else {
@@ -703,7 +1006,6 @@ export function AccountsTable({
         })
       );
 
-      // Deduplicate by id
       const seen = new Set<string>();
       const deduped = allActivities.filter((a) => {
         if (seen.has(String(a.id))) return false;
@@ -725,20 +1027,28 @@ export function AccountsTable({
     if (!selectedAccountIds.length || !removeRemarks.trim()) return;
     setLocalPosts((prev) =>
       prev.map((item) =>
-        selectedAccountIds.includes(item.id) ? { ...item, status: "Removed" } : item,
-      ),
+        selectedAccountIds.includes(item.id)
+          ? { ...item, status: "Removed" }
+          : item
+      )
     );
     try {
       const res = await fetch("/api/com-bulk-remove-account", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ids: selectedAccountIds, status: "Removed", remarks: removeRemarks.trim() }),
+        body: JSON.stringify({
+          ids: selectedAccountIds,
+          status: "Removed",
+          remarks: removeRemarks.trim(),
+        }),
       });
       if (!res.ok) throw new Error();
       sileo.info({
         title: "Archived",
         description: "Accounts archived. Pending TSM approval.",
-        duration: 4000, position: "top-right", fill: "black",
+        duration: 4000,
+        position: "top-right",
+        fill: "black",
         styles: { title: "text-white!", description: "text-white" },
       });
       await onRefreshAccountsAction();
@@ -748,34 +1058,46 @@ export function AccountsTable({
       table.setPageIndex(0);
     } catch {
       sileo.error({
-        title: "Failed", description: "Failed to archive accounts.",
-        duration: 4000, position: "top-right", fill: "black",
+        title: "Failed",
+        description: "Failed to archive accounts.",
+        duration: 4000,
+        position: "top-right",
+        fill: "black",
         styles: { title: "text-white!", description: "text-white" },
       });
     }
   }
 
   // ── Bulk transfer ─────────────────────────────────────────────────────────
-  async function handleBulkTransfer(transferTo: string, accountIds: string[]) {
+  async function handleBulkTransfer(
+    transferTo: string,
+    accountIds: string[]
+  ) {
     if (!accountIds.length || !transferTo) return;
     setLocalPosts((prev) =>
       prev.map((item) =>
         accountIds.includes(item.id)
           ? { ...item, status: "Subject for Transfer", transfer_to: transferTo }
-          : item,
-      ),
+          : item
+      )
     );
     try {
       const res = await fetch("/api/com-bulk-transfer-account", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ids: accountIds, status: "Subject for Transfer", transfer_to: transferTo }),
+        body: JSON.stringify({
+          ids: accountIds,
+          status: "Subject for Transfer",
+          transfer_to: transferTo,
+        }),
       });
       if (!res.ok) throw new Error();
       sileo.success({
         title: "Transfer Requested",
         description: "Pending TSM approval.",
-        duration: 4000, position: "top-right", fill: "black",
+        duration: 4000,
+        position: "top-right",
+        fill: "black",
         styles: { title: "text-white!", description: "text-white" },
       });
       await onRefreshAccountsAction();
@@ -783,8 +1105,11 @@ export function AccountsTable({
       setIsTransferDialogOpen(false);
     } catch {
       sileo.error({
-        title: "Failed", description: "Failed to transfer accounts.",
-        duration: 4000, position: "top-right", fill: "black",
+        title: "Failed",
+        description: "Failed to transfer accounts.",
+        duration: 4000,
+        position: "top-right",
+        fill: "black",
         styles: { title: "text-white!", description: "text-white" },
       });
     }
@@ -794,7 +1119,7 @@ export function AccountsTable({
     try {
       const o = JSON.parse(jsonString);
       if (o && (Array.isArray(o) || typeof o === "object")) return o;
-    } catch { }
+    } catch {}
     return null;
   }
 
@@ -804,55 +1129,110 @@ export function AccountsTable({
 
       {/* ── Stats Grid ───────────────────────────────────────────────────── */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard icon={Building2} label="Total Accounts" value={stats.total} accent="#f59e0b" />
-
+        <StatCard
+          icon={Building2}
+          label="Total Accounts"
+          value={stats.total}
+          accent="#f59e0b"
+        />
         <StatCard icon={Star} label="Premium Clusters" accent="#3b82f6">
           <div className="space-y-1">
             {[
-              { label: "Top 50", value: stats.top50, color: "#f59e0b" },
-              { label: "Next 30", value: stats.next30, color: "#3b82f6" },
+              { label: "Top 50",     value: stats.top50,     color: "#f59e0b" },
+              { label: "Next 30",    value: stats.next30,    color: "#3b82f6" },
               { label: "Balance 20", value: stats.balance20, color: "#8b5cf6" },
             ].map(({ label, value, color }) => (
               <div key={label} className="flex items-center justify-between">
                 <span className="text-[11px] text-slate-500">{label}</span>
-                <span className="font-bold text-[13px]" style={{ color }}>{value}</span>
+                <span className="font-bold text-[13px]" style={{ color }}>
+                  {value}
+                </span>
               </div>
             ))}
           </div>
         </StatCard>
-
         <StatCard icon={Users} label="Client Types" accent="#10b981">
           <div className="space-y-1">
             {[
               { label: "New Client", value: stats.newClient, color: "#10b981" },
-              { label: "TSA Client", value: stats.tsa, color: "#ef4444" },
-              { label: "CSR Client", value: stats.csr, color: "#f97316" },
+              { label: "TSA Client", value: stats.tsa,       color: "#ef4444" },
+              { label: "CSR Client", value: stats.csr,       color: "#f97316" },
             ].map(({ label, value, color }) => (
               <div key={label} className="flex items-center justify-between">
                 <span className="text-[11px] text-slate-500">{label}</span>
-                <span className="font-bold text-[13px]" style={{ color }}>{value}</span>
+                <span className="font-bold text-[13px]" style={{ color }}>
+                  {value}
+                </span>
               </div>
             ))}
           </div>
         </StatCard>
-
       </div>
 
       {/* ── Table ────────────────────────────────────────────────────────── */}
       <div
-        className="overflow-hidden shadow-sm border"
+        ref={tableRef}
+        className="relative overflow-hidden shadow-sm border select-none"
         style={{
           borderColor: tableStyles.table_border,
           borderRadius: `${tableStyles.table_border_radius}px`,
           backgroundColor: tableStyles.table_bg,
+          WebkitUserSelect: "none",
+          MozUserSelect: "none",
+          msUserSelect: "none",
+          userSelect: "none",
         }}
       >
-        {/* ── Toolbar inside container ── */}
+        {/* ── Watermark overlay ─────────────────────────────────────────── */}
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-0 overflow-hidden select-none"
+          style={{
+            zIndex: 5,
+            borderRadius: `${tableStyles.table_border_radius}px`,
+          }}
+        >
+          <svg
+            width="100%"
+            height="100%"
+            xmlns="http://www.w3.org/2000/svg"
+            style={{ position: "absolute", inset: 0 }}
+          >
+            {Array.from({ length: 30 }).map((_, i) => {
+              const col = i % 5;
+              const row = Math.floor(i / 5);
+              return (
+                <text
+                  key={i}
+                  x={col * 220 - 40}
+                  y={row * 100 + 80}
+                  fill="#000000"
+                  fontSize="11"
+                  fontWeight="600"
+                  fontFamily="'Inter', 'Segoe UI', Arial, sans-serif"
+                  letterSpacing="0.08em"
+                  opacity="0.055"
+                  transform={`rotate(-28, ${col * 220 + 70}, ${
+                    row * 100 + 80
+                  })`}
+                >
+                  {userDetails.referenceid} • CONFIDENTIAL
+                </text>
+              );
+            })}
+          </svg>
+        </div>
+
+        {/* ── Toolbar ── */}
         <div
           className="flex flex-wrap items-center gap-3 px-4 py-2.5 border-b"
-          style={{ borderColor: tableStyles.toolbar_border ?? tableStyles.th_border, backgroundColor: tableStyles.toolbar_bg ?? tableStyles.th_bg }}
+          style={{
+            borderColor: tableStyles.toolbar_border ?? tableStyles.th_border,
+            backgroundColor: tableStyles.toolbar_bg ?? tableStyles.th_bg,
+            position: "relative",
+            zIndex: 10,
+          }}
         >
-          {/* Add Account + Search */}
           <div className="flex items-center gap-2 flex-1 min-w-0">
             <AccountDialog
               mode="create"
@@ -871,7 +1251,7 @@ export function AccountsTable({
                 backgroundColor: tableStyles.toolbar_btn_bg,
                 color: tableStyles.toolbar_btn_text,
                 borderColor: tableStyles.toolbar_btn_border,
-                borderRadius: `${tableStyles.table_border_radius}px`
+                borderRadius: `${tableStyles.table_border_radius}px`,
               }}
             >
               <Plus className="h-3.5 w-3.5 mr-1" /> Add Account
@@ -879,8 +1259,16 @@ export function AccountsTable({
             <Input
               placeholder="Search records..."
               value={searchInput}
-              onChange={(e) => { setSearchInput(e.target.value); setGlobalFilter(e.target.value); }}
-              onKeyDown={(e) => { if (e.key === "Escape") { setSearchInput(""); setGlobalFilter(""); } }}
+              onChange={(e) => {
+                setSearchInput(e.target.value);
+                setGlobalFilter(e.target.value);
+              }}
+              onKeyDown={(e) => {
+                if (e.key === "Escape") {
+                  setSearchInput("");
+                  setGlobalFilter("");
+                }
+              }}
               className="h-8 text-[10px] rounded-none pl-8 uppercase tracking-widest border-0 focus-visible:ring-0"
               style={{
                 color: tableStyles.toolbar_input_text,
@@ -892,7 +1280,6 @@ export function AccountsTable({
             />
           </div>
 
-          {/* Filter + bulk actions */}
           <div className="flex items-center gap-2 shrink-0">
             <AccountsActiveFilter
               typeFilter={typeFilter}
@@ -919,7 +1306,9 @@ export function AccountsTable({
                   variant="outline"
                   size="sm"
                   className="cursor-pointer h-8 text-xs"
-                  style={{ borderRadius: `${tableStyles.table_border_radius}px`, }}
+                  style={{
+                    borderRadius: `${tableStyles.table_border_radius}px`,
+                  }}
                   onClick={() => setIsTransferDialogOpen(true)}
                 >
                   <Repeat className="h-3.5 w-3.5 mr-1" /> Transfer
@@ -928,10 +1317,14 @@ export function AccountsTable({
                   variant="destructive"
                   size="sm"
                   className="cursor-pointer h-8 text-xs"
-                  style={{ borderRadius: `${tableStyles.table_border_radius}px`, }}
+                  style={{
+                    borderRadius: `${tableStyles.table_border_radius}px`,
+                  }}
                   onClick={async () => {
                     const ids = [...selectedAccountIds];
-                    const accountsToArchive = localPosts.filter((acc) => ids.includes(acc.id));
+                    const accountsToArchive = localPosts.filter((acc) =>
+                      ids.includes(acc.id)
+                    );
                     setHistoricalData([]);
                     setLoadingHistoricalData(true);
                     setIsRemoveDialogOpen(true);
@@ -941,20 +1334,27 @@ export function AccountsTable({
                         accountsToArchive.map(async (acc) => {
                           const params = new URLSearchParams();
                           if (acc.account_reference_number) {
-                            params.set("account_reference_number", acc.account_reference_number);
+                            params.set(
+                              "account_reference_number",
+                              acc.account_reference_number
+                            );
                           } else if (acc.company_name) {
                             params.set("company_name", acc.company_name);
                           } else {
                             return;
                           }
                           params.set("referenceid", userDetails.referenceid);
-                          const res = await fetch(`/api/activity/tsa/historical/fetch-by-account?${params}`);
+                          const res = await fetch(
+                            `/api/activity/tsa/historical/fetch-by-account?${params}`
+                          );
                           if (res.ok) {
                             const json = await res.json();
-                            const tagged = (json.activities || []).map((a: any) => ({
-                              ...a,
-                              company_name: acc.company_name,
-                            }));
+                            const tagged = (json.activities || []).map(
+                              (a: any) => ({
+                                ...a,
+                                company_name: acc.company_name,
+                              })
+                            );
                             allActivities.push(...tagged);
                           }
                         })
@@ -979,14 +1379,14 @@ export function AccountsTable({
               </div>
             )}
 
-            {/* Record count */}
             <div
               className="flex items-center gap-2 px-3 py-1 border text-[10px] font-bold uppercase tracking-widest"
               style={{
                 color: tableStyles.toolbar_btn_text ?? tableStyles.th_text,
-                borderColor: tableStyles.toolbar_btn_border ?? tableStyles.th_border,
+                borderColor:
+                  tableStyles.toolbar_btn_border ?? tableStyles.th_border,
                 backgroundColor: tableStyles.toolbar_btn_bg ?? "transparent",
-                borderRadius: `${tableStyles.table_border_radius}px`
+                borderRadius: `${tableStyles.table_border_radius}px`,
               }}
             >
               <Activity className="h-3.5 w-3.5 opacity-60" />
@@ -995,13 +1395,19 @@ export function AccountsTable({
           </div>
         </div>
 
-        <div className="overflow-x-auto">
+        <div
+          className="overflow-x-auto"
+          style={{ position: "relative", zIndex: 1 }}
+        >
           <Table>
             <TableHeader>
               {table.getHeaderGroups().map((hg) => (
                 <TableRow
                   key={hg.id}
-                  style={{ borderColor: tableStyles.tr_border, backgroundColor: tableStyles.th_bg }}
+                  style={{
+                    borderColor: tableStyles.tr_border,
+                    backgroundColor: tableStyles.th_bg,
+                  }}
                 >
                   {hg.headers.map((header) => (
                     <TableHead
@@ -1015,7 +1421,10 @@ export function AccountsTable({
                         backgroundColor: tableStyles.th_bg,
                       }}
                     >
-                      {flexRender(header.column.columnDef.header, header.getContext())}
+                      {flexRender(
+                        header.column.columnDef.header,
+                        header.getContext()
+                      )}
                     </TableHead>
                   ))}
                 </TableRow>
@@ -1043,15 +1452,21 @@ export function AccountsTable({
                     className="transition-colors"
                     style={{
                       borderColor: tableStyles.tr_border,
-                      backgroundColor: row.getIsSelected() ? "#eff6ff" : tableStyles.table_bg,
+                      backgroundColor: row.getIsSelected()
+                        ? "#eff6ff"
+                        : tableStyles.table_bg,
                     }}
                     onMouseEnter={(e) => {
                       if (!row.getIsSelected())
-                        (e.currentTarget as HTMLElement).style.backgroundColor = tableStyles.tr_hover_bg;
+                        (
+                          e.currentTarget as HTMLElement
+                        ).style.backgroundColor = tableStyles.tr_hover_bg;
                     }}
                     onMouseLeave={(e) => {
                       if (!row.getIsSelected())
-                        (e.currentTarget as HTMLElement).style.backgroundColor = tableStyles.table_bg;
+                        (
+                          e.currentTarget as HTMLElement
+                        ).style.backgroundColor = tableStyles.table_bg;
                     }}
                   >
                     {row.getVisibleCells().map((cell) => (
@@ -1065,7 +1480,10 @@ export function AccountsTable({
                           borderColor: tableStyles.td_border,
                         }}
                       >
-                        {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                        {flexRender(
+                          cell.column.columnDef.cell,
+                          cell.getContext()
+                        )}
                       </TableCell>
                     ))}
                   </TableRow>
@@ -1079,16 +1497,21 @@ export function AccountsTable({
           <div className="mx-4 mb-4 mt-2 flex items-start gap-2 rounded-none border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
             <span className="mt-1.5 h-1.5 w-1.5 flex-shrink-0 rounded-none bg-amber-500" />
             <span>
-              Accounts with <strong>Pending</strong> status require TSM approval before they can be used in activity creation.
+              Accounts with <strong>Pending</strong> status require TSM
+              approval before they can be used in activity creation.
             </span>
           </div>
         )}
 
-        {/* ── Pagination inside container ── */}
         {table.getPageCount() > 1 && (
           <div
             className="flex items-center justify-center border-t"
-            style={{ backgroundColor: tableStyles.pagination_bg, borderColor: tableStyles.toolbar_border ?? tableStyles.th_border }}
+            style={{
+              backgroundColor: tableStyles.pagination_bg,
+              borderColor: tableStyles.toolbar_border ?? tableStyles.th_border,
+              position: "relative",
+              zIndex: 10,
+            }}
           >
             <div
               className="flex items-center gap-4 justify-center text-xs"
@@ -1115,7 +1538,8 @@ export function AccountsTable({
                   borderRadius: `${tableStyles.pagination_radius}px`,
                 }}
               >
-                {table.getState().pagination.pageIndex + 1} / {table.getPageCount()}
+                {table.getState().pagination.pageIndex + 1} /{" "}
+                {table.getPageCount()}
               </span>
               <button
                 onClick={() => table.nextPage()}
@@ -1145,17 +1569,23 @@ export function AccountsTable({
             contact_person:
               typeof editingAccount.contact_person === "string"
                 ? tryParseJSON(editingAccount.contact_person) ??
-                editingAccount.contact_person.split(",").map((v) => v.trim())
+                  editingAccount.contact_person
+                    .split(",")
+                    .map((v) => v.trim())
                 : editingAccount.contact_person || [""],
             contact_number:
               typeof editingAccount.contact_number === "string"
                 ? tryParseJSON(editingAccount.contact_number) ??
-                editingAccount.contact_number.split(",").map((v) => v.trim())
+                  editingAccount.contact_number
+                    .split(",")
+                    .map((v) => v.trim())
                 : editingAccount.contact_number || [""],
             email_address:
               typeof editingAccount.email_address === "string"
                 ? tryParseJSON(editingAccount.email_address) ??
-                editingAccount.email_address.split(",").map((v) => v.trim())
+                  editingAccount.email_address
+                    .split(",")
+                    .map((v) => v.trim())
                 : editingAccount.email_address || [""],
             address: editingAccount.address,
             region: editingAccount.region,
