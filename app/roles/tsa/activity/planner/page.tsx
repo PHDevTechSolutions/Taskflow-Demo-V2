@@ -900,7 +900,7 @@ function DashboardContent() {
                                     className="p-2 bg-amber-50/60 border border-amber-200/70 rounded-none text-xs hover:bg-amber-100 transition-colors cursor-pointer"
                                   >
                                     <div className="flex items-center justify-between gap-2">
-                                      <span className="font-medium truncate flex-1">{account.company_name}</span>
+                                      <span className="font-medium flex-1">{account.company_name}</span>
                                       <Badge
                                         className={`text-[9px] shrink-0 ${
                                           account.agingDays > 30

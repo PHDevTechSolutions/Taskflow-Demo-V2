@@ -58,7 +58,7 @@ export function NavWorkspaces({
                     className="flex items-center space-x-2 cursor-pointer flex-grow break-words"
                   >
                     <WorkspaceIcon className="w-5 h-5 flex-shrink-0" />
-                    <span className="truncate">{workspace.name}</span>
+                    <span className="whitespace-normal break-words leading-snug">{workspace.name}</span>
                   </SidebarMenuButton>
 
                   {workspace.url && (
@@ -87,16 +87,14 @@ export function NavWorkspaces({
                       const PageIcon = page.icon;
                       return (
                         <SidebarMenuSubItem key={`${workspace.name}-${page.name}-${page.url}`}>
-                          <SidebarMenuSubButton asChild>
-                            <a href={page.url} className="flex items-center justify-between w-full pr-2">
-                              <div className="flex items-center space-x-2 truncate">
+                          <SidebarMenuSubButton asChild className="h-auto py-1.5">
+                            <a href={page.url} className="flex items-center justify-between w-full">
+                              <div className="flex items-start gap-2 min-w-0 flex-1">
                                 <PageIcon className="w-4 h-4 flex-shrink-0" />
-                                <span className="truncate">{page.name}</span>
+                                <span className="whitespace-normal break-words leading-snug text-[13px]">{page.name}</span>
                               </div>
-                              
-                              {/* 2. ADDED THIS BLOCK TO SHOW THE BUBBLE */}
                               {page.badge && (
-                                <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white shadow-sm">
+                                <span className="ml-1 flex h-5 min-w-5 flex-shrink-0 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white shadow-sm">
                                   {page.badge}
                                 </span>
                               )}

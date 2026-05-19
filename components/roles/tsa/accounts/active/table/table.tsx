@@ -128,11 +128,20 @@ type AuditEventType =
   | "table_scrolled"
   | "copy_attempted";
 
+// Session dedup — prevents firing the same one-shot events on re-renders
+const _sessionLogged = new Set<string>();
+
 async function sendAuditLog(
   referenceid: string,
   event_type: AuditEventType,
-  metadata: Record<string, unknown> = {}
+  metadata: Record<string, unknown> = {},
+  opts: { once?: boolean } = {}
 ) {
+  if (opts.once) {
+    const key = `${referenceid}:${event_type}`;
+    if (_sessionLogged.has(key)) return;
+    _sessionLogged.add(key);
+  }
   try {
     const res = await fetch("/api/screenshot-log", {
       method: "POST",
