@@ -669,16 +669,24 @@ function DashboardContent() {
   }, [userDetails.referenceid, fetchActivitiesForNoActivity, fetchAccountsForNoActivity]);
 
   // ─── Last activity date per account (last touch) ─────────────────────────
-  // Key is normalized (lowercase + trimmed) company_name for case-insensitive matching
+  // Keyed by both normalized company_name AND account_reference_number for accurate matching
   const lastActivityDateMap = React.useMemo(() => {
     const m: Record<string, string> = {};
+    const updateIfNewer = (key: string, dateStr: string) => {
+      const existing = m[key];
+      if (!existing || new Date(dateStr).getTime() > new Date(existing).getTime()) {
+        m[key] = dateStr;
+      }
+    };
     activities.forEach((a) => {
-      if (a.company_name && a.date_created) {
-        const key = a.company_name.toLowerCase().trim().replace(/\./g, "");
-        const existing = m[key];
-        if (!existing || new Date(a.date_created).getTime() > new Date(existing).getTime()) {
-          m[key] = a.date_created;
-        }
+      if (!a.date_created) return;
+      if (a.company_name) {
+        const nameKey = `name:${a.company_name.toLowerCase().trim().replace(/\./g, "")}`;
+        updateIfNewer(nameKey, a.date_created);
+      }
+      if (a.account_reference_number) {
+        const refKey = `ref:${a.account_reference_number.toLowerCase().trim()}`;
+        updateIfNewer(refKey, a.date_created);
       }
     });
     return m;
@@ -693,10 +701,24 @@ function DashboardContent() {
   };
 
   // ─── All accounts with last touch info, sorted by most neglected ─────────
-  // Lookup uses normalized company_name to match the normalized map key
+  // Lookup tries account_reference_number first (unique), then falls back to company_name
   const filteredNoActivityAccounts = React.useMemo(() => {
     const enriched = accounts.map((account) => {
-      const lastTouch = lastActivityDateMap[account.company_name?.toLowerCase().trim().replace(/\./g, "")] || null;
+      const byRef = account.account_reference_number
+        ? lastActivityDateMap[`ref:${account.account_reference_number.toLowerCase().trim()}`] ?? null
+        : null;
+      const byName = account.company_name
+        ? lastActivityDateMap[`name:${account.company_name.toLowerCase().trim().replace(/\./g, "")}`] ?? null
+        : null;
+
+      // Pick the most recent date between the two lookup results
+      let lastTouch: string | null = null;
+      if (byRef && byName) {
+        lastTouch = new Date(byRef).getTime() >= new Date(byName).getTime() ? byRef : byName;
+      } else {
+        lastTouch = byRef ?? byName;
+      }
+
       const referenceDate = lastTouch || account.date_created;
       const agingDays = calculateAging(referenceDate);
       return {
@@ -718,7 +740,8 @@ function DashboardContent() {
       const searchLower = noActivitySearch.toLowerCase();
       sorted = sorted.filter((acc) =>
         acc.company_name.toLowerCase().includes(searchLower) ||
-        acc.type_client.toLowerCase().includes(searchLower)
+        acc.type_client.toLowerCase().includes(searchLower) ||
+        (acc.account_reference_number ?? "").toLowerCase().includes(searchLower)
       );
     }
 
@@ -826,7 +849,7 @@ function DashboardContent() {
                       <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3 h-3 text-gray-400" />
                       <input
                         type="text"
-                        placeholder="Search..."
+                        placeholder="Search by company or ref no..."
                         className="w-full pl-7 pr-2 py-1.5 text-[11px] border border-gray-200 rounded-none focus:outline-none focus:border-amber-400"
                         value={noActivitySearch}
                         onChange={(e) => {
