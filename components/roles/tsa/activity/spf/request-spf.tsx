@@ -461,8 +461,8 @@ const SPF: React.FC<SPFProps> = ({ referenceid, tsm, manager, prepared_by }) => 
 
             // Sort by date_updated descending (most recent first)
             const sortedActivities = (data.activities || []).sort((a: SPFRecord, b: SPFRecord) => {
-                const dateA = new Date(a.date_updated || a.created_at || a.id).getTime();
-                const dateB = new Date(b.date_updated || b.created_at || b.id).getTime();
+                const dateA = new Date(a.date_updated || a.created_at || String(a.id)).getTime();
+                const dateB = new Date(b.date_updated || b.created_at || String(b.id)).getTime();
                 return dateB - dateA; // Descending order
             });
 
@@ -913,7 +913,7 @@ const SPF: React.FC<SPFProps> = ({ referenceid, tsm, manager, prepared_by }) => 
                                             "Contact Person", "Contact No.", "Reg. Address",
                                             "Delivery", "Billing", "Collection",
                                             "Payment", "Warranty", "Delivery Date",
-                                            "Prepared By", "Approved By",
+                                            "Prepared By", "Approved By", "Date Modified"
                                         ].map((h) => (
                                             <TableHead key={h} style={{
                                                 color: tableStyles.th_text,
@@ -1059,6 +1059,23 @@ const SPF: React.FC<SPFProps> = ({ referenceid, tsm, manager, prepared_by }) => 
                                                     padding: `${tableStyles.td_padding}px 12px`,
                                                     borderColor: tableStyles.td_border,
                                                 }}>{item.approved_by || "—"}</TableCell>
+                                                <TableCell style={{
+                                                    color: tableStyles.td_text,
+                                                    fontSize: `${tableStyles.td_font_size}px`,
+                                                    padding: `${tableStyles.td_padding}px 12px`,
+                                                    borderColor: tableStyles.td_border,
+                                                }}>
+                                                    {item.date_updated
+                                                        ? new Date(item.date_updated).toLocaleString("en-PH", {
+                                                            timeZone: "Asia/Manila",
+                                                            year: "numeric",
+                                                            month: "short",
+                                                            day: "2-digit",
+                                                            hour: "2-digit",
+                                                            minute: "2-digit",
+                                                        })
+                                                        : "—"}
+                                                </TableCell>
                                             </TableRow>
                                         );
                                     })}

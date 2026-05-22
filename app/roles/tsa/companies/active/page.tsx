@@ -262,9 +262,8 @@ function DashboardContent() {
     try {
       const isEdit = Boolean(payload.id);
 
-      // Direct save for both create and edit
       const url = isEdit ? "/api/com-edit-account" : "/api/com-save-account";
-      const method = "PUT";
+      const method = isEdit ? "PUT" : "POST";
 
       const response = await fetch(url, {
         method,
