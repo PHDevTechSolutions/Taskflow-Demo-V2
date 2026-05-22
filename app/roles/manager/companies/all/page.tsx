@@ -1120,7 +1120,7 @@ function DashboardContent() {
   const tsmStats = useMemo(() => {
     const activityRefs = new Set(
       filteredActivitiesByDate
-        .map((act) => act.account_reference_number)
+        .map((act) => act.account_reference_number?.toLowerCase())
         .filter((ref): ref is string => Boolean(ref))
     );
     const tsmRefs = new Set(
@@ -1154,7 +1154,7 @@ function DashboardContent() {
       const tsmRef = normalizeReference(tsm.ReferenceID || tsm.referenceid);
       const tsmAccs = tsmBuckets.get(tsmRef) ?? [];
       const withActivity = tsmAccs.reduce(
-        (count, account) => count + (activityRefs.has(account.account_reference_number) ? 1 : 0),
+        (count, account) => count + (activityRefs.has(account.account_reference_number?.toLowerCase() ?? "") ? 1 : 0),
         0
       );
       return {
@@ -1167,7 +1167,7 @@ function DashboardContent() {
 
     if (unassignedAccounts.length > 0) {
       const withActivity = unassignedAccounts.reduce(
-        (count, account) => count + (activityRefs.has(account.account_reference_number) ? 1 : 0),
+        (count, account) => count + (activityRefs.has(account.account_reference_number?.toLowerCase() ?? "") ? 1 : 0),
         0
       );
       stats.push({
@@ -1192,7 +1192,7 @@ function DashboardContent() {
   const agentStats = useMemo<AgentWithStats[]>(() => {
     const activityRefs = new Set(
       selectedTsmActivitiesByDate
-        .map((act) => act.account_reference_number)
+        .map((act) => act.account_reference_number?.toLowerCase())
         .filter((ref): ref is string => Boolean(ref))
     );
     const agentRefs = new Set(
@@ -1218,7 +1218,7 @@ function DashboardContent() {
       const agentRef = normalizeReference(agent.ReferenceID || agent.referenceid);
       const agentAccs = agentBuckets.get(agentRef) ?? [];
       const withActivity = agentAccs.reduce(
-        (count, account) => count + (activityRefs.has(account.account_reference_number) ? 1 : 0),
+        (count, account) => count + (activityRefs.has(account.account_reference_number?.toLowerCase() ?? "") ? 1 : 0),
         0
       );
       return {
@@ -1231,7 +1231,7 @@ function DashboardContent() {
 
     if (unassignedAccounts.length > 0) {
       const withActivity = unassignedAccounts.reduce(
-        (count, account) => count + (activityRefs.has(account.account_reference_number) ? 1 : 0),
+        (count, account) => count + (activityRefs.has(account.account_reference_number?.toLowerCase() ?? "") ? 1 : 0),
         0
       );
       stats.push({
@@ -1258,11 +1258,11 @@ function DashboardContent() {
       }),
       { total: 0, withActivity: 0, withoutActivity: 0 }
     );
-    const activitySet = new Set(filteredActivitiesByDate.map((act) => act.account_reference_number));
+    const activitySet = new Set(filteredActivitiesByDate.map((act) => act.account_reference_number?.toLowerCase()).filter(Boolean));
     const typeStats: Record<string, { total: number; withActivity: number; withoutActivity: number }> = {};
     allActiveAccounts.forEach((a) => {
       const t = (a.type_client ?? "Unknown").toUpperCase();
-      const hasAct = activitySet.has(a.account_reference_number);
+      const hasAct = activitySet.has(a.account_reference_number?.toLowerCase() ?? "");
       if (!typeStats[t]) typeStats[t] = { total: 0, withActivity: 0, withoutActivity: 0 };
       typeStats[t].total += 1;
       if (hasAct) typeStats[t].withActivity += 1;
@@ -1296,15 +1296,17 @@ function DashboardContent() {
 
   const scopedAccountsWithActivity = useMemo(() => {
     const s = new Set<string>();
-    scopedActivities.forEach((a) => { if (a.account_reference_number) s.add(a.account_reference_number); });
+    scopedActivities.forEach((a) => { if (a.account_reference_number) s.add(a.account_reference_number.toLowerCase()); });
     return s;
   }, [scopedActivities]);
 
   const activityCountMap = useMemo(() => {
     const m: Record<string, number> = {};
     scopedActivities.forEach((a) => {
-      if (a.account_reference_number)
-        m[a.account_reference_number] = (m[a.account_reference_number] ?? 0) + 1;
+      if (a.account_reference_number) {
+        const key = a.account_reference_number.toLowerCase();
+        m[key] = (m[key] ?? 0) + 1;
+      }
     });
     return m;
   }, [scopedActivities]);
@@ -1313,7 +1315,7 @@ function DashboardContent() {
     const m: Record<string, string> = {};
     scopedActivities.forEach((a) => {
       if (a.account_reference_number && a.date_created) {
-        const key = a.account_reference_number;
+        const key = a.account_reference_number.toLowerCase();
         if (!m[key] || new Date(a.date_created) > new Date(m[key])) m[key] = a.date_created;
       }
     });
@@ -1324,7 +1326,7 @@ function DashboardContent() {
     const stats: Record<string, { total: number; withActivity: number; withoutActivity: number }> = {};
     scopedAccounts.forEach((a) => {
       const t = (a.type_client ?? "Unknown").toUpperCase();
-      const hasActivity = scopedAccountsWithActivity.has(a.account_reference_number);
+      const hasActivity = scopedAccountsWithActivity.has(a.account_reference_number?.toLowerCase() ?? "");
       if (!stats[t]) stats[t] = { total: 0, withActivity: 0, withoutActivity: 0 };
       stats[t].total += 1;
       if (hasActivity) stats[t].withActivity += 1;
@@ -1337,8 +1339,8 @@ function DashboardContent() {
 
   const filteredAccounts = useMemo(() => {
     let list = scopedAccounts;
-    if (activityFilter === "with") list = list.filter((a) => scopedAccountsWithActivity.has(a.account_reference_number));
-    else if (activityFilter === "without") list = list.filter((a) => !scopedAccountsWithActivity.has(a.account_reference_number));
+    if (activityFilter === "with") list = list.filter((a) => scopedAccountsWithActivity.has(a.account_reference_number?.toLowerCase() ?? ""));
+    else if (activityFilter === "without") list = list.filter((a) => !scopedAccountsWithActivity.has(a.account_reference_number?.toLowerCase() ?? ""));
     if (typeFilter) list = list.filter((a) => a.type_client?.toUpperCase() === typeFilter);
     const q = search.toLowerCase();
     if (!q) return list;
@@ -1379,27 +1381,35 @@ function DashboardContent() {
   const visibleAgentStats = paginatedAgentStats.slice(0, agentVisibleCount);
   const hasMoreAgentRowsInPage = visibleAgentStats.length < paginatedAgentStats.length;
 
-  const withActivityCount = scopedAccounts.filter((a) => scopedAccountsWithActivity.has(a.account_reference_number)).length;
+  const withActivityCount = scopedAccounts.filter((a) => scopedAccountsWithActivity.has(a.account_reference_number?.toLowerCase() ?? "")).length;
   const withoutActivityCount = scopedAccounts.length - withActivityCount;
+
+  // ── Customer set: pre-built for O(1) lookup ──
+  const customerRefSet = useMemo(() => {
+    const s = new Set<string>();
+    scopedActivities.forEach((a) => {
+      if (!a.account_reference_number) return;
+      if (
+        (a.actual_sales ?? 0) > 0 ||
+        (a.type_activity ?? "").toLowerCase().includes("delivered") ||
+        (a.type_activity ?? "").toLowerCase().includes("closed")
+      ) {
+        s.add(a.account_reference_number.toLowerCase());
+      }
+    });
+    return s;
+  }, [scopedActivities]);
 
   // ── Customer / Lead classification ──
   const categoryStats = useMemo(() => {
     let customers = 0;
     let leads = 0;
     scopedAccounts.forEach((account) => {
-      const accountActivities = scopedActivities.filter(
-        (a) => a.account_reference_number === account.account_reference_number
-      );
-      const isCustomer = accountActivities.some(
-        (a) => (a.actual_sales ?? 0) > 0 ||
-          (a.type_activity ?? "").toLowerCase().includes("delivered") ||
-          (a.type_activity ?? "").toLowerCase().includes("closed")
-      );
-      if (isCustomer) customers++;
+      if (customerRefSet.has(account.account_reference_number?.toLowerCase() ?? "")) customers++;
       else leads++;
     });
     return { customers, leads };
-  }, [scopedAccounts, scopedActivities]);
+  }, [scopedAccounts, customerRefSet]);
 
   const agentCardTotals = useMemo(
     () => agentStats.reduce(
@@ -1458,7 +1468,7 @@ function DashboardContent() {
         ? tsmActivities
         : activities;
     const records = sourceActivities.filter((a) => {
-      if (a.account_reference_number !== account.account_reference_number) return false;
+      if (a.account_reference_number?.toLowerCase() !== account.account_reference_number?.toLowerCase()) return false;
       if (!dateCreatedFilterRange?.from) return true;
       if (!a.date_created) return false;
       return isDateInRange(a.date_created, dateCreatedFilterRange);
@@ -2041,19 +2051,12 @@ function DashboardContent() {
                                 </TableCell>
                               </TableRow>
                             ) : visiblePaginatedAccounts.map((account) => {
-                              const actCount = activityCountMap[account.account_reference_number] ?? 0;
+                              const actCount = activityCountMap[account.account_reference_number?.toLowerCase() ?? ""] ?? 0;
                               const hasAct = actCount > 0;
                               const typeStyle = getTypeClientStyle(account.type_client);
 
                               // ── Category classification ──
-                              const accountActivities = scopedActivities.filter(
-                                (a) => a.account_reference_number === account.account_reference_number
-                              );
-                              const isCustomer = accountActivities.some(
-                                (a) => (a.actual_sales ?? 0) > 0 ||
-                                  (a.type_activity ?? "").toLowerCase().includes("delivered") ||
-                                  (a.type_activity ?? "").toLowerCase().includes("closed")
-                              );
+                              const isCustomer = customerRefSet.has(account.account_reference_number?.toLowerCase() ?? "");
                               const category = isCustomer ? "Customer" : "Lead";
                               const categoryStyle = isCustomer
                                 ? { pill: "bg-emerald-50 text-emerald-700 border-emerald-200", dot: "bg-emerald-500" }
@@ -2074,7 +2077,7 @@ function DashboardContent() {
                                   </TableCell>
                                   <TableCell>
                                     {(() => {
-                                      const lastActDate = lastActivityDateMap[account.account_reference_number];
+                                      const lastActDate = lastActivityDateMap[account.account_reference_number?.toLowerCase() ?? ""];
                                       const fallbackDate = account.date_created;
                                       const hasActivity = !!lastActDate;
                                       const displayDate = hasActivity ? lastActDate : fallbackDate;
