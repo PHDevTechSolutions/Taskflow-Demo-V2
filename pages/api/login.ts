@@ -104,7 +104,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           LoginAttempts: 0,
           Status: "Active",
           LockUntil: null,
-          DeviceId: deviceId,
+          DeviceId: null,
           Connection: "Online",
         },
       }

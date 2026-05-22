@@ -87,7 +87,6 @@ const data = {
         { name: "Active", url: "/roles/admin/companies/active", icon: BookOpen },
         { name: "Group / Industry", url: "/roles/admin/companies/group", icon: Users },
         { name: "Pending Transferred", url: "/roles/admin/companies/transfer", icon: BookOpen },
-        { name: "Account Approval", url: "/roles/admin/companies/approval", icon: Trash2 },
       ],
     },
     {
@@ -123,7 +122,6 @@ const data = {
          
         { name: "Pending Approval", url: "/roles/admin/activity/quotation/pending-quotation", icon: CalendarDays },
         { name: "Approved Quotations", url: "/roles/admin/activity/quotation/approval-quotation", icon: CalendarDays },
-        { name: "Declined Quotation", url: "/roles/admin/activity/quotation/declined-quotation", icon: XCircle },
         { name: "Client Coverage Guide", url: "/roles/admin/activity/ccg", icon: Compass },
       ],
     },
