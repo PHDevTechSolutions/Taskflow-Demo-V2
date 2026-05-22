@@ -12,7 +12,6 @@ import { sileo } from "sileo";
 
 import { AccountsActiveSearch } from "../../active/search";
 import { AccountsActiveFilter } from "../../active/filter";
-import { AccountsActivePagination } from "../../active/pagination";
 
 interface Account {
   id: string;
@@ -58,6 +57,56 @@ export function AccountsTable({
   useEffect(() => {
     setLocalPosts(posts);
   }, [posts]);
+
+  // ── Table styles from API ─────────────────────────────────────────────────
+  const [tableStyles, setTableStyles] = useState({
+    th_bg: "#f9fafb",
+    layout: "datatable",
+    td_text: "#111827",
+    th_text: "#374151",
+    table_bg: "#ffffff",
+    tfoot_bg: "#ffffff",
+    td_border: "#f3f4f6",
+    th_border: "#e5e7eb",
+    tr_border: "#f3f4f6",
+    td_padding: "12",
+    tfoot_text: "#6b7280",
+    th_padding: "12",
+    toolbar_bg: "#f9fafb",
+    tr_hover_bg: "#f9fafb",
+    table_border: "#e5e7eb",
+    table_shadow: "0 4px 6px -1px rgba(0,0,0,0.07), 0 10px 15px -3px rgba(0,0,0,0.07), 0 0 0 1px rgba(0,0,0,0.04)",
+    td_font_size: "13",
+    tfoot_border: "#e5e7eb",
+    th_font_size: "12",
+    pagination_bg: "#ffffff",
+    tfoot_padding: "12",
+    th_font_weight: "600",
+    toolbar_border: "#e5e7eb",
+    toolbar_btn_bg: "#ffffff",
+    pagination_text: "#374151",
+    tfoot_font_size: "12",
+    toolbar_btn_text: "#374151",
+    toolbar_input_bg: "#ffffff",
+    pagination_border: "#d1d5db",
+    pagination_radius: "8",
+    table_font_family: "'Inter', 'Segoe UI', Arial, sans-serif",
+    th_letter_spacing: "0.01em",
+    toolbar_btn_border: "#d1d5db",
+    toolbar_input_text: "#374151",
+    table_border_radius: "16",
+    pagination_active_bg: "#3b82f6",
+    toolbar_input_border: "#d1d5db",
+    pagination_active_text: "#ffffff"
+
+  });
+
+  useEffect(() => {
+    fetch("/api/table-styles")
+      .then((res) => res.json())
+      .then((data) => { if (data?.table_styles) setTableStyles(data.table_styles); })
+      .catch(() => { });
+  }, []);
 
   const [globalFilter, setGlobalFilter] = useState("");
   const [isFiltering, setIsFiltering] = useState(false);
@@ -186,10 +235,10 @@ export function AccountsTable({
   ========================== */
   const columns = useMemo<ColumnDef<Account>[]>(
     () => [
-      { accessorKey: "company_name", header: "Company Name", cell: ({ row }) => <span className="font-semibold text-zinc-900">{row.original.company_name}</span> },
+      { accessorKey: "company_name", header: "Company Name", cell: ({ row }) => <span className="font-semibold">{row.original.company_name}</span> },
       { accessorKey: "contact_person", header: "Contact Person" },
-      { accessorKey: "email_address", header: "Email Address", cell: ({ row }) => <span className="text-zinc-500 font-mono text-[11px]">{row.original.email_address}</span> },
-      { accessorKey: "address", header: "Address", cell: ({ row }) => <div className="max-w-[200px] truncate text-zinc-500" title={row.original.address}>{row.original.address}</div> },
+      { accessorKey: "email_address", header: "Email Address", cell: ({ row }) => <span className="font-mono text-[11px]">{row.original.email_address}</span> },
+      { accessorKey: "address", header: "Address", cell: ({ row }) => <div className="max-w-[200px] truncate" title={row.original.address}>{row.original.address}</div> },
       { accessorKey: "type_client", header: "Client Type", cell: ({ row }) => <Badge variant="secondary" className="rounded-none font-normal text-[10px] uppercase tracking-wider">{row.original.type_client}</Badge> },
       { accessorKey: "industry", header: "Industry" },
       {
@@ -278,11 +327,23 @@ export function AccountsTable({
       </div>
 
       {/* TABLE */}
-      <div className="bg-white border border-zinc-200 shadow-sm overflow-hidden">
-        <div className="px-4 py-3 border-b border-zinc-100 bg-zinc-50/50 flex items-center justify-between">
+      <div
+        className="overflow-hidden shadow-sm border"
+        style={{
+          borderColor: tableStyles.table_border,
+          borderRadius: `${tableStyles.table_border_radius}px`,
+          backgroundColor: tableStyles.table_bg,
+        }}
+      >
+        <div
+          className="px-4 py-3 border-b flex items-center justify-between"
+          style={{ borderColor: tableStyles.th_border, backgroundColor: tableStyles.th_bg }}
+        >
           <div className="flex items-center gap-2">
-            <span className="text-xs font-bold uppercase tracking-widest text-zinc-500">Removed Accounts</span>
-            <Badge variant="outline" className="rounded-none bg-white text-[10px] font-mono border-zinc-200">
+            <span className="text-xs font-bold uppercase tracking-widest" style={{ color: tableStyles.th_text }}>
+              Removed Accounts
+            </span>
+            <Badge variant="outline" className="rounded-none bg-white text-[10px] font-mono" style={{ borderColor: tableStyles.th_border }}>
               {filteredData.length}
             </Badge>
           </div>
@@ -290,11 +351,24 @@ export function AccountsTable({
 
         <div className="overflow-x-auto">
           <Table>
-            <TableHeader className="bg-zinc-50/50">
+            <TableHeader>
               {table.getHeaderGroups().map((hg) => (
-                <TableRow key={hg.id} className="hover:bg-transparent">
+                <TableRow
+                  key={hg.id}
+                  style={{ borderColor: tableStyles.tr_border, backgroundColor: tableStyles.th_bg }}
+                >
                   {hg.headers.map((h) => (
-                    <TableHead key={h.id} className="text-[11px] font-bold uppercase tracking-wider h-10 text-zinc-500">
+                    <TableHead
+                      key={h.id}
+                      className="font-bold uppercase tracking-wider"
+                      style={{
+                        color: tableStyles.th_text,
+                        fontSize: `${tableStyles.th_font_size}px`,
+                        padding: `${tableStyles.th_padding}px 16px`,
+                        borderColor: tableStyles.th_border,
+                        backgroundColor: tableStyles.th_bg,
+                      }}
+                    >
                       {flexRender(h.column.columnDef.header, h.getContext())}
                     </TableHead>
                   ))}
@@ -314,13 +388,29 @@ export function AccountsTable({
                 </TableRow>
               ) : (
                 table.getRowModel().rows.map((row) => (
-                  <TableRow key={row.id} className="group hover:bg-zinc-50/50 transition-colors border-b border-zinc-100 last:border-0">
+                  <TableRow
+                    key={row.id}
+                    className="transition-colors"
+                    style={{ borderColor: tableStyles.tr_border, backgroundColor: tableStyles.table_bg }}
+                    onMouseEnter={(e) => {
+                      (e.currentTarget as HTMLElement).style.backgroundColor = tableStyles.tr_hover_bg;
+                    }}
+                    onMouseLeave={(e) => {
+                      (e.currentTarget as HTMLElement).style.backgroundColor = tableStyles.table_bg;
+                    }}
+                  >
                     {row.getVisibleCells().map((cell) => (
-                      <TableCell key={cell.id} className="py-3 text-[12px]">
-                        {flexRender(
-                          cell.column.columnDef.cell,
-                          cell.getContext()
-                        )}
+                      <TableCell
+                        key={cell.id}
+                        className="align-top"
+                        style={{
+                          color: tableStyles.td_text,
+                          fontSize: `${tableStyles.td_font_size}px`,
+                          padding: `${tableStyles.td_padding}px 16px`,
+                          borderColor: tableStyles.td_border,
+                        }}
+                      >
+                        {flexRender(cell.column.columnDef.cell, cell.getContext())}
                       </TableCell>
                     ))}
                   </TableRow>
@@ -381,7 +471,58 @@ export function AccountsTable({
         </AlertDialogContent>
       </AlertDialog>
 
-      <AccountsActivePagination table={table} />
+      {/* ── Pagination ── */}
+      {table.getPageCount() > 1 && (
+        <div
+          className="flex items-center justify-center border-t"
+          style={{
+            backgroundColor: tableStyles.pagination_bg,
+            borderColor: tableStyles.toolbar_border ?? tableStyles.th_border,
+          }}
+        >
+          <div
+            className="flex items-center gap-4 justify-center text-xs"
+            style={{ padding: `${tableStyles.tfoot_padding}px 12px` }}
+          >
+            <button
+              onClick={() => table.previousPage()}
+              disabled={!table.getCanPreviousPage()}
+              className="h-8 px-3 text-[10px] font-bold uppercase tracking-widest border transition-all disabled:pointer-events-none disabled:opacity-30"
+              style={{
+                color: tableStyles.pagination_text,
+                borderColor: tableStyles.pagination_border,
+                borderRadius: `${tableStyles.pagination_radius}px`,
+                backgroundColor: "transparent",
+              }}
+            >
+              ← Prev
+            </button>
+            <span
+              className="font-mono text-[11px] font-bold select-none px-3 py-1 border"
+              style={{
+                color: tableStyles.pagination_text,
+                borderColor: tableStyles.pagination_border,
+                borderRadius: `${tableStyles.pagination_radius}px`,
+              }}
+            >
+              {table.getState().pagination.pageIndex + 1} / {table.getPageCount()}
+            </span>
+            <button
+              onClick={() => table.nextPage()}
+              disabled={!table.getCanNextPage()}
+              className="h-8 px-3 text-[10px] font-bold uppercase tracking-widest border transition-all disabled:pointer-events-none disabled:opacity-30"
+              style={{
+                color: tableStyles.pagination_text,
+                borderColor: tableStyles.pagination_border,
+                borderRadius: `${tableStyles.pagination_radius}px`,
+                backgroundColor: "transparent",
+              }}
+            >
+              Next →
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

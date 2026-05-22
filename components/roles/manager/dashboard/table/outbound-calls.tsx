@@ -134,20 +134,17 @@ export function OutboundCallsTableCard({
   const initConfig = useCallback(() => {
     const saved = loadConfig();
     return {
-      columns:              saved?.columns              ?? DEFAULT_COLUMNS.map((c) => ({ ...c })),
-      obTargetPerDay:       saved?.obTargetPerDay       ?? null,
-      hiddenAgents:         saved?.hiddenAgents         ?? ([] as string[]),
-      agentColumnOverrides: saved?.agentColumnOverrides ?? ({} as Record<string, string[]>),
+      columns:        saved?.columns        ?? DEFAULT_COLUMNS.map((c) => ({ ...c })),
+      obTargetPerDay: saved?.obTargetPerDay ?? null, // null = not yet set, will be filled by API
+      hiddenAgents:   saved?.hiddenAgents   ?? ([] as string[]),
     };
   }, []);
 
   /* ---- Committed state (drives table) ---- */
-  const [columns,              setColumns]              = useState<ColumnConfig[]>(() => initConfig().columns);
-  const [obTargetPerDay,       setObTargetPerDay]       = useState<number>(()        => initConfig().obTargetPerDay ?? 20);
-  const [hiddenAgents,         setHiddenAgents]         = useState<string[]>(()      => initConfig().hiddenAgents);
-  // agentColumnOverrides: { [agentId]: string[] } — columns in the array render as "—" for that agent
-  const [agentColumnOverrides, setAgentColumnOverrides] = useState<Record<string, string[]>>(() => initConfig().agentColumnOverrides);
-  const [quotaLoading,         setQuotaLoading]         = useState<boolean>(() => initConfig().obTargetPerDay === null);
+  const [columns,        setColumns]        = useState<ColumnConfig[]>(() => initConfig().columns);
+  const [obTargetPerDay, setObTargetPerDay] = useState<number>(()        => initConfig().obTargetPerDay ?? 20);
+  const [hiddenAgents,   setHiddenAgents]   = useState<string[]>(()      => initConfig().hiddenAgents);
+  const [quotaLoading,   setQuotaLoading]   = useState<boolean>(() => initConfig().obTargetPerDay === null);
 
   /* ---- Fetch quota from API on mount (only if not already saved in localStorage) ---- */
   useEffect(() => {
@@ -194,20 +191,14 @@ export function OutboundCallsTableCard({
     setColumns(draftColumns);
     setObTargetPerDay(draftObTarget);
     setHiddenAgents(draftHiddenAgents);
-    setAgentColumnOverrides(draftAgentColumnOverrides);
-    saveConfig({
-      columns: draftColumns,
-      obTargetPerDay: draftObTarget,
-      hiddenAgents: draftHiddenAgents,
-      agentColumnOverrides: draftAgentColumnOverrides,
-    });
+    saveConfig({ columns: draftColumns, obTargetPerDay: draftObTarget, hiddenAgents: draftHiddenAgents });
     setQuotaLoading(false);
     setShowSettings(false);
   };
 
   const resetPanel = () => {
     setDraftColumns(DEFAULT_COLUMNS.map((c) => ({ ...c })));
-    setDraftObTarget(obTargetPerDay);
+    setDraftObTarget(obTargetPerDay); // reset to current API-sourced value
     setDraftHiddenAgents([]);
     setDraftAgentColumnOverrides({});
   };
@@ -779,8 +770,8 @@ export function OutboundCallsTableCard({
                           <span className="capitalize text-gray-700">{info.name}</span>
                         </div>
                       </TableCell>
-                      {col("obTarget")     && <TableCell className="text-center text-gray-600">{z("obTarget")     ? "—" : quotaLoading ? "…" : obTarget}</TableCell>}
-                      {col("totalCalls")   && <TableCell className="text-center font-semibold text-gray-800">{z("totalCalls")   ? "—" : stat.totalCalls}</TableCell>}
+                      {col("obTarget")     && <TableCell className="text-center text-gray-600">{quotaLoading ? "…" : obTarget}</TableCell>}
+                      {col("totalCalls")   && <TableCell className="text-center font-semibold text-gray-800">{stat.totalCalls}</TableCell>}
                       {col("achievement")  && (
                         <TableCell className="text-center">
                           {z("achievement") ? "—" : (
@@ -807,7 +798,7 @@ export function OutboundCallsTableCard({
               <TableFooter>
                 <TableRow className="bg-gray-50 text-xs font-semibold font-mono">
                   <TableCell className="text-gray-700">Total</TableCell>
-                  {col("obTarget")     && <TableCell className="text-center text-gray-600">{quotaLoading ? "…" : obTarget * visibleStats.filter((a) => !isZeroed(a.agentId, "obTarget")).length}</TableCell>}
+                  {col("obTarget")     && <TableCell className="text-center text-gray-600">{quotaLoading ? "…" : obTarget * visibleStats.length}</TableCell>}
                   {col("totalCalls")   && <TableCell className="text-center text-gray-800">{totals.totalCalls}</TableCell>}
                   {col("achievement")  && <TableCell className="text-center text-gray-700">{totals.achievement}</TableCell>}
                   {col("numQuotes")    && <TableCell className="text-center">{convBadge(totals.numQuotes)}</TableCell>}

@@ -274,6 +274,55 @@ export const RevisedQuotation: React.FC<CompletedProps> = ({
   const [highlightedArn, setHighlightedArn] = useState<string | null>(null);
   const rowRefs = useRef<Map<string, HTMLTableRowElement>>(new Map());
 
+  const [tableStyles, setTableStyles] = useState({
+    th_bg: "#f9fafb",
+    layout: "datatable",
+    td_text: "#111827",
+    th_text: "#374151",
+    table_bg: "#ffffff",
+    tfoot_bg: "#ffffff",
+    td_border: "#f3f4f6",
+    th_border: "#e5e7eb",
+    tr_border: "#f3f4f6",
+    td_padding: "12",
+    tfoot_text: "#6b7280",
+    th_padding: "12",
+    toolbar_bg: "#f9fafb",
+    tr_hover_bg: "#f9fafb",
+    table_border: "#e5e7eb",
+    table_shadow: "0 4px 6px -1px rgba(0,0,0,0.07), 0 10px 15px -3px rgba(0,0,0,0.07), 0 0 0 1px rgba(0,0,0,0.04)",
+    td_font_size: "13",
+    tfoot_border: "#e5e7eb",
+    th_font_size: "12",
+    pagination_bg: "#ffffff",
+    tfoot_padding: "12",
+    th_font_weight: "600",
+    toolbar_border: "#e5e7eb",
+    toolbar_btn_bg: "#ffffff",
+    pagination_text: "#374151",
+    tfoot_font_size: "12",
+    toolbar_btn_text: "#374151",
+    toolbar_input_bg: "#ffffff",
+    pagination_border: "#d1d5db",
+    pagination_radius: "8",
+    table_font_family: "'Inter', 'Segoe UI', Arial, sans-serif",
+    th_letter_spacing: "0.01em",
+    toolbar_btn_border: "#d1d5db",
+    toolbar_input_text: "#374151",
+    table_border_radius: "16",
+    pagination_active_bg: "#3b82f6",
+    toolbar_input_border: "#d1d5db",
+    pagination_active_text: "#ffffff"
+
+  });
+
+  useEffect(() => {
+    fetch("/api/table-styles")
+      .then((res) => res.json())
+      .then((data) => { if (data?.table_styles) setTableStyles(data.table_styles); })
+      .catch(() => { });
+  }, []);
+
   // ── Inline status edit state ─────────────────────────────────────────────
   const [editStatusMode, setEditStatusMode] = useState(false);
   const [pendingStatuses, setPendingStatuses] = useState<Record<number, string>>({});
@@ -337,12 +386,12 @@ export const RevisedQuotation: React.FC<CompletedProps> = ({
       url.searchParams.append("referenceid", referenceid);
       url.searchParams.append("page", String(page));
       url.searchParams.append("limit", String(itemsPerPage));
-      
+
       // Add search term if present
       if (searchTerm.trim()) {
         url.searchParams.append("search", searchTerm.trim());
       }
-      
+
       // Add filters
       if (filterStatus !== "all") url.searchParams.append("status", filterStatus);
       if (filterTypeActivity !== "all") url.searchParams.append("type_activity", filterTypeActivity);
@@ -350,7 +399,7 @@ export const RevisedQuotation: React.FC<CompletedProps> = ({
       if (filterTypeClient !== "all") url.searchParams.append("type_client", filterTypeClient);
       if (filterCallStatus !== "all") url.searchParams.append("call_status", filterCallStatus);
       if (filterQuotationStatus !== "all") url.searchParams.append("quotation_status", filterQuotationStatus);
-      
+
       if (from && to) {
         url.searchParams.append("from", from);
         url.searchParams.append("to", to);
@@ -359,7 +408,7 @@ export const RevisedQuotation: React.FC<CompletedProps> = ({
       const res = await fetch(url.toString());
       if (!res.ok) throw new Error("Failed to fetch activities");
       const data = await res.json();
-      
+
       if (loadMore && page > 1) {
         // Append new data for load more
         setActivities(prev => [...prev, ...(data.activities || [])]);
@@ -367,7 +416,7 @@ export const RevisedQuotation: React.FC<CompletedProps> = ({
         // Replace data for initial load or new search
         setActivities(data.activities || []);
       }
-      
+
       // Update pagination info
       setTotalCount(data.totalCount || 0);
       setHasMore(data.hasMore || false);
@@ -610,7 +659,7 @@ export const RevisedQuotation: React.FC<CompletedProps> = ({
     try {
       let newStatus: string | null = null;
       let reason = '';
-      
+
       // Business rules for status progression
       switch (trigger) {
         case 'quotation':
@@ -619,14 +668,14 @@ export const RevisedQuotation: React.FC<CompletedProps> = ({
             reason = 'Quotation marked for SO conversion';
           }
           break;
-          
+
         case 'so':
           if (item.so_number && item.so_amount && item.status === 'Quote-Done') {
             newStatus = 'SO-Done';
             reason = 'Sales Order created';
           }
           break;
-          
+
         case 'delivery':
           if (item.dr_number && item.delivery_date && item.status === 'SO-Done') {
             newStatus = 'Delivered';
@@ -634,11 +683,11 @@ export const RevisedQuotation: React.FC<CompletedProps> = ({
           }
           break;
       }
-      
+
       if (newStatus && newStatus !== item.status) {
         const res = await fetch('/api/activity/tsa/historical/auto-update-status', {
           method: 'PUT',
-          headers: { 
+          headers: {
             'Content-Type': 'application/json',
             'X-CSRF-Protection': '1'
           },
@@ -651,12 +700,12 @@ export const RevisedQuotation: React.FC<CompletedProps> = ({
             autoUpdate: true
           })
         });
-        
+
         if (!res.ok) {
           const errorData = await res.json().catch(() => ({}));
           throw new Error(errorData?.error || 'Failed to auto-update status');
         }
-        
+
         // Show notification for auto-update
         sileo.success({
           title: 'Status Auto-Updated',
@@ -666,7 +715,7 @@ export const RevisedQuotation: React.FC<CompletedProps> = ({
           fill: 'black',
           styles: { title: 'text-white!', description: 'text-white' },
         });
-        
+
         // Refresh data
         fetchActivities();
       }
@@ -700,17 +749,17 @@ export const RevisedQuotation: React.FC<CompletedProps> = ({
     try {
       const res = await fetch("/api/activity/tsa/historical/update-quotation-status", {
         method: "PUT",
-        headers: { 
+        headers: {
           "Content-Type": "application/json",
           "X-CSRF-Protection": "1"
         },
-        body: JSON.stringify({ 
-          id, 
-          quotation_status: main.trim(), 
-          quotation_status_sub: sub?.trim() || "" 
+        body: JSON.stringify({
+          id,
+          quotation_status: main.trim(),
+          quotation_status_sub: sub?.trim() || ""
         }),
       });
-      
+
       if (!res.ok) {
         const errorData = await res.json().catch(() => ({}));
         throw new Error(errorData?.error || "Failed to update");
@@ -721,7 +770,7 @@ export const RevisedQuotation: React.FC<CompletedProps> = ({
       if (updatedItem) {
         // Create updated item object
         const itemWithNewStatus = { ...updatedItem, quotation_status: main.trim() };
-        
+
         // Trigger status progression automation
         await autoUpdateStatus(itemWithNewStatus, 'quotation');
       }
@@ -761,61 +810,79 @@ export const RevisedQuotation: React.FC<CompletedProps> = ({
           outline: 2px solid rgb(234 179 8);
           outline-offset: -2px;
         }
-        .status-edit-mode-badge {
-          display: inline-flex;
-          align-items: center;
-          gap: 6px;
-          background: #eff6ff;
-          border: 1px solid #93c5fd;
-          color: #1d4ed8;
-          font-size: 10px;
-          font-weight: 700;
-          padding: 2px 8px;
-          border-radius: 0;
-          text-transform: uppercase;
-          letter-spacing: 0.05em;
-        }
       `}</style>
 
-      <div className="mb-4 flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4">
-        <div className="relative max-w-md w-full flex gap-2">
-          <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-400" />
-            <Input
-              type="text"
-              placeholder="Search company, reference ID, or quotation #..."
-              className="pl-9 h-10 rounded-none border-zinc-200 focus:ring-0 focus:border-zinc-400 transition-all text-sm"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  handleSearch();
-                }
-              }}
-            />
-          </div>
-          <Button
-            onClick={handleSearch}
-            disabled={loading}
-            className="h-10 px-4 rounded-none bg-zinc-900 hover:bg-zinc-800 text-white text-sm font-medium"
-          >
-            {loading ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              "Search"
-            )}
-          </Button>
-        </div>
+      {/* ── Unified table container ── */}
+      <div
+        className="overflow-hidden border"
+        style={{
+          borderColor: tableStyles.table_border,
+          borderRadius: `${tableStyles.table_border_radius}px`,
+        }}
+      >
 
-        <div className="flex items-center gap-2">
+        {/* ── Toolbar ── */}
+        <div
+          className="flex flex-wrap items-center gap-3 px-3 py-2.5 border-b"
+          style={{ backgroundColor: tableStyles.toolbar_bg, borderColor: tableStyles.toolbar_border }}
+        >
+          {/* Title */}
+          <div className="flex items-center gap-2 shrink-0">
+            <Search className="w-3.5 h-3.5" style={{ color: tableStyles.toolbar_btn_text }} />
+            <span className="text-[11px] font-black uppercase tracking-widest" style={{ color: tableStyles.toolbar_btn_text }}>
+              Quotation History
+            </span>
+          </div>
+
+          {/* Search input */}
+          <div className="relative flex-1 min-w-[180px] max-w-sm flex gap-2">
+            <div className="relative flex-1">
+              <Search
+                className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 opacity-50"
+                style={{ color: tableStyles.toolbar_input_text }}
+              />
+              <Input
+                placeholder="Search company, reference ID, or quotation #..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter") handleSearch(); }}
+                className="h-8 text-[10px] rounded-none pl-8 uppercase tracking-widest border-0 focus-visible:ring-0"
+                style={{
+                  color: tableStyles.toolbar_input_text,
+                  fontSize: `${tableStyles.th_font_size}px`,
+                  backgroundColor: tableStyles.toolbar_input_bg,
+                  borderColor: tableStyles.toolbar_input_border,
+                  borderRadius: `${tableStyles.table_border_radius}px`,
+                }}
+              />
+            </div>
+            <button
+              onClick={handleSearch}
+              className="h-8 px-3 text-[10px] font-bold uppercase tracking-widest border transition-colors"
+              style={{
+                color: tableStyles.toolbar_btn_text,
+                borderColor: tableStyles.toolbar_btn_border,
+                backgroundColor: tableStyles.toolbar_btn_bg,
+                borderRadius: `${tableStyles.table_border_radius}px`,
+              }}
+            >
+              {loading ? <Loader2 className="w-3 h-3 animate-spin" /> : "Search"}
+            </button>
+          </div>
+
+          {/* Status Edit Mode badge */}
           {editStatusMode && (
-            <span className="status-edit-mode-badge shadow-sm">
+            <span
+              className="inline-flex items-center gap-1.5 px-3 py-1 text-[10px] font-bold uppercase tracking-widest border"
+              style={{ color: "#1d4ed8", borderColor: "#93c5fd", backgroundColor: "#eff6ff" }}
+            >
               <PenIcon className="w-3 h-3" />
               Status Edit Mode
             </span>
           )}
 
-          <div className="flex items-center gap-1.5 border border-zinc-200 p-1 bg-white">
+          {/* Right side actions */}
+          <div className="ml-auto flex items-center gap-2">
             <TaskListDialog
               filterStatus={filterStatus}
               filterTypeActivity={filterTypeActivity}
@@ -839,96 +906,121 @@ export const RevisedQuotation: React.FC<CompletedProps> = ({
               setItemsPerPage={setItemsPerPage}
               setCurrentPage={setCurrentPage}
             />
+
+            {/* Delete selected */}
             {selectedIds.size > 0 && (
-              <Button
-                variant="destructive"
-                size="sm"
+              <button
+                className="h-8 px-3 text-[10px] font-bold uppercase tracking-widest flex items-center gap-1.5 transition-colors bg-red-600 border-red-700 text-white hover:bg-red-700"
+                style={{ borderRadius: `${tableStyles.table_border_radius}px` }}
                 onClick={() => setDeleteDialogOpen(true)}
-                className="h-8 flex items-center gap-1.5 px-3 rounded-none bg-red-600 hover:bg-red-700 transition-colors"
               >
-                <Trash2 className="w-3.5 h-3.5" />
-                <span className="text-[11px] font-bold uppercase tracking-wider">Delete ({selectedIds.size})</span>
-              </Button>
+                <Trash2 className="w-3 h-3" />
+                Delete ({selectedIds.size})
+              </button>
+            )}
+
+            {/* Record count */}
+            {totalCount > 0 && (
+              <div
+                className="flex items-center gap-2 px-3 py-1 border text-[10px] font-bold uppercase tracking-widest"
+                style={{
+                  color: tableStyles.toolbar_btn_text,
+                  borderColor: tableStyles.toolbar_btn_border,
+                  backgroundColor: tableStyles.toolbar_btn_bg,
+                  borderRadius: `${tableStyles.table_border_radius}px`,
+                }}
+              >
+                <span className="border-r pr-2" style={{ borderColor: tableStyles.toolbar_btn_border }}>
+                  {totalCount} records
+                </span>
+                <span className="font-mono">
+                  {activities.length} shown
+                </span>
+              </div>
             )}
           </div>
         </div>
-      </div>
 
-      {error && (
-        <Alert variant="destructive" className="rounded-none border-red-200 bg-red-50 p-4">
-          <div className="flex items-start gap-3">
-            <AlertCircleIcon className="h-5 w-5 text-red-600 mt-0.5" />
-            <div className="space-y-1">
+        {/* ── Error ── */}
+        {error && (
+          <div className="p-4" style={{ backgroundColor: tableStyles.table_bg }}>
+            <Alert variant="destructive" className="rounded-none border-red-200 bg-red-50">
+              <AlertCircleIcon className="h-5 w-5 text-red-600" />
               <AlertTitle className="text-sm font-bold text-red-900">Sync Error</AlertTitle>
-              <AlertDescription className="text-xs text-red-700 leading-relaxed">
-                We couldn't retrieve the latest activity data. Please check your network connection or try refreshing the page.
+              <AlertDescription className="text-xs text-red-700">
+                Could not retrieve quotation data. Please try again.
               </AlertDescription>
-            </div>
+            </Alert>
           </div>
-        </Alert>
-      )}
+        )}
 
-      {loading && activities.length === 0 && (
-        <div className="flex flex-col items-center justify-center py-20 gap-3 opacity-60">
-          <Loader2 className="h-8 w-8 animate-spin text-zinc-400" />
-          <p className="text-[11px] font-mono uppercase tracking-widest text-zinc-500">Retrieving Quotations...</p>
-        </div>
-      )}
-
-      {!loading && activities.length === 0 && !error && (
-        <div className="flex flex-col items-center justify-center py-20 gap-3 bg-zinc-50/50 border border-dashed border-zinc-200">
-          <AlertCircleIcon className="h-8 w-8 text-zinc-300" />
-          <div className="text-center">
-            <p className="text-sm font-bold text-zinc-500">No records found</p>
-            <p className="text-[11px] text-zinc-400">Try adjusting your filters or search terms.</p>
+        {/* ── Loading ── */}
+        {loading && activities.length === 0 && (
+          <div
+            className="flex flex-col items-center justify-center py-20 gap-3"
+            style={{ backgroundColor: tableStyles.table_bg }}
+          >
+            <Loader2 className="h-8 w-8 animate-spin" style={{ color: tableStyles.td_text, opacity: 0.4 }} />
+            <p className="text-[11px] font-mono uppercase tracking-widest" style={{ color: tableStyles.td_text, opacity: 0.5 }}>
+              Retrieving Quotations...
+            </p>
           </div>
-        </div>
-      )}
+        )}
 
-      {activities.length > 0 && (
-        <div className="bg-white border border-zinc-200 shadow-sm overflow-hidden">
-          <div className="px-4 py-3 border-b border-zinc-100 bg-zinc-50/50 flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <span className="text-xs font-bold uppercase tracking-widest text-zinc-500">Quotation History</span>
-              <Badge variant="outline" className="rounded-none bg-white text-[10px] font-mono border-zinc-200">
-                {activities.length}
-              </Badge>
-              {totalCount > activities.length && (
-                <span className="text-[10px] text-zinc-400">
-                  Showing {activities.length} of {totalCount} total
-                </span>
-              )}
-            </div>
+        {/* ── Empty state ── */}
+        {!loading && !error && activities.length === 0 && (
+          <div
+            className="flex flex-col items-center justify-center py-20 gap-2"
+            style={{ backgroundColor: tableStyles.table_bg }}
+          >
+            <AlertCircleIcon className="h-10 w-10 opacity-20" style={{ color: tableStyles.td_text }} />
+            <p className="text-xs font-bold uppercase tracking-widest" style={{ color: tableStyles.td_text, opacity: 0.5 }}>
+              No quotation records found
+            </p>
           </div>
+        )}
 
-          <div className="overflow-x-auto">
-            <Table className="text-xs">
-              <TableHeader className="bg-zinc-50/50">
-                <TableRow className="hover:bg-transparent border-b border-zinc-200">
-                  <TableHead className="w-10 h-11 text-center">
-                    <Checkbox
-                      checked={selectedIds.size === activities.length && activities.length > 0}
-                      onCheckedChange={(checked) => {
-                        if (checked) {
-                          setSelectedIds(new Set(activities.map((a: Completed) => a.id)));
-                        } else {
-                          setSelectedIds(new Set());
-                        }
-                      }}
-                      className="rounded-none h-4 w-4"
-                    />
-                  </TableHead>
-                  <TableHead className="w-20 text-[11px] font-bold uppercase tracking-wider text-zinc-500 text-center">Edit</TableHead>
-                  <TableHead className="text-[11px] font-bold uppercase tracking-wider text-zinc-500">Quotation #</TableHead>
-                  <TableHead className="text-[11px] font-bold uppercase tracking-wider text-zinc-500">Quotation Status</TableHead>
-                  <TableHead className="text-[11px] font-bold uppercase tracking-wider text-zinc-500">Quotation Remarks</TableHead>
-                  <TableHead className="text-[11px] font-bold uppercase tracking-wider text-zinc-500 text-center">Status</TableHead>
-                  <TableHead className="text-[11px] font-bold uppercase tracking-wider text-zinc-500">Duration</TableHead>
-                  <TableHead className="text-[11px] font-bold uppercase tracking-wider text-zinc-500">Company</TableHead>
-                  <TableHead className="text-[11px] font-bold uppercase tracking-wider text-zinc-500">Timeline</TableHead>
-                  <TableHead className="text-[11px] font-bold uppercase tracking-wider text-zinc-500">Feedback / Notes</TableHead>
-                  <TableHead className="text-[11px] font-bold uppercase tracking-wider text-zinc-500 text-right">Amount</TableHead>
-                  <TableHead className="text-[11px] font-bold uppercase tracking-wider text-zinc-500 text-center">Updated</TableHead>
+        {/* ── Table ── */}
+        {activities.length > 0 && (
+          <div className="overflow-x-auto" style={{ backgroundColor: tableStyles.table_bg }}>
+            <Table>
+              <TableHeader>
+                <TableRow style={{ backgroundColor: tableStyles.th_bg, borderColor: tableStyles.tr_border }}>
+                  {/* shared th style helper */}
+                  {(() => {
+                    const thStyle: React.CSSProperties = {
+                      color: tableStyles.th_text,
+                      fontSize: `${tableStyles.th_font_size}px`,
+                      padding: `${tableStyles.th_padding}px 12px`,
+                      borderColor: tableStyles.th_border,
+                      backgroundColor: tableStyles.th_bg,
+                    };
+                    return (
+                      <>
+                        <TableHead style={thStyle} className="uppercase font-black">
+                          <Checkbox
+                            checked={selectedIds.size === activities.length && activities.length > 0}
+                            onCheckedChange={(checked) => {
+                              if (checked) {
+                                setSelectedIds(new Set(activities.map((a: Completed) => a.id)));
+                              } else {
+                                setSelectedIds(new Set());
+                              }
+                            }}
+                            className="h-4 w-4"
+                            style={{ borderRadius: `${tableStyles.table_border_radius}px` }}
+                          />
+                        </TableHead>
+                        {[
+                          "Edit", "Quotation #", "Quotation Status", "Quotation Remarks",
+                          "Status", "Duration", "Company", "Timeline",
+                          "Feedback / Notes", "Amount", "Updated",
+                        ].map((h) => (
+                          <TableHead key={h} style={thStyle} className="uppercase font-black whitespace-nowrap">{h}</TableHead>
+                        ))}
+                      </>
+                    );
+                  })()}
                 </TableRow>
               </TableHeader>
 
@@ -938,6 +1030,13 @@ export const RevisedQuotation: React.FC<CompletedProps> = ({
                   const isHighlighted =
                     highlightedArn === item.activity_reference_number ||
                     highlightedArn === item.quotation_number;
+
+                  const tdStyle: React.CSSProperties = {
+                    color: tableStyles.td_text,
+                    fontSize: `${tableStyles.td_font_size}px`,
+                    padding: `${tableStyles.td_padding}px 12px`,
+                    borderColor: tableStyles.td_border,
+                  };
 
                   return (
                     <TableRow
@@ -951,33 +1050,40 @@ export const RevisedQuotation: React.FC<CompletedProps> = ({
                           if (item.quotation_number) rowRefs.current.delete(item.quotation_number);
                         }
                       }}
-                      className={`group border-b border-zinc-100 last:border-0 hover:bg-zinc-50/50 transition-colors ${isHighlighted ? "rq-highlight-row" : ""}`}
+                      className={isHighlighted ? "rq-highlight-row" : ""}
+                      style={{ borderColor: tableStyles.tr_border, backgroundColor: tableStyles.table_bg }}
+                      onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = tableStyles.tr_hover_bg; }}
+                      onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = tableStyles.table_bg; }}
                     >
-                      <TableCell className="text-center">
+                      <TableCell style={tdStyle}>
                         <Checkbox
-                          className="rounded-none h-4 w-4"
+                          className="h-4 w-4"
                           checked={isSelected}
                           onCheckedChange={() => toggleSelect(item.id)}
+                          style={{ borderRadius: `${tableStyles.table_border_radius}px` }}
                         />
                       </TableCell>
 
-                      <TableCell className="text-center">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => openEditDialog(item)}
-                          className="h-8 w-8 p-0 rounded-none hover:bg-blue-50 hover:text-blue-600 border border-zinc-200 transition-all group"
+                      <TableCell style={tdStyle}>
+                        <button
                           title="Edit Quotation"
+                          onClick={() => openEditDialog(item)}
+                          className="h-7 w-7 flex items-center justify-center border transition-colors"
+                          style={{
+                            borderColor: tableStyles.td_border,
+                            color: tableStyles.td_text,
+                            borderRadius: `${tableStyles.table_border_radius}px`,
+                          }}
+                          onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = "#eff6ff"; (e.currentTarget as HTMLElement).style.color = "#2563eb"; }}
+                          onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = "transparent"; (e.currentTarget as HTMLElement).style.color = tableStyles.td_text; }}
                         >
-                          <PenIcon className="w-3.5 h-3.5 text-zinc-400 group-hover:text-blue-600" />
-                        </Button>
+                          <PenIcon className="h-3.5 w-3.5" />
+                        </button>
                       </TableCell>
 
-                      <TableCell className="font-mono text-[11px] font-bold text-zinc-700 uppercase">
-                        {displayValue(item.quotation_number)}
-                      </TableCell>
+                      <TableCell style={tdStyle}>{displayValue(item.quotation_number)}</TableCell>
 
-                      <TableCell className="px-3">
+                      <TableCell style={tdStyle}>
                         {item.status === "Quote-Done" ? (
                           <Select
                             value={`${item.quotation_status || ""}__${item.quotation_status_sub || ""}`}
@@ -986,41 +1092,36 @@ export const RevisedQuotation: React.FC<CompletedProps> = ({
                               handleQuotationStatusUpdate(item.id, main, sub || "");
                             }}
                           >
-                            <SelectTrigger className="h-7 text-[10px] w-[140px] rounded-none border-zinc-200 bg-white hover:bg-zinc-50 transition-colors font-bold uppercase tracking-tight">
-                              <SelectValue asChild><span>{item.quotation_status || 'Select status'}</span></SelectValue>
+                            <SelectTrigger
+                              className="h-7 text-[10px] w-[140px] font-bold uppercase tracking-tight"
+                              style={{ borderRadius: `${tableStyles.table_border_radius}px` }}
+                            >
+                              <SelectValue asChild><span>{item.quotation_status || "Select status"}</span></SelectValue>
                             </SelectTrigger>
-                            <SelectContent className="rounded-none">
+                            <SelectContent>
                               {Object.entries(QUOTATION_STATUS_OPTIONS).map(([mainStatus, subStatuses]) => (
                                 <SelectGroup key={mainStatus}>
-                                  <SelectItem value={mainStatus} className="text-[10px] uppercase font-semibold">
-                                    {mainStatus}
-                                  </SelectItem>
-                                  {subStatuses.map(subStatus => (
-                                    <SelectItem key={subStatus} value={`${mainStatus}__${subStatus}`} className="text-[10px] pl-8">
-                                      {subStatus}
-                                    </SelectItem>
+                                  <SelectItem value={mainStatus} className="text-[10px] uppercase font-semibold">{mainStatus}</SelectItem>
+                                  {subStatuses.map((subStatus) => (
+                                    <SelectItem key={subStatus} value={`${mainStatus}__${subStatus}`} className="text-[10px] pl-8">{subStatus}</SelectItem>
                                   ))}
                                 </SelectGroup>
                               ))}
                             </SelectContent>
                           </Select>
                         ) : (
-                          <span className="text-zinc-500 font-medium">{displayValue(item.quotation_status)}</span>
+                          <span style={{ color: tableStyles.td_text }}>{displayValue(item.quotation_status)}</span>
                         )}
                       </TableCell>
 
-                      <TableCell className="px-3 capitalize">
+                      <TableCell style={tdStyle}>
                         <div className="flex items-center gap-1">
                           {displayValue(item.quotation_status_sub)}
-                          {item.quotation_status === 'Convert to SO' && (
-                            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-medium bg-amber-100 text-amber-800">
-                              AUTO
-                            </span>
-                          )}
+                          {item.quotation_status === "Convert to SO" && "—"}
                         </div>
                       </TableCell>
 
-                      <TableCell className="text-center">
+                      <TableCell style={tdStyle}>
                         {editStatusMode ? (
                           <Input
                             className="h-7 text-[10px] w-28 uppercase font-bold border-blue-200 bg-blue-50/50 focus:ring-0 focus:border-blue-400 rounded-none mx-auto text-center"
@@ -1033,11 +1134,7 @@ export const RevisedQuotation: React.FC<CompletedProps> = ({
                             onKeyDown={(e) => {
                               if (e.key === "Enter") (e.target as HTMLInputElement).blur();
                               if (e.key === "Escape") {
-                                setPendingStatuses((prev) => {
-                                  const next = { ...prev };
-                                  delete next[item.id];
-                                  return next;
-                                });
+                                setPendingStatuses((prev) => { const next = { ...prev }; delete next[item.id]; return next; });
                                 (e.target as HTMLInputElement).blur();
                               }
                             }}
@@ -1045,87 +1142,111 @@ export const RevisedQuotation: React.FC<CompletedProps> = ({
                         ) : (
                           <Badge
                             variant="outline"
-                            className={`rounded-none text-[10px] font-bold uppercase tracking-tighter px-2 py-0.5 border-transparent
-                              ${item.tsm_approved_status === "Approved" || item.tsm_approved_status === "Approved By Sales Head"
+                            className={`text-[10px] font-bold uppercase tracking-tighter px-2 py-0.5 border-transparent ${
+                              item.tsm_approved_status === "Approved" || item.tsm_approved_status === "Approved By Sales Head"
                                 ? "bg-emerald-50 text-emerald-700 border-emerald-100"
                                 : item.tsm_approved_status === "Pending"
-                                  ? "bg-orange-50 text-orange-700 border-orange-100"
-                                  : item.tsm_approved_status === "Decline"
-                                    ? "bg-red-50 text-red-700 border-red-100"
-                                    : "bg-zinc-100 text-zinc-600 border-zinc-200"
-                              }`}
+                                ? "bg-orange-50 text-orange-700 border-orange-100"
+                                : item.tsm_approved_status === "Decline"
+                                ? "bg-red-50 text-red-700 border-red-100"
+                                : "bg-zinc-100 text-zinc-600 border-zinc-200"
+                            }`}
+                            style={{ borderRadius: `${tableStyles.table_border_radius}px` }}
                           >
                             {item.tsm_approved_status}
                           </Badge>
                         )}
                       </TableCell>
 
-                      <TableCell className="font-mono text-[10px] text-zinc-500">
-                        {formatDuration(item.start_date, item.end_date)}
-                      </TableCell>
+                      <TableCell style={tdStyle}>{formatDuration(item.start_date, item.end_date)}</TableCell>
 
-                      <TableCell className="font-bold text-zinc-800">
-                        {item.company_name}
-                      </TableCell>
+                      <TableCell style={{ ...tdStyle }} className="font-bold">{item.company_name}</TableCell>
 
-                      <TableCell className="text-[10px] text-zinc-500 leading-tight py-2">
+                      <TableCell style={tdStyle}>
                         {item.tsm_approval_date && (
                           <div className="flex items-center gap-1">
-                            <span className="text-zinc-400 uppercase font-bold tracking-tighter">TSM:</span>
-                            <span>{new Date(item.tsm_approval_date).toLocaleDateString("en-PH", { month: "short", day: "numeric", year: "numeric", hour: "2-digit", minute: "2-digit" })}</span>
+                            <span className="text-zinc-400 uppercase font-bold tracking-tighter text-[9px]">TSM:</span>
+                            <span>{new Date(item.tsm_approval_date).toLocaleDateString("en-PH", { month: "short", day: "numeric", year: "numeric" })}</span>
                           </div>
                         )}
                         {item.manager_approval_date && (
                           <div className="flex items-center gap-1">
-                            <span className="text-zinc-400 uppercase font-bold tracking-tighter">MGR:</span>
-                            <span>{new Date(item.manager_approval_date).toLocaleDateString("en-PH", { month: "short", day: "numeric", year: "numeric", hour: "2-digit", minute: "2-digit" })}</span>
+                            <span className="text-zinc-400 uppercase font-bold tracking-tighter text-[9px]">MGR:</span>
+                            <span>{new Date(item.manager_approval_date).toLocaleDateString("en-PH", { month: "short", day: "numeric", year: "numeric" })}</span>
                           </div>
                         )}
-                        {!item.tsm_approval_date && !item.manager_approval_date && <span className="text-zinc-300 italic">No activity logs</span>}
+                        {!item.tsm_approval_date && !item.manager_approval_date && (
+                          <span className="text-zinc-300 italic">—</span>
+                        )}
                       </TableCell>
 
-                      <TableCell className="text-right font-mono font-bold text-zinc-700">
-                        {item.tsm_remarks || "—"}{item.manager_remarks}
+                      <TableCell style={tdStyle}>
+                        <span className="block truncate max-w-[180px]">
+                          {item.tsm_remarks || "—"}{item.manager_remarks ? ` / ${item.manager_remarks}` : ""}
+                        </span>
                       </TableCell>
 
-                      <TableCell className="text-right font-mono font-bold text-zinc-700">
-                        {item.quotation_amount ? (
-                          `₱${parseFloat(String(item.quotation_amount)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-                        ) : "—"}
+                      <TableCell style={tdStyle}>
+                        {item.quotation_amount
+                          ? `₱${parseFloat(String(item.quotation_amount)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                          : "—"}
                       </TableCell>
 
-                      <TableCell className="text-center font-mono text-[11px] text-zinc-400">
+                      <TableCell style={tdStyle}>
                         {new Date(item.date_updated!).toLocaleDateString("en-PH", { month: "short", day: "numeric" })}
                       </TableCell>
                     </TableRow>
                   );
                 })}
               </TableBody>
+
+              <tfoot>
+                <TableRow style={{ backgroundColor: tableStyles.tfoot_bg, borderColor: tableStyles.tfoot_border }}>
+                  <TableCell
+                    colSpan={12}
+                    className="uppercase tracking-wider"
+                    style={{
+                      color: tableStyles.tfoot_text,
+                      fontSize: `${tableStyles.tfoot_font_size}px`,
+                      padding: `${tableStyles.tfoot_padding}px 12px`,
+                    }}
+                  >
+                    {totalCount} record{totalCount !== 1 ? "s" : ""} total
+                  </TableCell>
+                </TableRow>
+              </tfoot>
             </Table>
           </div>
-          
-          {/* Load More Button */}
-          {hasMore && (
-            <div className="px-4 py-3 border-t border-zinc-100 bg-zinc-50/50 flex justify-center">
-              <Button
-                onClick={handleLoadMore}
-                disabled={loadingMore}
-                variant="outline"
-                className="rounded-none text-xs"
-              >
-                {loadingMore ? (
-                  <>
-                    <LoaderPinwheel className="animate-spin h-3 w-3" /> Loading...
-                  </>
-                ) : (
-                  "Load More"
-                )}
-              </Button>
-            </div>
-          )}
-        </div>
-      )}
+        )}
 
+        {/* ── Load More ── */}
+        {hasMore && (
+          <div
+            className="flex items-center justify-center border-t py-3"
+            style={{ backgroundColor: tableStyles.pagination_bg, borderColor: tableStyles.toolbar_border }}
+          >
+            <button
+              onClick={handleLoadMore}
+              disabled={loadingMore}
+              className="h-8 px-4 text-[10px] font-bold uppercase tracking-widest border transition-all disabled:pointer-events-none disabled:opacity-30"
+              style={{
+                color: tableStyles.pagination_text,
+                borderColor: tableStyles.pagination_border,
+                borderRadius: `${tableStyles.pagination_radius}px`,
+                backgroundColor: "transparent",
+              }}
+            >
+              {loadingMore ? (
+                <span className="flex items-center gap-1.5"><Loader2 className="w-3 h-3 animate-spin" /> Loading...</span>
+              ) : (
+                "Load More"
+              )}
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* ── Edit dialog ── */}
       {editOpen && editItem && (
         <TaskListEditDialog
           item={editItem}
@@ -1174,9 +1295,7 @@ export const RevisedQuotation: React.FC<CompletedProps> = ({
               <PenIcon className="w-4 h-4 text-blue-600" />
               <h2 className="text-sm font-semibold text-gray-800">Status Edit — Authorization</h2>
             </div>
-            <p className="text-xs text-gray-500">
-              Enter the master password to enable inline status editing.
-            </p>
+            <p className="text-xs text-gray-500">Enter the master password to enable inline status editing.</p>
             <input
               autoFocus
               type="password"
@@ -1185,20 +1304,14 @@ export const RevisedQuotation: React.FC<CompletedProps> = ({
               onChange={(e) => { setPwInput(e.target.value); setPwError(false); }}
               onKeyDown={(e) => {
                 if (e.key === "Enter") {
-                  if (pwInput === MASTER_PASSWORD) {
-                    setEditStatusMode(true);
-                    setPwDialogOpen(false);
-                  } else {
-                    setPwError(true);
-                    setPwInput("");
-                  }
+                  if (pwInput === MASTER_PASSWORD) { setEditStatusMode(true); setPwDialogOpen(false); }
+                  else { setPwError(true); setPwInput(""); }
                 }
                 if (e.key === "Escape") setPwDialogOpen(false);
               }}
-              className={`border rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 transition-all ${pwError
-                ? "border-red-400 focus:ring-red-200 bg-red-50"
-                : "border-gray-300 focus:ring-blue-200"
-                }`}
+              className={`border rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 transition-all ${
+                pwError ? "border-red-400 focus:ring-red-200 bg-red-50" : "border-gray-300 focus:ring-blue-200"
+              }`}
             />
             {pwError && (
               <p className="text-xs text-red-500 -mt-2 flex items-center gap-1">
@@ -1206,23 +1319,12 @@ export const RevisedQuotation: React.FC<CompletedProps> = ({
               </p>
             )}
             <div className="flex gap-2 justify-end">
-              <Button
-                variant="ghost"
-                className="text-xs rounded-lg"
-                onClick={() => setPwDialogOpen(false)}
-              >
-                Cancel
-              </Button>
+              <Button variant="ghost" className="text-xs rounded-lg" onClick={() => setPwDialogOpen(false)}>Cancel</Button>
               <Button
                 className="text-xs rounded-lg"
                 onClick={() => {
-                  if (pwInput === MASTER_PASSWORD) {
-                    setEditStatusMode(true);
-                    setPwDialogOpen(false);
-                  } else {
-                    setPwError(true);
-                    setPwInput("");
-                  }
+                  if (pwInput === MASTER_PASSWORD) { setEditStatusMode(true); setPwDialogOpen(false); }
+                  else { setPwError(true); setPwInput(""); }
                 }}
               >
                 Unlock
