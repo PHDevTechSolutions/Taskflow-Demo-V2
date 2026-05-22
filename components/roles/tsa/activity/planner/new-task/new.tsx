@@ -523,9 +523,11 @@ export const NewTask: React.FC<NewTaskProps> = ({
   );
 
   const filteredAccounts = useMemo(() => {
-    if (!searchTerm.trim()) return activeAccounts;
-    return activeAccounts.filter((acc) =>
-      acc.company_name.toLowerCase().includes(searchTerm.toLowerCase())
+    if (!searchTerm.trim()) return [];
+    return activeAccounts.filter(
+      (acc) =>
+        acc.status?.toLowerCase() === "active" &&
+        acc.company_name.toLowerCase().includes(searchTerm.toLowerCase()),
     );
   }, [activeAccounts, searchTerm]);
 

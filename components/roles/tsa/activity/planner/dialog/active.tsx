@@ -2,12 +2,16 @@
 
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-  SheetDescription,
-} from "@/components/ui/sheet";
+  AlertCircleIcon,
+  PlusIcon,
+  MinusIcon,
+  CheckCircle2Icon,
+  Loader2,
+  XIcon,
+  User,
+  MapPin,
+  Tag,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -30,24 +34,39 @@ import { Textarea } from "@/components/ui/textarea";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { sileo } from "sileo";
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
-import {
-  AlertCircleIcon,
-  PlusIcon,
-  MinusIcon,
-  CheckCircle2Icon,
-  ArrowLeft,
-  ArrowRight,
-  Loader2,
-} from "lucide-react";
 import { supabase } from "@/utils/supabase";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
-const TYPECLIENT_OPTIONS = ["New Client"] as const;
+const TYPECLIENT_OPTIONS = [
+  { value: "Top 50",     description: "Top 50 key accounts with highest revenue potential." },
+  { value: "Next 30",    description: "Next tier of 30 accounts for growth development." },
+  { value: "Balance 20", description: "Remaining 20 accounts in the portfolio." },
+  { value: "TSA Client", description: "Account managed directly by a Territory Sales Associate." },
+  { value: "New Client", description: "Client is new and receiving assistance for the first time." },
+] as const;
+
 const TOTAL_STEPS = 3;
+
+const STEPS = [
+  {
+    label: "User Information",
+    description: "Company & contact details",
+    icon: User,
+  },
+  {
+    label: "Address",
+    description: "Location & delivery info",
+    icon: MapPin,
+  },
+  {
+    label: "Classification",
+    description: "Type, industry & status",
+    icon: Tag,
+  },
+];
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-/** Normalize company name for duplicate checking */
 function cleanCompanyName(name: string): string {
   if (!name) return "";
   return name
@@ -58,7 +77,6 @@ function cleanCompanyName(name: string): string {
     .trim();
 }
 
-/** Validate email — returns true if valid or explicitly N/A */
 function isValidEmail(email: string): boolean {
   if (!email) return false;
   const lower = email.trim().toLowerCase();
@@ -66,7 +84,6 @@ function isValidEmail(email: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/i.test(email);
 }
 
-/** Normalize PH phone number to 11-digit local format for comparison */
 function normalizePHNumber(number: string): string {
   if (!number) return "";
   let n = number.replace(/\D/g, "");
@@ -75,48 +92,48 @@ function normalizePHNumber(number: string): string {
   return n;
 }
 
-/** Format local PH number → 0917-123-4567 */
+/** Format PH mobile → 0900-000-0000 (strict 11 digits) */
 function formatPH(val: string): string {
-  val = val.replace(/\D/g, "").slice(0, 11);
-  if (val.length <= 4) return val;
-  if (val.length <= 7) return `${val.slice(0, 4)}-${val.slice(4)}`;
-  return `${val.slice(0, 4)}-${val.slice(4, 7)}-${val.slice(7)}`;
+  const digits = val.replace(/\D/g, "").slice(0, 11);
+  if (digits.length <= 4) return digits;
+  if (digits.length <= 7) return `${digits.slice(0, 4)}-${digits.slice(4)}`;
+  return `${digits.slice(0, 4)}-${digits.slice(4, 7)}-${digits.slice(7)}`;
 }
 
-/** Format landline number → (02) 8123-4567 or (043) 123-4567 */
+/** Format TIN → 000-000-000-000 */
+function formatTIN(val: string): string {
+  const digits = val.replace(/\D/g, "").slice(0, 12);
+  if (digits.length <= 3) return digits;
+  if (digits.length <= 6) return `${digits.slice(0, 3)}-${digits.slice(3)}`;
+  if (digits.length <= 9) return `${digits.slice(0, 3)}-${digits.slice(3, 6)}-${digits.slice(6)}`;
+  return `${digits.slice(0, 3)}-${digits.slice(3, 6)}-${digits.slice(6, 9)}-${digits.slice(9)}`;
+}
+
+/** Format landline → (02) 8123-4567 or (043) 123-4567 */
 function formatLandline(val: string): string {
-  val = val.replace(/\D/g, "").slice(0, 10); // Max 10 digits for PH landline
-  if (val.length === 0) return "";
-  
-  // Area code: 2 digits for NCR (02), 3 digits for others (043, 032, etc.)
-  let areaCodeLen = val.startsWith("2") ? 2 : 3;
-  
-  if (val.length <= areaCodeLen) {
-    return val.length === 2 && val.startsWith("2") ? `(${val})` : val;
-  }
-  
-  const areaCode = val.slice(0, areaCodeLen);
-  const rest = val.slice(areaCodeLen);
-  
-  if (rest.length <= 3) {
-    return `(${areaCode}) ${rest}`;
-  }
-  
-  return `(${areaCode}) ${rest.slice(0, 4)}-${rest.slice(4, 7)}${rest.slice(7) ? `-${rest.slice(7)}` : ""}`;
+  const digits = val.replace(/\D/g, "").slice(0, 10);
+  if (digits.length === 0) return "";
+  const areaCodeLen = digits.startsWith("2") ? 2 : 3;
+  if (digits.length <= areaCodeLen) return `(${digits}`;
+  const areaCode = digits.slice(0, areaCodeLen);
+  const rest = digits.slice(areaCodeLen);
+  if (rest.length <= 4) return `(${areaCode}) ${rest}`;
+  return `(${areaCode}) ${rest.slice(0, 4)}-${rest.slice(4)}`;
 }
 
-/** Format international number → +63 917 123 4567 */
+/** Format international → +63 917 123 4567 */
 function formatIntl(val: string): string {
-  val = val.replace(/[^0-9+]/g, "");
-  if (val.indexOf("+") > 0) val = "+" + val.replace(/\+/g, "");
-  const digits = val.replace(/\D/g, "");
-  if (digits.length < 4) return val;
+  // Strip everything except digits and leading +
+  let clean = val.replace(/[^0-9+]/g, "");
+  if (clean.indexOf("+") > 0) clean = "+" + clean.replace(/\+/g, "");
+  const digits = clean.replace(/\D/g, "");
+  if (digits.length < 2) return clean;
   const country = digits.slice(0, 2);
   const rest = digits.slice(2);
+  if (rest.length === 0) return `+${country}`;
   if (rest.length <= 3) return `+${country} ${rest}`;
   if (rest.length <= 6) return `+${country} ${rest.slice(0, 3)} ${rest.slice(3)}`;
-  if (rest.length <= 10)
-    return `+${country} ${rest.slice(0, 3)} ${rest.slice(3, 6)} ${rest.slice(6)}`;
+  if (rest.length <= 10) return `+${country} ${rest.slice(0, 3)} ${rest.slice(3, 6)} ${rest.slice(6)}`;
   return `+${country} ${rest.slice(0, 3)} ${rest.slice(3, 6)} ${rest.slice(6, 10)} ${rest.slice(10)}`;
 }
 
@@ -136,6 +153,7 @@ interface AccountFormData {
   date_created?: string;
   company_group: string;
   tin_number?: string;
+  reason: string;
 }
 
 interface Agent {
@@ -174,12 +192,13 @@ const DEFAULT_FORM: AccountFormData = {
   email_address: [""],
   address: "",
   region: "",
-  status: "Active",
+  status: "For Approval",
   delivery_address: "",
   type_client: "New Client",
   industry: "OTHER",
   company_group: "",
   tin_number: "",
+  reason: "",
 };
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -192,7 +211,6 @@ export function AccountDialog({
   onOpenChangeAction,
 }: AccountDialogProps) {
 
-  // ── Form state ──────────────────────────────────────────────────────────────
   const [formData, setFormData] = useState<AccountFormData>({
     ...DEFAULT_FORM,
     ...initialData,
@@ -203,32 +221,31 @@ export function AccountDialog({
     value: AccountFormData[K],
   ) => setFormData((prev) => ({ ...prev, [key]: value }));
 
-  // ── Stepper ─────────────────────────────────────────────────────────────────
   const [step, setStep] = useState(0);
 
-  // ── Industry state (dynamic from Supabase) ──────────────────────────────────
   const [industries, setIndustries] = useState<string[]>([]);
   const [loadingIndustries, setLoadingIndustries] = useState(false);
   const [newIndustryInput, setNewIndustryInput] = useState("");
   const [addingIndustry, setAddingIndustry] = useState(false);
   const [showAddIndustry, setShowAddIndustry] = useState(false);
 
-  // ── Regions ─────────────────────────────────────────────────────────────────
   const [regions, setRegions] = useState<string[]>([]);
-
-  // ── Agents ──────────────────────────────────────────────────────────────────
   const [agents, setAgents] = useState<Agent[]>([]);
 
-  // ── Duplicate check ─────────────────────────────────────────────────────────
   const [companyError, setCompanyError] = useState("");
   const [duplicateInfo, setDuplicateInfo] = useState<DuplicateCompany[]>([]);
   const [isCheckingDuplicate, setIsCheckingDuplicate] = useState(false);
   const [showAllDuplicates, setShowAllDuplicates] = useState(false);
 
+  const [companySuggestions, setCompanySuggestions] = useState<DuplicateCompany[]>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [activeSuggestionIndex, setActiveSuggestionIndex] = useState(-1);
+  const companyInputRef = useRef<HTMLInputElement>(null);
+  const suggestionsRef = useRef<HTMLDivElement>(null);
+
   const submitLock = useRef(false);
   const debounceTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // ── Reset form when dialog opens/closes ────────────────────────────────────
   useEffect(() => {
     if (open) {
       setFormData({ ...DEFAULT_FORM, ...initialData });
@@ -238,10 +255,12 @@ export function AccountDialog({
       setShowAllDuplicates(false);
       setNewIndustryInput("");
       setShowAddIndustry(false);
+      setCompanySuggestions([]);
+      setShowSuggestions(false);
+      setActiveSuggestionIndex(-1);
     }
   }, [open, initialData]);
 
-  // ── Fetch regions ───────────────────────────────────────────────────────────
   useEffect(() => {
     fetch("https://psgc.gitlab.io/api/regions")
       .then((res) => res.json())
@@ -249,7 +268,6 @@ export function AccountDialog({
       .catch(console.error);
   }, []);
 
-  // ── Fetch agents ────────────────────────────────────────────────────────────
   useEffect(() => {
     if (!userDetails.referenceid) return;
     fetch("/api/fetch-all-user-transfer")
@@ -268,7 +286,6 @@ export function AccountDialog({
       .catch(console.error);
   }, [userDetails.referenceid]);
 
-  // ── Fetch industries from Supabase ──────────────────────────────────────────
   const fetchIndustries = useCallback(async () => {
     setLoadingIndustries(true);
     try {
@@ -276,7 +293,6 @@ export function AccountDialog({
         .from("industry")
         .select("industry_name")
         .order("industry_name", { ascending: true });
-
       if (error) throw error;
       setIndustries((data ?? []).map((row) => row.industry_name as string).filter(Boolean));
     } catch (err) {
@@ -290,12 +306,10 @@ export function AccountDialog({
     fetchIndustries();
   }, [fetchIndustries]);
 
-  // ── Add new industry to Supabase ────────────────────────────────────────────
   const handleAddIndustry = async () => {
     const name = newIndustryInput.trim().toUpperCase();
     if (!name) return;
 
-    // Prevent duplicates locally before hitting DB
     if (industries.includes(name)) {
       sileo.error({
         title: "Duplicate",
@@ -310,18 +324,12 @@ export function AccountDialog({
 
     setAddingIndustry(true);
     try {
-      const { error } = await supabase
-        .from("industry")
-        .insert({ industry_name: name });
-
+      const { error } = await supabase.from("industry").insert({ industry_name: name });
       if (error) throw error;
-
-      // Optimistically update local list + select it
       setIndustries((prev) => [...prev, name].sort());
       updateField("industry", name);
       setNewIndustryInput("");
       setShowAddIndustry(false);
-
       sileo.success({
         title: "Industry Added",
         description: `"${name}" has been added successfully.`,
@@ -344,11 +352,12 @@ export function AccountDialog({
     }
   };
 
-  // ── Duplicate check on company name change ──────────────────────────────────
   useEffect(() => {
     if (mode === "edit") {
       setCompanyError("");
       setDuplicateInfo([]);
+      setCompanySuggestions([]);
+      setShowSuggestions(false);
       return;
     }
 
@@ -357,9 +366,11 @@ export function AccountDialog({
     debounceTimeout.current = setTimeout(() => {
       const name = formData.company_name.trim();
 
-      if (!name || name.length < 3) {
-        setCompanyError("Company Name must be at least 3 characters.");
+      if (!name || name.length < 2) {
+        setCompanyError(name.length > 0 ? "Company Name must be at least 3 characters." : "");
         setDuplicateInfo([]);
+        setCompanySuggestions([]);
+        setShowSuggestions(false);
         return;
       }
 
@@ -367,6 +378,8 @@ export function AccountDialog({
       if (["NONE", "OTHER"].includes(cleaned)) {
         setCompanyError("Company Name Invalid.");
         setDuplicateInfo([]);
+        setCompanySuggestions([]);
+        setShowSuggestions(false);
         return;
       }
 
@@ -382,17 +395,21 @@ export function AccountDialog({
           return res.json() as Promise<{ exists: boolean; companies: DuplicateCompany[] }>;
         })
         .then(({ exists, companies }) => {
+          const enriched = companies.map((company) => ({
+            ...company,
+            owner_firstname:
+              agents.find((a) => a.referenceid === company.owner_referenceid)
+                ?.firstname ?? company.owner_referenceid,
+          }));
+
           if (exists && companies.length > 0) {
-            setDuplicateInfo(
-              companies.map((company) => ({
-                ...company,
-                owner_firstname:
-                  agents.find((a) => a.referenceid === company.owner_referenceid)
-                    ?.firstname ?? company.owner_referenceid,
-              })),
-            );
+            setDuplicateInfo(enriched);
+            setCompanySuggestions(enriched);
+            setShowSuggestions(true);
           } else {
             setDuplicateInfo([]);
+            setCompanySuggestions([]);
+            setShowSuggestions(false);
           }
           setCompanyError("");
         })
@@ -400,19 +417,20 @@ export function AccountDialog({
           if (err.name !== "AbortError") {
             setCompanyError("Failed to validate company name.");
             setDuplicateInfo([]);
+            setCompanySuggestions([]);
+            setShowSuggestions(false);
           }
         })
         .finally(() => setIsCheckingDuplicate(false));
 
       return () => controller.abort();
-    }, 500);
+    }, 350);
 
     return () => {
       if (debounceTimeout.current) clearTimeout(debounceTimeout.current);
     };
   }, [formData.company_name, mode, agents]);
 
-  // ── Duplicate contact check ─────────────────────────────────────────────────
   useEffect(() => {
     if (!duplicateInfo.length) {
       setCompanyError("");
@@ -455,7 +473,6 @@ export function AccountDialog({
     }
   }, [formData.contact_person, formData.contact_number, duplicateInfo]);
 
-  // ── Step validation ─────────────────────────────────────────────────────────
   const canProceedToNext = (): boolean => {
     switch (step) {
       case 0:
@@ -479,10 +496,19 @@ export function AccountDialog({
         return (
           formData.type_client !== "" &&
           formData.industry !== "" &&
-          formData.status !== ""
+          formData.status !== "" &&
+          formData.reason.trim() !== ""
         );
       default:
         return false;
+    }
+  };
+
+  const handleStepClick = (targetStep: number) => {
+    if (targetStep < step) {
+      setStep(targetStep);
+    } else if (targetStep === step + 1 && canProceedToNext()) {
+      setStep(targetStep);
     }
   };
 
@@ -493,7 +519,6 @@ export function AccountDialog({
     if (step > 0) setStep((s) => s - 1);
   };
 
-  // ── Form submission ─────────────────────────────────────────────────────────
   const handleSubmit = async () => {
     if (submitLock.current) return;
     submitLock.current = true;
@@ -511,7 +536,6 @@ export function AccountDialog({
       return;
     }
 
-    // Validate all emails
     for (const em of formData.email_address) {
       if (em.trim() && em.trim().toLowerCase() !== "n/a" && !isValidEmail(em)) {
         sileo.error({
@@ -533,10 +557,13 @@ export function AccountDialog({
       contact_person: formData.contact_person.map((v) => v.trim()).filter(Boolean),
       contact_number: formData.contact_number.map((v) => v.trim()).filter(Boolean),
       email_address: formData.email_address.map((v) => v.trim()).filter(Boolean),
+      address: formData.address.toUpperCase(),
+      delivery_address: formData.delivery_address.toUpperCase(),
       referenceid: userDetails.referenceid,
       tsm: userDetails.tsm,
       manager: userDetails.manager,
-      status: mode === "create" ? "Active" : formData.status,
+      // status is always "For Approval" on both create and edit
+      status: "For Approval",
     };
 
     try {
@@ -567,31 +594,84 @@ export function AccountDialog({
     }
   };
 
-  // MultiValueField intentionally removed — inline inputs used instead
-  // to prevent input focus loss caused by component re-mounting on every render.
-
   // ── Step content ────────────────────────────────────────────────────────────
   const renderStepContent = () => {
     switch (step) {
-      // ── Step 0: Company Info ────────────────────────────────────────────────
+      // ── Step 0: User Information ────────────────────────────────────────────
       case 0:
         return (
-          <>
+          <div className="space-y-6">
             {/* Company Name */}
-            <div className="mb-4">
+            <div>
               <FieldContent>
-                <FieldLabel className="font-bold">Company Name</FieldLabel>
-                <FieldDescription>
+                <FieldLabel className="font-semibold text-sm">Company Name</FieldLabel>
+                <FieldDescription className="text-xs">
                   Enter the official registered name of the company.
                 </FieldDescription>
               </FieldContent>
-              <Input
-                required
-                value={formData.company_name}
-                onChange={(e) => updateField("company_name", e.target.value)}
-                placeholder="Company Name"
-                className="uppercase rounded-none"
-              />
+              <div className="relative mt-1.5">
+                <Input
+                  ref={companyInputRef}
+                  required
+                  value={formData.company_name}
+                  onChange={(e) => {
+                    updateField("company_name", e.target.value);
+                    setActiveSuggestionIndex(-1);
+                  }}
+                  onFocus={() => {
+                    if (companySuggestions.length > 0) setShowSuggestions(true);
+                  }}
+                  onBlur={() => {
+                    setTimeout(() => setShowSuggestions(false), 150);
+                  }}
+                  onKeyDown={(e) => {
+                    if (!showSuggestions || companySuggestions.length === 0) return;
+                    if (e.key === "ArrowDown") {
+                      e.preventDefault();
+                      setActiveSuggestionIndex((i) => Math.min(i + 1, companySuggestions.length - 1));
+                    } else if (e.key === "ArrowUp") {
+                      e.preventDefault();
+                      setActiveSuggestionIndex((i) => Math.max(i - 1, 0));
+                    } else if (e.key === "Enter" && activeSuggestionIndex >= 0) {
+                      e.preventDefault();
+                      const selected = companySuggestions[activeSuggestionIndex];
+                      updateField("company_name", selected.company_name);
+                      setShowSuggestions(false);
+                      setActiveSuggestionIndex(-1);
+                    } else if (e.key === "Escape") {
+                      setShowSuggestions(false);
+                      setActiveSuggestionIndex(-1);
+                    }
+                  }}
+                  placeholder="Company Name"
+                  className="uppercase rounded-none"
+                  autoComplete="off"
+                />
+                {showSuggestions && companySuggestions.length > 0 && (
+                  <div
+                    ref={suggestionsRef}
+                    className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded shadow-lg max-h-56 overflow-y-auto"
+                  >
+                    {companySuggestions.map((s, idx) => (
+                      <button
+                        key={s.owner_referenceid + s.company_name}
+                        type="button"
+                        className={`w-full text-left px-3 py-2 text-sm flex items-center justify-between gap-2 hover:bg-yellow-50 transition-colors ${idx === activeSuggestionIndex ? "bg-yellow-100" : ""}`}
+                        onMouseDown={() => {
+                          updateField("company_name", s.company_name);
+                          setShowSuggestions(false);
+                          setActiveSuggestionIndex(-1);
+                        }}
+                      >
+                        <span className="font-medium uppercase truncate">{s.company_name}</span>
+                        <span className="text-xs text-gray-400 shrink-0 capitalize">
+                          {s.owner_firstname ?? s.owner_referenceid}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
 
               {isCheckingDuplicate && (
                 <Alert className="mt-2">
@@ -602,40 +682,32 @@ export function AccountDialog({
 
               {duplicateInfo.length > 0 && (
                 <>
-                  {(showAllDuplicates ? duplicateInfo : duplicateInfo.slice(0, 2)).map(
-                    (dup) => (
-                      <Alert
-                        key={dup.owner_referenceid + dup.company_name}
-                        variant={companyError ? "destructive" : "default"}
-                        className={`mt-2 ${!companyError ? "bg-yellow-100 text-yellow-800" : ""}`}
-                      >
-                        <AlertCircleIcon
-                          className={`mr-2 h-5 w-5 ${companyError ? "text-red-500" : "text-yellow-500"}`}
-                        />
-                        <div>
-                          <AlertTitle className="font-bold">
-                            {companyError ? companyError : "Already Taken By"}
-                          </AlertTitle>
-                          <AlertDescription className="flex items-center gap-2">
-                            <strong className="text-[10px]">{dup.company_name}</strong>
-                            <span>—</span>
-                            <span className="capitalize text-[10px]">
-                              {dup.owner_firstname}
-                            </span>
-                          </AlertDescription>
-                        </div>
-                      </Alert>
-                    ),
-                  )}
+                  {(showAllDuplicates ? duplicateInfo : duplicateInfo.slice(0, 2)).map((dup) => (
+                    <Alert
+                      key={dup.owner_referenceid + dup.company_name}
+                      variant={companyError ? "destructive" : "default"}
+                      className={`mt-2 ${!companyError ? "bg-yellow-100 text-yellow-800" : ""}`}
+                    >
+                      <AlertCircleIcon className={`mr-2 h-5 w-5 ${companyError ? "text-red-500" : "text-yellow-500"}`} />
+                      <div>
+                        <AlertTitle className="font-bold">
+                          {companyError ? companyError : "Already Taken By"}
+                        </AlertTitle>
+                        <AlertDescription className="flex items-center gap-2">
+                          <strong className="text-[10px]">{dup.company_name}</strong>
+                          <span>—</span>
+                          <span className="capitalize text-[10px]">{dup.owner_firstname}</span>
+                        </AlertDescription>
+                      </div>
+                    </Alert>
+                  ))}
                   {duplicateInfo.length > 2 && (
                     <button
                       type="button"
                       className="mt-2 text-blue-600 hover:underline text-xs"
                       onClick={() => setShowAllDuplicates((p) => !p)}
                     >
-                      {showAllDuplicates
-                        ? "View Less"
-                        : `View More (${duplicateInfo.length - 2} more)`}
+                      {showAllDuplicates ? "View Less" : `View More (${duplicateInfo.length - 2} more)`}
                     </button>
                   )}
                 </>
@@ -643,529 +715,484 @@ export function AccountDialog({
             </div>
 
             {/* TIN Number */}
-            <div className="mb-4">
+            <div>
               <FieldContent>
-                <FieldLabel className="font-bold">TIN Number</FieldLabel>
-                <FieldDescription>
-                  Enter the Tax Identification Number (optional).
+                <FieldLabel className="font-semibold text-sm">TIN Number</FieldLabel>
+                <FieldDescription className="text-xs">
+                  Enter the Tax Identification Number (optional). Format: 000-000-000-000
                 </FieldDescription>
               </FieldContent>
               <Input
                 value={formData.tin_number || ""}
-                onChange={(e) => updateField("tin_number", e.target.value)}
+                onChange={(e) => {
+                  updateField("tin_number", formatTIN(e.target.value));
+                }}
                 placeholder="000-000-000-000"
-                className="rounded-none"
+                className="rounded-none mt-1.5"
+                maxLength={15}
+                inputMode="numeric"
               />
             </div>
 
             {/* Contact Person(s) */}
-            <div className="mb-4">
-              <FieldGroup>
-                <FieldSet>
-                  <FieldContent>
-                    <FieldLabel className="font-bold">Contact Person(s)</FieldLabel>
-                    <FieldDescription>
-                      Enter the full name(s) of the primary contact person(s).
-                    </FieldDescription>
-                  </FieldContent>
-                  {formData.contact_person.map((val, i) => (
-                    <div key={i} className="flex items-center gap-2 mb-2">
-                      <Input
-                        value={val}
-                        onChange={(e) => {
-                          const copy = [...formData.contact_person];
-                          copy[i] = e.target.value;
-                          updateField("contact_person", copy);
-                        }}
-                        placeholder="Contact Person"
-                        className="uppercase rounded-none flex-1"
-                      />
-                      <Button
-                        type="button"
-                        variant="destructive"
-                        className="rounded-none"
-                        disabled={formData.contact_person.length === 1}
-                        onClick={() => {
-                          const copy = [...formData.contact_person];
-                          copy.splice(i, 1);
-                          updateField("contact_person", copy);
-                        }}
-                      >
-                        <MinusIcon className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        type="button"
-                        className="rounded-none"
-                        onClick={() =>
-                          updateField("contact_person", [...formData.contact_person, ""])
-                        }
-                      >
-                        <PlusIcon className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  ))}
-                </FieldSet>
-              </FieldGroup>
+            <div>
+              <FieldContent>
+                <FieldLabel className="font-semibold text-sm">Contact Person(s)</FieldLabel>
+                <FieldDescription className="text-xs">
+                  Enter the full name(s) of the primary contact person(s).
+                </FieldDescription>
+              </FieldContent>
+              <div className="mt-1.5 space-y-2">
+                {formData.contact_person.map((val, i) => (
+                  <div key={i} className="flex items-center gap-2">
+                    <Input
+                      value={val}
+                      onChange={(e) => {
+                        const copy = [...formData.contact_person];
+                        copy[i] = e.target.value;
+                        updateField("contact_person", copy);
+                      }}
+                      placeholder="Contact Person"
+                      className="uppercase rounded-none flex-1"
+                    />
+                    <Button
+                      type="button"
+                      variant="destructive"
+                      size="icon"
+                      className="rounded-none shrink-0"
+                      disabled={formData.contact_person.length === 1}
+                      onClick={() => {
+                        const copy = [...formData.contact_person];
+                        copy.splice(i, 1);
+                        updateField("contact_person", copy);
+                      }}
+                    >
+                      <MinusIcon className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      type="button"
+                      size="icon"
+                      className="rounded-none shrink-0"
+                      onClick={() => updateField("contact_person", [...formData.contact_person, ""])}
+                    >
+                      <PlusIcon className="h-4 w-4" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
             </div>
 
             {/* Contact Number(s) */}
-            <div className="mb-4">
-              <FieldGroup>
-                <FieldSet>
-                  <FieldContent>
-                    <FieldLabel className="font-bold">Contact Number(s)</FieldLabel>
-                    <FieldDescription>
-                      Enter the phone number(s) of the primary contact person(s).
-                    </FieldDescription>
-                  </FieldContent>
+            <div>
+              <FieldContent>
+                <FieldLabel className="font-semibold text-sm">Contact Number(s)</FieldLabel>
+                <FieldDescription className="text-xs">
+                  Enter the phone number(s) of the primary contact person(s).
+                </FieldDescription>
+              </FieldContent>
+              <div className="mt-1.5 space-y-3">
+                {formData.contact_number.map((cn, i) => {
+                  const isIntl = cn.startsWith("+");
+                  const digits = cn.replace(/\D/g, "");
+                  // Landline: starts with 0 but NOT 09; must have at least 2 digits
+                  const isLandline = !isIntl && digits.startsWith("0") && !digits.startsWith("09") && digits.length >= 2;
+                  const isMobile = !isIntl && !isLandline && !cn.startsWith("#");
+                  const isCustom = cn.startsWith("#");
 
-                  {formData.contact_number.map((cn, i) => {
-                    // Determine type: custom, intl (+), landline (starts with 0 but not 09), or mobile (starts with 09)
-                    const isIntl = cn.startsWith("+");
-                    const digits = cn.replace(/\D/g, "");
-                    const isLandline = !isIntl && digits.startsWith("0") && !digits.startsWith("09") && digits.length >= 2;
-                    const isMobile = !isIntl && digits.startsWith("09");
-                    const isCustom = cn.startsWith("#"); // Custom numbers start with #
-                    
-                    let displayVal = cn;
-                    if (isCustom) displayVal = cn.slice(1); // Remove # prefix for display
-                    else if (isIntl) displayVal = formatIntl(cn);
-                    else if (isLandline) displayVal = formatLandline(cn);
-                    else displayVal = formatPH(cn);
+                  // Display value — always re-formatted from raw digits stored in state
+                  let displayVal = cn;
+                  if (isCustom) displayVal = cn.slice(1);
+                  else if (isIntl) displayVal = formatIntl(cn);
+                  else if (isLandline) displayVal = formatLandline(digits);
+                  else displayVal = formatPH(digits);
 
-                    return (
-                      <div key={i} className="flex flex-col gap-1 mb-4">
-                        <div className="flex items-center gap-2">
-                          <Select
-                            value={isCustom ? "custom" : isIntl ? "intl" : isLandline ? "landline" : "local"}
-                            onValueChange={(v) => {
-                              const copy = [...formData.contact_number];
-                              const currentDigits = cn.replace(/\D/g, "");
-                              
-                              if (v === "local") {
-                                // Convert to mobile format
-                                copy[i] = currentDigits.startsWith("63")
-                                  ? "0" + currentDigits.slice(2)
-                                  : currentDigits.startsWith("0")
-                                  ? currentDigits
-                                  : "09";
-                              } else if (v === "intl") {
-                                // Convert to international
-                                copy[i] = currentDigits.startsWith("0")
-                                  ? `+63${currentDigits.slice(1)}`
-                                  : currentDigits.startsWith("63")
-                                  ? "+" + currentDigits
-                                  : "+63";
-                              } else if (v === "landline") {
-                                // Convert to landline (start with 0 and area code)
-                                copy[i] = currentDigits.startsWith("63")
-                                  ? "0" + currentDigits.slice(2, 3) // Take first digit after 63 for area code
-                                  : currentDigits.startsWith("0") && !currentDigits.startsWith("09")
-                                  ? currentDigits.slice(0, 4) // Keep first 4 digits (0 + area code)
-                                  : "02"; // Default to NCR area code
-                              } else if (v === "custom") {
-                                // Convert to custom - add # prefix, keep original
-                                copy[i] = "#" + (cn.startsWith("#") ? cn.slice(1) : cn);
-                              }
-                              updateField("contact_number", copy);
-                            }}
-                          >
-                            <SelectTrigger className="w-[100px] rounded-none">
-                              {isCustom ? "Custom" : isIntl ? "Intl" : isLandline ? "Landline" : "Phil"}
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="local">Phil</SelectItem>
-                              <SelectItem value="landline">Landline</SelectItem>
-                              <SelectItem value="intl">Intl</SelectItem>
-                              <SelectItem value="custom">Custom</SelectItem>
-                            </SelectContent>
-                          </Select>
+                  // Validation flags
+                  const mobileInvalid = isMobile && digits.length > 0 && digits.length !== 11;
+                  const landlineInvalid = isLandline && digits.length > 0 && (digits.length < 9 || digits.length > 10);
+                  const intlInvalid = isIntl && cn.replace(/\s+/g, "").length > 1 && !/^\+\d{7,15}$/.test(cn.replace(/\s+/g, ""));
 
-                          <Input
-                            value={displayVal}
-                            onChange={(e) => {
-                              const raw = e.target.value;
-                              const copy = [...formData.contact_number];
-                              if (isCustom) {
-                                // For custom, keep as-is but preserve # prefix
-                                copy[i] = "#" + raw;
-                              } else {
-                                const digitsOnly = raw.replace(/\D/g, "");
-                                copy[i] = isIntl ? "+" + digitsOnly : digitsOnly;
-                              }
-                              updateField("contact_number", copy);
-                            }}
-                            placeholder={isCustom ? "Any format (e.g. ext. 123)" : isIntl ? "+63 917 123 4567" : isLandline ? "(02) 1234-5678" : "0917-123-4567"}
-                            className="rounded-none flex-1"
-                          />
-
-                          <Button
-                            type="button"
-                            variant="destructive"
-                            className="rounded-none"
-                            disabled={formData.contact_number.length === 1}
-                            onClick={() => {
-                              const copy = [...formData.contact_number];
-                              copy.splice(i, 1);
-                              updateField("contact_number", copy);
-                            }}
-                          >
-                            <MinusIcon />
-                          </Button>
-                          <Button
-                            type="button"
-                            className="rounded-none"
-                            onClick={() =>
-                              updateField("contact_number", [
-                                ...formData.contact_number,
-                                "",
-                              ])
+                  return (
+                    <div key={i} className="space-y-1">
+                      <div className="flex items-center gap-2">
+                        <Select
+                          value={isCustom ? "custom" : isIntl ? "intl" : isLandline ? "landline" : "local"}
+                          onValueChange={(v) => {
+                            const copy = [...formData.contact_number];
+                            const currentDigits = cn.replace(/\D/g, "");
+                            if (v === "local") {
+                              // Convert to mobile — seed with 09 if empty
+                              const base = currentDigits.startsWith("63")
+                                ? "0" + currentDigits.slice(2)
+                                : currentDigits.startsWith("0") ? currentDigits : "09";
+                              copy[i] = base.slice(0, 11);
+                            } else if (v === "intl") {
+                              copy[i] = currentDigits.startsWith("0")
+                                ? `+63${currentDigits.slice(1)}`
+                                : currentDigits.startsWith("63") ? "+" + currentDigits : "+63";
+                            } else if (v === "landline") {
+                              copy[i] = currentDigits.startsWith("09")
+                                ? "02"
+                                : currentDigits.startsWith("0")
+                                ? currentDigits.slice(0, 10)
+                                : "02";
+                            } else if (v === "custom") {
+                              copy[i] = "#" + (cn.startsWith("#") ? cn.slice(1) : cn);
                             }
-                          >
-                            <PlusIcon />
-                          </Button>
-                        </div>
+                            updateField("contact_number", copy);
+                          }}
+                        >
+                          <SelectTrigger className="w-[105px] rounded-none shrink-0 text-xs">
+                            {isCustom ? "Custom" : isIntl ? "Intl" : isLandline ? "Landline" : "Phil"}
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="local">Phil (Mobile)</SelectItem>
+                            <SelectItem value="landline">Landline</SelectItem>
+                            <SelectItem value="intl">International</SelectItem>
+                            <SelectItem value="custom">Custom</SelectItem>
+                          </SelectContent>
+                        </Select>
 
-                        {/* Inline validation */}
-                        {isMobile && digits.length > 0 && digits.length !== 11 && (
-                          <p className="text-red-500 text-xs">
-                            Mobile numbers must be exactly 11 digits.
-                          </p>
-                        )}
-                        {isLandline && digits.length > 0 && (digits.length < 9 || digits.length > 10) && (
-                          <p className="text-red-500 text-xs">
-                            Landline numbers must be 9-10 digits (including area code).
-                          </p>
-                        )}
-                        {isIntl && cn.length > 1 && !/^\+\d{5,15}$/.test(cn.replace(/\s+/g, "")) && (
-                          <p className="text-red-500 text-xs">
-                            Invalid international number format.
-                          </p>
-                        )}
-                        {isCustom && (
-                          <p className="text-blue-500 text-xs">
-                            Custom format - no validation applied
-                          </p>
-                        )}
+                        <Input
+                          value={displayVal}
+                          onChange={(e) => {
+                            const raw = e.target.value;
+                            const copy = [...formData.contact_number];
+                            if (isCustom) {
+                              copy[i] = "#" + raw;
+                            } else if (isIntl) {
+                              // Preserve + prefix; store as +digits
+                              const digitsOnly = raw.replace(/\D/g, "");
+                              copy[i] = "+" + digitsOnly;
+                            } else {
+                              // Store raw digits only for local/landline
+                              copy[i] = raw.replace(/\D/g, "").slice(0, isLandline ? 10 : 11);
+                            }
+                            updateField("contact_number", copy);
+                          }}
+                          placeholder={
+                            isCustom ? "Any format (e.g. ext. 123)"
+                            : isIntl ? "+63 917 123 4567"
+                            : isLandline ? "(02) 8123-4567"
+                            : "0900-000-0000"
+                          }
+                          className={`rounded-none flex-1 ${mobileInvalid || landlineInvalid || intlInvalid ? "border-red-400" : ""}`}
+                          inputMode={isCustom ? "text" : "numeric"}
+                          maxLength={isCustom ? undefined : isIntl ? 20 : isLandline ? 14 : 13}
+                        />
+
+                        <Button
+                          type="button"
+                          variant="destructive"
+                          size="icon"
+                          className="rounded-none shrink-0"
+                          disabled={formData.contact_number.length === 1}
+                          onClick={() => {
+                            const copy = [...formData.contact_number];
+                            copy.splice(i, 1);
+                            updateField("contact_number", copy);
+                          }}
+                        >
+                          <MinusIcon className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          type="button"
+                          size="icon"
+                          className="rounded-none shrink-0"
+                          onClick={() => updateField("contact_number", [...formData.contact_number, ""])}
+                        >
+                          <PlusIcon className="h-4 w-4" />
+                        </Button>
                       </div>
-                    );
-                  })}
-                </FieldSet>
-              </FieldGroup>
+
+                      {mobileInvalid && (
+                        <p className="text-red-500 text-xs">PH mobile numbers must be exactly 11 digits (e.g. 0917-123-4567).</p>
+                      )}
+                      {landlineInvalid && (
+                        <p className="text-red-500 text-xs">Landline must be 9–10 digits including area code (e.g. (02) 8123-4567).</p>
+                      )}
+                      {intlInvalid && (
+                        <p className="text-red-500 text-xs">Invalid international number. Format: +[country code] [number].</p>
+                      )}
+                      {isCustom && (
+                        <p className="text-blue-500 text-xs">Custom format — no validation applied.</p>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
             </div>
 
             {/* Email Address(es) */}
-            <div className="mb-4">
-              <FieldGroup>
-                <FieldSet>
-                  <FieldContent>
-                    <FieldLabel className="font-bold">Email Address(es)</FieldLabel>
-                    <FieldDescription>
-                      Enter the email address(es) of the primary contact person(s).
-                    </FieldDescription>
-                  </FieldContent>
-
-                  {formData.email_address.map((em, i) => {
-                    const isNA = em === "N/A";
-                    const emailError =
-                      em && !isNA && !isValidEmail(em)
-                        ? "Invalid email format"
-                        : "";
-
-                    return (
-                      <div key={i} className="mb-2">
-                        <div className="flex gap-2">
-                          <Input
-                            type="email"
-                            value={em}
-                            disabled={isNA}
-                            onChange={(e) => {
-                              const copy = [...formData.email_address];
-                              copy[i] = e.target.value;
-                              updateField("email_address", copy);
-                            }}
-                            placeholder="Email Address"
-                            className={`rounded-none flex-1 ${emailError ? "border-red-500" : ""}`}
-                          />
-                          <Button
-                            type="button"
-                            variant="destructive"
-                            className="rounded-none"
-                            disabled={formData.email_address.length === 1 || isNA}
-                            onClick={() => {
-                              const copy = [...formData.email_address];
-                              copy.splice(i, 1);
-                              updateField("email_address", copy);
-                            }}
-                          >
-                            <MinusIcon />
-                          </Button>
-                          <Button
-                            type="button"
-                            className="rounded-none"
-                            disabled={formData.email_address[0] === "N/A"}
-                            onClick={() =>
-                              updateField("email_address", [
-                                ...formData.email_address,
-                                "",
-                              ])
-                            }
-                          >
-                            <PlusIcon />
-                          </Button>
-                        </div>
-                        {emailError && (
-                          <p className="text-red-500 text-xs mt-1">{emailError}</p>
-                        )}
+            <div>
+              <FieldContent>
+                <FieldLabel className="font-semibold text-sm">Email Address(es)</FieldLabel>
+                <FieldDescription className="text-xs">
+                  Enter the email address(es) of the primary contact person(s).
+                </FieldDescription>
+              </FieldContent>
+              <div className="mt-1.5 space-y-2">
+                {formData.email_address.map((em, i) => {
+                  const isNA = em === "N/A";
+                  const emailError = em && !isNA && !isValidEmail(em) ? "Invalid email format" : "";
+                  return (
+                    <div key={i}>
+                      <div className="flex gap-2">
+                        <Input
+                          type="email"
+                          value={em}
+                          disabled={isNA}
+                          onChange={(e) => {
+                            const copy = [...formData.email_address];
+                            copy[i] = e.target.value;
+                            updateField("email_address", copy);
+                          }}
+                          placeholder="Email Address"
+                          className={`rounded-none flex-1 ${emailError ? "border-red-500" : ""}`}
+                        />
+                        <Button
+                          type="button"
+                          variant="destructive"
+                          size="icon"
+                          className="rounded-none shrink-0"
+                          disabled={formData.email_address.length === 1 || isNA}
+                          onClick={() => {
+                            const copy = [...formData.email_address];
+                            copy.splice(i, 1);
+                            updateField("email_address", copy);
+                          }}
+                        >
+                          <MinusIcon className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          type="button"
+                          size="icon"
+                          className="rounded-none shrink-0"
+                          disabled={formData.email_address[0] === "N/A"}
+                          onClick={() => updateField("email_address", [...formData.email_address, ""])}
+                        >
+                          <PlusIcon className="h-4 w-4" />
+                        </Button>
                       </div>
-                    );
-                  })}
-
-                  <div className="flex items-center gap-2 mt-2">
-                    <input
-                      type="checkbox"
-                      id="no-email-checkbox"
-                      checked={formData.email_address[0] === "N/A"}
-                      onChange={(e) =>
-                        updateField("email_address", e.target.checked ? ["N/A"] : [""])
-                      }
-                      className="h-4 w-4"
-                    />
-                    <Label htmlFor="no-email-checkbox" className="text-sm">
-                      No email address
-                    </Label>
-                  </div>
-                </FieldSet>
-              </FieldGroup>
+                      {emailError && <p className="text-red-500 text-xs mt-1">{emailError}</p>}
+                    </div>
+                  );
+                })}
+                <div className="flex items-center gap-2 pt-1">
+                  <input
+                    type="checkbox"
+                    id="no-email-checkbox"
+                    checked={formData.email_address[0] === "N/A"}
+                    onChange={(e) => updateField("email_address", e.target.checked ? ["N/A"] : [""])}
+                    className="h-4 w-4"
+                  />
+                  <Label htmlFor="no-email-checkbox" className="text-sm">No email address</Label>
+                </div>
+              </div>
             </div>
-          </>
+          </div>
         );
 
       // ── Step 1: Address ─────────────────────────────────────────────────────
       case 1:
         return (
-          <>
-            <div className="mb-4">
-              <FieldGroup>
-                <FieldSet>
-                  <FieldContent>
-                    <FieldLabel className="font-bold">Region</FieldLabel>
-                    <FieldDescription>Select the region for the company address.</FieldDescription>
-                  </FieldContent>
-                  <Select
-                    value={formData.region || ""}
-                    onValueChange={(val) => updateField("region", val)}
-                  >
-                    <SelectTrigger className="w-full rounded-none">
-                      <span>{formData.region || "Select Region"}</span>
-                    </SelectTrigger>
-                    <SelectContent>
-                      {regions.map((r) => (
-                        <SelectItem key={r} value={r}>
-                          {r}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </FieldSet>
-              </FieldGroup>
+          <div className="space-y-6">
+            <div>
+              <FieldContent>
+                <FieldLabel className="font-semibold text-sm">Region</FieldLabel>
+                <FieldDescription className="text-xs">Select the region for the company address.</FieldDescription>
+              </FieldContent>
+              <Select
+                value={formData.region || ""}
+                onValueChange={(val) => updateField("region", val)}
+              >
+                <SelectTrigger className="w-full rounded-none mt-1.5">
+                  <span>{formData.region || "Select Region"}</span>
+                </SelectTrigger>
+                <SelectContent>
+                  {regions.map((r) => (
+                    <SelectItem key={r} value={r}>{r}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
 
-            <div className="mb-4">
-              <FieldGroup>
-                <FieldSet>
-                  <FieldContent>
-                    <FieldLabel className="font-bold">Address</FieldLabel>
-                    <FieldDescription>
-                      Enter the complete physical address of the company.
-                    </FieldDescription>
-                  </FieldContent>
-                  <Textarea
-                    value={formData.address}
-                    onChange={(e) => updateField("address", e.target.value)}
-                    placeholder="Address"
-                    className="rounded-none"
-                  />
-                </FieldSet>
-              </FieldGroup>
+            <div>
+              <FieldContent>
+                <FieldLabel className="font-semibold text-sm">Address</FieldLabel>
+                <FieldDescription className="text-xs">
+                  Enter the complete physical address of the company.
+                </FieldDescription>
+              </FieldContent>
+              <Textarea
+                value={formData.address}
+                onChange={(e) => updateField("address", e.target.value.toUpperCase())}
+                placeholder="ADDRESS"
+                className="rounded-none mt-1.5 uppercase"
+                rows={3}
+              />
             </div>
 
-            <div className="mb-4">
-              <FieldGroup>
-                <FieldSet>
-                  <FieldContent>
-                    <FieldLabel className="font-bold">Delivery Address</FieldLabel>
-                    <FieldDescription>
-                      Provide the full address where goods/services should be delivered.
-                    </FieldDescription>
-                  </FieldContent>
-                  <Textarea
-                    value={formData.delivery_address}
-                    onChange={(e) => updateField("delivery_address", e.target.value)}
-                    placeholder="Delivery Address"
-                    className="rounded-none"
-                  />
-                </FieldSet>
-              </FieldGroup>
+            <div>
+              <FieldContent>
+                <FieldLabel className="font-semibold text-sm">Delivery Address</FieldLabel>
+                <FieldDescription className="text-xs">
+                  Provide the full address where goods/services should be delivered.
+                </FieldDescription>
+              </FieldContent>
+              <Textarea
+                value={formData.delivery_address}
+                onChange={(e) => updateField("delivery_address", e.target.value.toUpperCase())}
+                placeholder="DELIVERY ADDRESS"
+                className="rounded-none mt-1.5 uppercase"
+                rows={3}
+              />
             </div>
-          </>
+          </div>
         );
 
       // ── Step 2: Classification ──────────────────────────────────────────────
       case 2:
         return (
-          <>
+          <div className="space-y-6">
             {/* Type Client */}
-            <div className="mb-4">
-              <FieldGroup>
-                <FieldSet>
-                  <FieldContent>
-                    <FieldLabel className="font-bold">Type Client</FieldLabel>
-                    <FieldDescription>Select the type of client for this company.</FieldDescription>
-                  </FieldContent>
-                  <RadioGroup
-                    value={formData.type_client}
-                    onValueChange={(val) => updateField("type_client", val)}
-                  >
-                    {TYPECLIENT_OPTIONS.map((tc) => (
-                      <FieldLabel key={tc}>
-                        <Field orientation="horizontal">
-                          <FieldContent>
-                            <FieldTitle>{tc}</FieldTitle>
-                            <FieldDescription>
-                              {tc === "New Client" &&
-                                "Client is new and receiving assistance for the first time."}
-                            </FieldDescription>
-                          </FieldContent>
-                          <RadioGroupItem value={tc} />
-                        </Field>
-                      </FieldLabel>
-                    ))}
-                  </RadioGroup>
-                </FieldSet>
-              </FieldGroup>
-            </div>
-
-            {/* Industry — dynamic from Supabase */}
-            <div className="mb-4">
-              <FieldGroup>
-                <FieldSet>
-                  <FieldContent>
-                    <FieldLabel className="font-bold">Industry</FieldLabel>
-                    <FieldDescription>
-                      Select the industry sector related to this company.
-                    </FieldDescription>
-                  </FieldContent>
-
-                  {loadingIndustries ? (
-                    <div className="flex items-center gap-2 text-xs text-muted-foreground py-2">
-                      <Loader2 className="animate-spin h-4 w-4" />
-                      Loading industries...
-                    </div>
-                  ) : (
-                    <Select
-                      value={formData.industry}
-                      onValueChange={(val) => updateField("industry", val)}
-                    >
-                      <SelectTrigger className="w-full rounded-none">
-                        <span>{formData.industry || "Select Industry"}</span>
-                      </SelectTrigger>
-                      <SelectContent>
-                        {industries.map((ind) => (
-                          <SelectItem key={ind} value={ind}>
-                            {ind.replace(/_/g, " ")}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  )}
-
-                  {/* Add new industry inline */}
-                  <div className="mt-2">
-                    {!showAddIndustry ? (
-                      <button
-                        type="button"
-                        className="text-xs text-blue-600 hover:underline"
-                        onClick={() => setShowAddIndustry(true)}
-                      >
-                        + Add new industry
-                      </button>
-                    ) : (
-                      <div className="flex items-center gap-2 mt-1">
-                        <Input
-                          value={newIndustryInput}
-                          onChange={(e) =>
-                            setNewIndustryInput(e.target.value.toUpperCase())
-                          }
-                          placeholder="NEW_INDUSTRY_NAME"
-                          className="rounded-none uppercase text-xs flex-1"
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter") {
-                              e.preventDefault();
-                              handleAddIndustry();
-                            }
-                          }}
-                        />
-                        <Button
-                          type="button"
-                          className="rounded-none text-xs"
-                          disabled={!newIndustryInput.trim() || addingIndustry}
-                          onClick={handleAddIndustry}
-                        >
-                          {addingIndustry ? (
-                            <Loader2 className="animate-spin h-3 w-3" />
-                          ) : (
-                            "Save"
-                          )}
-                        </Button>
-                        <Button
-                          type="button"
-                          variant="outline"
-                          className="rounded-none text-xs"
-                          onClick={() => {
-                            setShowAddIndustry(false);
-                            setNewIndustryInput("");
-                          }}
-                        >
-                          Cancel
-                        </Button>
-                      </div>
-                    )}
-                  </div>
-                </FieldSet>
-              </FieldGroup>
-            </div>
-
-            {/* Status */}
             <div>
-              <FieldGroup>
-                <FieldSet>
-                  <FieldContent>
-                    <FieldLabel className="font-bold">Action</FieldLabel>
-                    <FieldDescription>
-                      Select the current status of the company.
-                    </FieldDescription>
-                  </FieldContent>
-                  <RadioGroup
-                    value={formData.status}
-                    onValueChange={(val) => updateField("status", val)}
-                  >
-                    <FieldLabel>
+              <FieldContent>
+                <FieldLabel className="font-semibold text-sm">Type Client</FieldLabel>
+                <FieldDescription className="text-xs">Select the type of client for this company.</FieldDescription>
+              </FieldContent>
+              <div className="mt-1.5">
+                <RadioGroup
+                  value={formData.type_client}
+                  onValueChange={(val) => updateField("type_client", val)}
+                  className="grid grid-cols-2 gap-2"
+                >
+                  {TYPECLIENT_OPTIONS.map((tc) => (
+                    <FieldLabel key={tc.value}>
                       <Field orientation="horizontal">
                         <FieldContent>
-                          <FieldTitle>Active</FieldTitle>
-                          <FieldDescription>
-                            Status is active and the client is currently valid.
-                          </FieldDescription>
+                          <FieldTitle>{tc.value}</FieldTitle>
+                          <FieldDescription>{tc.description}</FieldDescription>
                         </FieldContent>
-                        <RadioGroupItem value="Active" />
+                        <RadioGroupItem value={tc.value} />
                       </Field>
                     </FieldLabel>
-                  </RadioGroup>
-                </FieldSet>
-              </FieldGroup>
+                  ))}
+                </RadioGroup>
+              </div>
             </div>
-          </>
+
+            {/* Industry */}
+            <div>
+              <FieldContent>
+                <FieldLabel className="font-semibold text-sm">Industry</FieldLabel>
+                <FieldDescription className="text-xs">
+                  Select the industry sector related to this company.
+                </FieldDescription>
+              </FieldContent>
+              <div className="mt-1.5">
+                {loadingIndustries ? (
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground py-2">
+                    <Loader2 className="animate-spin h-4 w-4" />
+                    Loading industries...
+                  </div>
+                ) : (
+                  <Select
+                    value={formData.industry}
+                    onValueChange={(val) => updateField("industry", val)}
+                  >
+                    <SelectTrigger className="w-full rounded-none">
+                      <span>{formData.industry || "Select Industry"}</span>
+                    </SelectTrigger>
+                    <SelectContent>
+                      {industries.map((ind) => (
+                        <SelectItem key={ind} value={ind}>{ind.replace(/_/g, " ")}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+
+                <div className="mt-2">
+                  {!showAddIndustry ? (
+                    <button
+                      type="button"
+                      className="text-xs text-blue-600 hover:underline"
+                      onClick={() => setShowAddIndustry(true)}
+                    >
+                      + Add new industry
+                    </button>
+                  ) : (
+                    <div className="flex items-center gap-2 mt-1">
+                      <Input
+                        value={newIndustryInput}
+                        onChange={(e) => setNewIndustryInput(e.target.value.toUpperCase())}
+                        placeholder="NEW_INDUSTRY_NAME"
+                        className="rounded-none uppercase text-xs flex-1"
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            e.preventDefault();
+                            handleAddIndustry();
+                          }
+                        }}
+                      />
+                      <Button
+                        type="button"
+                        className="rounded-none text-xs"
+                        disabled={!newIndustryInput.trim() || addingIndustry}
+                        onClick={handleAddIndustry}
+                      >
+                        {addingIndustry ? <Loader2 className="animate-spin h-3 w-3" /> : "Save"}
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="rounded-none text-xs"
+                        onClick={() => { setShowAddIndustry(false); setNewIndustryInput(""); }}
+                      >
+                        Cancel
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Status — always "For Approval" on create, read-only indicator */}
+            <div>
+              <FieldContent>
+                <FieldLabel className="font-semibold text-sm">Status</FieldLabel>
+                <FieldDescription className="text-xs">
+                  New accounts are automatically set to <strong>For Approval</strong> and must be validated by an admin before activation.
+                </FieldDescription>
+              </FieldContent>
+              <div className="mt-2 flex items-center gap-2 px-3 py-2.5 bg-amber-50 border border-amber-200 rounded-sm">
+                <div className="h-2 w-2 rounded-full bg-amber-400 shrink-0" />
+                <span className="text-xs font-semibold text-amber-700">For Approval</span>
+                <span className="text-[10px] text-amber-500 ml-auto">Pending admin review</span>
+              </div>
+            </div>
+
+            {/* Reason */}
+            <div>
+              <FieldContent>
+                <FieldLabel className="font-semibold text-sm">
+                  Reason / Remarks <span className="text-red-500">*</span>
+                </FieldLabel>
+                <FieldDescription className="text-xs">
+                  Provide the reason for {mode === "edit" ? "updating" : "creating"} this account. This is required.
+                </FieldDescription>
+              </FieldContent>
+              <Textarea
+                value={formData.reason}
+                onChange={(e) => updateField("reason", e.target.value)}
+                placeholder="Enter reason..."
+                className={`rounded-none mt-1.5 ${formData.reason.trim() === "" ? "border-red-300 focus-visible:ring-red-400" : ""}`}
+                rows={4}
+              />
+              {formData.reason.trim() === "" && (
+                <p className="text-red-500 text-xs mt-1">Reason is required.</p>
+              )}
+            </div>
+          </div>
         );
 
       default:
@@ -1173,34 +1200,113 @@ export function AccountDialog({
     }
   };
 
-  // ── Render ──────────────────────────────────────────────────────────────────
+  if (!open) return null;
+
   return (
-    <Sheet open={open} onOpenChange={onOpenChangeAction}>
-      <SheetContent
-        side="right"
-        className="w-full sm:w-[600px] overflow-auto custom-scrollbar"
-      >
-        <SheetHeader>
-          <SheetTitle>
+    <div className="fixed inset-0 z-50 flex flex-col bg-white overflow-hidden">
+      {/* ── Top bar ── */}
+      <div className="flex items-center justify-between px-6 py-4 border-b shrink-0">
+        <div>
+          <h1 className="text-base font-bold leading-tight">
             {mode === "edit" ? "Edit Account" : "Create New Account"}
-          </SheetTitle>
-          <SheetDescription>
-            Step {step + 1} of {TOTAL_STEPS}
-          </SheetDescription>
-        </SheetHeader>
+          </h1>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            {STEPS[step].description}
+          </p>
+        </div>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          className="rounded-none"
+          onClick={() => onOpenChangeAction(false)}
+        >
+          <XIcon className="h-5 w-5" />
+        </Button>
+      </div>
 
-        <div className="flex-1 mt-4 p-4">{renderStepContent()}</div>
+      {/* ── Main body: left stepper + right form ── */}
+      <div className="flex flex-1 overflow-hidden">
 
-        {/* Navigation */}
-        <div className="p-4 grid gap-4">
+        {/* ── Left stepper sidebar ── */}
+        <div className="w-56 shrink-0 border-r bg-gray-50 flex flex-col py-6 px-4 gap-1">
+          {STEPS.map((s, i) => {
+            const isCompleted = i < step;
+            const isCurrent = i === step;
+            const isClickable = i < step || (i === step + 1 && canProceedToNext());
+            const Icon = s.icon;
+
+            return (
+              <button
+                key={i}
+                type="button"
+                disabled={!isClickable && !isCurrent && i > step}
+                onClick={() => handleStepClick(i)}
+                className={`
+                  w-full text-left flex items-start gap-3 px-3 py-3 rounded-md transition-all
+                  ${isCurrent
+                    ? "bg-white border border-gray-200 shadow-sm"
+                    : isCompleted
+                      ? "hover:bg-white/70 cursor-pointer"
+                      : isClickable
+                        ? "hover:bg-white/70 cursor-pointer"
+                        : "opacity-40 cursor-not-allowed"
+                  }
+                `}
+              >
+                <div
+                  className={`
+                    shrink-0 w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold mt-0.5
+                    ${isCompleted
+                      ? "bg-black text-white"
+                      : isCurrent
+                        ? "bg-black text-white"
+                        : "bg-gray-200 text-gray-500"
+                    }
+                  `}
+                >
+                  {isCompleted ? (
+                    <CheckCircle2Icon className="h-4 w-4" />
+                  ) : (
+                    <Icon className="h-3.5 w-3.5" />
+                  )}
+                </div>
+                <div>
+                  <p className={`text-xs font-semibold leading-tight ${isCurrent ? "text-black" : isCompleted ? "text-gray-700" : "text-gray-400"}`}>
+                    {s.label}
+                  </p>
+                  <p className={`text-[10px] mt-0.5 leading-tight ${isCurrent ? "text-gray-500" : "text-gray-400"}`}>
+                    {s.description}
+                  </p>
+                </div>
+              </button>
+            );
+          })}
+        </div>
+
+        {/* ── Right: scrollable form ── */}
+        <div className="flex-1 overflow-y-auto">
+          <div className="mx-auto w-full px-8 py-8">
+            <div className="mb-6">
+              <h2 className="text-sm font-bold text-gray-900">{STEPS[step].label}</h2>
+              <div className="h-0.5 w-8 bg-black mt-1.5" />
+            </div>
+            {renderStepContent()}
+          </div>
+        </div>
+      </div>
+
+      {/* ── Navigation footer ── */}
+      <div className="shrink-0 border-t px-6 py-4 bg-white">
+        <div className="mx-auto w-full max-w-xl flex gap-3">
           <Button
             variant="outline"
             onClick={handleBack}
             disabled={step === 0}
             type="button"
-            className="rounded-none p-6 font-bold"
+            className="rounded-none flex-1 py-5 font-semibold text-sm"
           >
-            <ArrowLeft /> Back
+            Back
           </Button>
 
           {step === TOTAL_STEPS - 1 ? (
@@ -1208,9 +1314,9 @@ export function AccountDialog({
               onClick={handleSubmit}
               type="button"
               disabled={!canProceedToNext()}
-              className="rounded-none p-10 font-bold"
+              className="rounded-none flex-1 py-5 font-semibold text-sm"
             >
-              <CheckCircle2Icon />
+              <CheckCircle2Icon className="h-4 w-4 mr-2" />
               {mode === "edit" ? "Save Changes" : "Create Account"}
             </Button>
           ) : (
@@ -1218,13 +1324,13 @@ export function AccountDialog({
               onClick={handleNext}
               disabled={!canProceedToNext()}
               type="button"
-              className="rounded-none p-6 font-bold"
+              className="rounded-none flex-1 py-5 font-semibold text-sm"
             >
-              Next <ArrowRight />
+              Next
             </Button>
           )}
         </div>
-      </SheetContent>
-    </Sheet>
+      </div>
+    </div>
   );
 }

@@ -8,9 +8,13 @@ import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/compone
 import {
   Terminal, X, Search, History, AlertCircle, CheckCircle2,
   CalendarDays, ArrowLeft, FileText, Hash, Building2, Briefcase,
-  Users, ChevronRight, User, Phone, Mail, MapPin, TrendingUp,
+  Users, ChevronRight, User, Phone, Mail, MapPin, TrendingUp, BarChart2,
 } from "lucide-react";
 import { type DateRange } from "react-day-picker";
+import {
+  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
+  LineChart, Line, CartesianGrid, Cell,
+} from "recharts";
 
 /* ─── Types ───────────────────────────────────────────────────────── */
 
@@ -300,7 +304,7 @@ interface AccountListDialogProps {
   accounts: Account[];
   agentMap: Record<string, string>;
   activityCountMap: Record<string, number>;
-  onViewHistory: (companyName: string, source: ListSource) => void;
+  onViewHistory: (accountRefNumber: string, source: ListSource) => void;
   source: ListSource;
 }
 
@@ -414,7 +418,7 @@ function AccountListDialog({
               )}
             </div>
           ) : filtered.map((account) => {
-            const actCount = activityCountMap[account.company_name.toLowerCase()] ?? 0;
+            const actCount = activityCountMap[account.account_reference_number?.toLowerCase() ?? ""] ?? 0;
             const typeStyle = getTypeClientStyle(account.type_client);
             const agentName = agentMap[account.referenceid?.toLowerCase()] ?? null;
             return (
@@ -441,7 +445,7 @@ function AccountListDialog({
                     <FileText size={9} />
                     {actCount} {actCount === 1 ? "activity" : "activities"}
                   </span>
-                  <button onClick={() => { onClose(); onViewHistory(account.company_name, source); }}
+                  <button onClick={() => { onClose(); onViewHistory(account.account_reference_number ?? "", source); }}
                     className="flex items-center gap-1.5 text-[11px] font-semibold text-indigo-500 hover:text-indigo-700 transition-colors">
                     <History size={11} /> View History
                   </button>
@@ -612,9 +616,18 @@ function HistoryDialog({ open, onClose, onBack, companyName, loading, records, a
   const getTypeStyle = (t?: string) => typeStyles[t ?? ""] ?? "bg-slate-700/60 text-slate-300 border-slate-600/30";
   const toggleExpand = (key: string | number | null) => setExpanded((prev) => (prev === key ? null : key));
 
+  const totalQuotationAmount = useMemo(() => records.reduce((s, r) => s + (r.quotation_amount ?? 0), 0), [records]);
+  const totalSoAmount = useMemo(() => records.reduce((s, r) => s + (r.so_amount ?? 0), 0), [records]);
+  const typeClientStyle = account ? getTypeClientStyle(account.type_client) : null;
+
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
-      <DialogContent showCloseButton={false} className="max-w-2xl w-full max-h-[85vh] flex flex-col p-0 gap-0 rounded-2xl border-0 shadow-2xl overflow-hidden bg-[#0d1117]">
+      <DialogContent
+        showCloseButton={false}
+        className="!max-w-[95vw] !w-[95vw] !h-[90vh] p-0 gap-0 rounded-2xl border-0 shadow-2xl overflow-hidden bg-[#0d1117] flex flex-col"
+        style={{ maxWidth: "95vw", width: "95vw", height: "90vh" }}
+      >
+        {/* ── Title bar ── */}
         <div className="px-6 py-4 bg-[#161b22] border-b border-white/5 flex items-center justify-between shrink-0">
           <div className="flex items-center gap-3">
             {onBack && (
@@ -627,7 +640,7 @@ function HistoryDialog({ open, onClose, onBack, companyName, loading, records, a
               <span className="w-3 h-3 rounded-full bg-rose-500/80" />
               <span className="w-3 h-3 rounded-full bg-amber-400/80" />
               <span className="w-3 h-3 rounded-full bg-emerald-500/80" />
-              <div className="ml-1">
+              <div className="ml-2">
                 <DialogTitle className="text-white text-[11px] font-bold font-mono tracking-widest uppercase">activity_history</DialogTitle>
                 <DialogDescription className="text-slate-500 text-[10px] font-mono">{companyName}</DialogDescription>
               </div>
@@ -638,145 +651,459 @@ function HistoryDialog({ open, onClose, onBack, companyName, loading, records, a
           </button>
         </div>
 
-        {!loading && records.length > 0 && (
-          <div className="px-6 py-3 flex flex-wrap gap-2 border-b border-white/5 bg-[#161b22]/50 shrink-0">
-            <span className="px-3 py-1 rounded-full bg-white/10 text-white text-[11px] font-bold font-mono border border-white/10">{records.length} records</span>
-            {Object.entries(grouped).map(([type, count]) => (
-              <span key={type} className={`px-3 py-1 rounded-full text-[11px] font-mono font-medium border ${getTypeStyle(type)}`}>
-                {type} · <strong>{count}</strong>
-              </span>
-            ))}
-          </div>
-        )}
+        {/* ── Three-column body ── */}
+        <div className="flex flex-1 min-h-0">
 
-        {/* ── Account info + total sales panel ── */}
-        <div className="px-6 py-3 border-b border-white/5 bg-[#0d1117] shrink-0">
-          <div className="flex flex-wrap items-start gap-4">
-            {/* Contact details */}
-            <div className="flex-1 min-w-0 grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1.5">
-              {account?.contact_person && (
-                <div className="flex items-center gap-2 text-[11px]">
-                  <User size={11} className="text-slate-500 shrink-0" />
-                  <span className="text-slate-300 font-mono truncate">{account.contact_person}</span>
-                </div>
-              )}
-              {account?.contact_number && (
-                <div className="flex items-center gap-2 text-[11px]">
-                  <Phone size={11} className="text-slate-500 shrink-0" />
-                  <span className="text-slate-300 font-mono">{account.contact_number}</span>
-                </div>
-              )}
-              {account?.email_address && (
-                <div className="flex items-center gap-2 text-[11px]">
-                  <Mail size={11} className="text-slate-500 shrink-0" />
-                  <span className="text-slate-300 font-mono truncate">{account.email_address}</span>
-                </div>
-              )}
-              {(account?.address || account?.delivery_address) && (
-                <div className="flex items-start gap-2 text-[11px]">
-                  <MapPin size={11} className="text-slate-500 shrink-0 mt-px" />
-                  <span className="text-slate-300 font-mono leading-snug break-words">
-                    {account.address ?? account.delivery_address}
-                  </span>
-                </div>
-              )}
-            </div>
-            {/* Total actual sales */}
-            {totalActualSales > 0 && (
-              <div className="shrink-0 flex flex-col items-end gap-0.5 bg-emerald-500/10 border border-emerald-500/20 rounded-xl px-4 py-2.5">
-                <div className="flex items-center gap-1.5 text-[10px] text-emerald-400 font-semibold font-mono uppercase tracking-wide">
-                  <TrendingUp size={10} />
-                  Total Actual Sales
-                </div>
-                <span className="text-emerald-300 font-bold font-mono text-base tabular-nums">
-                  {totalActualSales.toLocaleString("en-PH", { style: "currency", currency: "PHP" })}
+          {/* ── LEFT: Company info ── */}
+          <div className="w-80 shrink-0 flex flex-col border-r border-white/5 bg-[#0d1117] overflow-y-auto">
+            <div className="px-6 pt-6 pb-4 border-b border-white/5">
+              {typeClientStyle && (
+                <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold border mb-2 ${typeClientStyle.pill}`}>
+                  <span className={`w-1.5 h-1.5 rounded-full ${typeClientStyle.dot}`} />{account?.type_client?.toUpperCase()}
                 </span>
+              )}
+              <h2 className="text-base font-bold text-white leading-snug">{companyName}</h2>
+              {account?.account_reference_number && <p className="text-[10px] font-mono text-slate-500 mt-0.5">{account.account_reference_number}</p>}
+            </div>
+            <div className="px-6 py-4 border-b border-white/5 space-y-2.5">
+              <p className="text-[9px] font-bold uppercase tracking-widest text-slate-600 mb-1">Contact</p>
+              {account?.contact_person && <div className="flex items-center gap-2 text-[11px]"><User size={11} className="text-slate-500 shrink-0" /><span className="text-slate-300 font-mono">{account.contact_person}</span></div>}
+              {account?.contact_number && <div className="flex items-center gap-2 text-[11px]"><Phone size={11} className="text-slate-500 shrink-0" /><span className="text-slate-300 font-mono">{account.contact_number}</span></div>}
+              {account?.email_address && <div className="flex items-center gap-2 text-[11px]"><Mail size={11} className="text-slate-500 shrink-0" /><span className="text-slate-300 font-mono break-all">{account.email_address}</span></div>}
+              {(account?.address || account?.delivery_address) && <div className="flex items-start gap-2 text-[11px]"><MapPin size={11} className="text-slate-500 shrink-0 mt-px" /><span className="text-slate-300 font-mono">{account.address ?? account.delivery_address}</span></div>}
+            </div>
+            {(account?.region || account?.industry) && (
+              <div className="px-6 py-4 border-b border-white/5 space-y-2">
+                <p className="text-[9px] font-bold uppercase tracking-widest text-slate-600 mb-1">Details</p>
+                {account?.region && <div className="flex items-start gap-2 text-[11px]"><span className="text-slate-500 font-mono w-16 shrink-0">Region</span><span className="text-slate-300 font-mono">{account.region}</span></div>}
+                {account?.industry && <div className="flex items-start gap-2 text-[11px]"><span className="text-slate-500 font-mono w-16 shrink-0">Industry</span><span className="text-slate-300 font-mono">{account.industry}</span></div>}
               </div>
+            )}
+            <div className="px-6 py-4 border-b border-white/5 space-y-3">
+              <p className="text-[9px] font-bold uppercase tracking-widest text-slate-600 mb-1">Financials</p>
+              {totalActualSales > 0 && (
+                <div className="rounded-xl bg-emerald-500/10 border border-emerald-500/20 px-4 py-3">
+                  <div className="flex items-center gap-1.5 text-[9px] text-emerald-400 font-semibold font-mono uppercase tracking-wide mb-1"><TrendingUp size={9} /> Total Actual Sales</div>
+                  <span className="text-emerald-300 font-bold font-mono text-lg tabular-nums">{totalActualSales.toLocaleString("en-PH", { style: "currency", currency: "PHP" })}</span>
+                </div>
+              )}
+              {totalQuotationAmount > 0 && (
+                <div className="rounded-xl bg-blue-500/10 border border-blue-500/20 px-4 py-3">
+                  <div className="text-[9px] text-blue-400 font-semibold font-mono uppercase tracking-wide mb-1">Total Quotation</div>
+                  <span className="text-blue-300 font-bold font-mono text-base tabular-nums">{totalQuotationAmount.toLocaleString("en-PH", { style: "currency", currency: "PHP" })}</span>
+                </div>
+              )}
+              {totalSoAmount > 0 && (
+                <div className="rounded-xl bg-violet-500/10 border border-violet-500/20 px-4 py-3">
+                  <div className="text-[9px] text-violet-400 font-semibold font-mono uppercase tracking-wide mb-1">Total SO Amount</div>
+                  <span className="text-violet-300 font-bold font-mono text-base tabular-nums">{totalSoAmount.toLocaleString("en-PH", { style: "currency", currency: "PHP" })}</span>
+                </div>
+              )}
+              {totalActualSales === 0 && totalQuotationAmount === 0 && totalSoAmount === 0 && <p className="text-[10px] text-slate-600 font-mono">No financial data</p>}
+            </div>
+            {!loading && records.length > 0 && (
+              <div className="px-6 py-4 space-y-2">
+                <p className="text-[9px] font-bold uppercase tracking-widest text-slate-600 mb-2">Activity Breakdown</p>
+                <div className="flex flex-wrap gap-1.5">
+                  <span className="px-2.5 py-1 rounded-full bg-white/10 text-white text-[10px] font-bold font-mono border border-white/10">{records.length} total</span>
+                  {Object.entries(grouped).map(([type, count]) => (
+                    <span key={type} className={`px-2.5 py-1 rounded-full text-[10px] font-mono font-medium border ${getTypeStyle(type)}`}>{type} · <strong>{count}</strong></span>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* ── MIDDLE: Activity feed ── */}
+          <div className="flex-1 flex flex-col min-w-0">
+            <div className="px-6 py-3 border-b border-white/5 shrink-0">
+              <div className="flex items-center gap-2 bg-white/5 rounded-xl px-3 py-2 border border-white/10">
+                <Search size={13} className="text-slate-500 shrink-0" />
+                <input type="text" placeholder="Search activity, quotation, remarks, status..." value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  className="text-xs bg-transparent outline-none flex-1 text-slate-300 placeholder-slate-600 font-mono" />
+                {search && <button onClick={() => setSearch("")} className="text-slate-600 hover:text-slate-400 transition-colors"><X size={12} /></button>}
+              </div>
+            </div>
+            <div className="overflow-y-auto flex-1 px-6 py-4 space-y-2">
+              {loading ? (
+                <div className="flex flex-col items-center justify-center py-20 gap-3">
+                  <div className="w-8 h-8 rounded-full border-2 border-white/10 border-t-green-400 animate-spin" />
+                  <p className="text-xs text-slate-500 font-mono">Fetching records...</p>
+                </div>
+              ) : filtered.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-20 gap-2">
+                  <div className="w-12 h-12 rounded-2xl bg-white/5 flex items-center justify-center border border-white/10">
+                    <History size={20} className="text-slate-600" />
+                  </div>
+                  <p className="text-xs text-slate-600 font-mono">no records found</p>
+                </div>
+              ) : filtered.map((r, i) => {
+                // ── Unique key: combine id + index to prevent duplicate key warnings ──
+                const key = `${r.id ?? "no-id"}-${i}`;
+                const isOpen = expanded === key;
+                const duration = fmtDuration(r.start_date, r.end_date);
+                const hasExtra = !!(r.quotation_amount || r.quotation_number || r.quotation_status ||
+                  r.so_amount || r.so_number || r.dr_number || r.delivery_date ||
+                  r.type_client || r.source || r.call_status || r.call_type ||
+                  r.actual_sales || r.ticket_reference_number || duration || r.payment_terms);
+
+                return (
+                  <div key={key} className="rounded-xl bg-white/[0.03] border border-white/5 hover:border-white/10 transition-all duration-150 overflow-hidden">
+                    <div className={`flex gap-3 p-3 ${hasExtra ? "cursor-pointer" : ""}`}
+                      onClick={() => hasExtra && toggleExpand(key)}>
+                      <div className="shrink-0 pt-0.5">
+                        <span className={`inline-block px-2 py-1 rounded-lg text-[9px] font-bold uppercase tracking-wide whitespace-nowrap border font-mono ${getTypeStyle(r.type_activity)}`}>
+                          {r.type_activity ?? ""}
+                        </span>
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs text-slate-300 leading-snug font-mono uppercase">
+                          {r.remarks ? r.remarks : <span className="text-slate-600 italic">no remarks</span>}
+                        </p>
+                        <div className="flex flex-wrap items-center gap-2 mt-1">
+                          {r.status && <span className="text-[10px] text-slate-500 font-mono">status: {r.status}</span>}
+                          {r.call_status && <span className="text-[10px] text-slate-500 font-mono">· {r.call_status}</span>}
+                          {r.quotation_number && <span className="flex items-center gap-0.5 text-[10px] text-slate-500 font-mono"><Hash size={9} />{r.quotation_number}</span>}
+                          {r.so_number && <span className="flex items-center gap-0.5 text-[10px] text-slate-500 font-mono"><Hash size={9} />SO {r.so_number}</span>}
+                        </div>
+                      </div>
+                      <div className="shrink-0 text-right flex flex-col items-end gap-1">
+                        <p className="text-[10px] text-slate-600 tabular-nums whitespace-nowrap font-mono">{fmtDate(r.date_created) ?? ""}</p>
+                        {hasExtra && <span className="text-[9px] text-slate-600 font-mono">{isOpen ? "less" : "more"}</span>}
+                      </div>
+                    </div>
+                    {isOpen && hasExtra && (
+                      <div className="px-4 pb-4 pt-1 border-t border-white/5 bg-white/[0.02] space-y-1.5">
+                        <div className="grid grid-cols-2 gap-x-6 gap-y-1.5 uppercase">
+                          <DetailField label="id."    value={r.id} />
+                          <DetailField label="Quotation No."    value={r.quotation_number} />
+                          <DetailField label="Quotation Status" value={r.quotation_status} />
+                          <DetailField label="Quotation Amount" value={fmtCurrency(r.quotation_amount)} />
+                          <DetailField label="SO Number"        value={r.so_number} />
+                          <DetailField label="SO Amount"        value={fmtCurrency(r.so_amount)} />
+                          <DetailField label="Actual Sales"     value={fmtCurrency(r.actual_sales)} />
+                          <DetailField label="DR Number"        value={r.dr_number} />
+                          <DetailField label="Delivery Date"    value={fmtDate(r.delivery_date)} />
+                          <DetailField label="Payment Terms"    value={r.payment_terms} />
+                          <DetailField label="Ticket Ref."      value={r.ticket_reference_number} />
+                          <DetailField label="Type Client"      value={r.type_client} />
+                          <DetailField label="Source"           value={r.source} />
+                          <DetailField label="Call Status"      value={r.call_status} />
+                          <DetailField label="Type"             value={r.call_type} />
+                          <DetailField label="Duration"         value={duration} />
+                          <DetailField label="Start Date"       value={fmtDate(r.start_date)} />
+                          <DetailField label="End Date"         value={fmtDate(r.end_date)} />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* ── FAR RIGHT: Analytics & Prospects ── */}
+          {(() => {
+            const callCount      = records.filter(r => (r.type_activity ?? "").toLowerCase().includes("call")).length;
+            const quotationCount = records.filter(r => r.quotation_number).length;
+            const quotationTotal = records.reduce((s, r) => s + (r.quotation_amount ?? 0), 0);
+            const soCount        = records.filter(r => r.so_number).length;
+            const soTotal        = records.reduce((s, r) => s + (r.so_amount ?? 0), 0);
+            const actualTotal    = records.reduce((s, r) => s + (r.actual_sales ?? 0), 0);
+
+            const funnelData = [
+              { label: "Calls",        count: callCount,      amount: 0,             color: "#38bdf8" },
+              { label: "Quotations",   count: quotationCount, amount: quotationTotal, color: "#818cf8" },
+              { label: "Sales Orders", count: soCount,        amount: soTotal,        color: "#a78bfa" },
+              { label: "Actual Sales", count: 0,              amount: actualTotal,    color: "#34d399" },
+            ];
+
+            const monthlyMap: Record<string, number> = {};
+            records.forEach(r => {
+              if (!r.actual_sales || !r.date_created) return;
+              const d = new Date(r.date_created);
+              if (isNaN(d.getTime())) return;
+              const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+              monthlyMap[key] = (monthlyMap[key] ?? 0) + r.actual_sales;
+            });
+            const sortedMonths = Object.entries(monthlyMap).sort(([a], [b]) => a.localeCompare(b));
+            const monthlyTrend = sortedMonths.slice(-6).map(([month, total], idx, arr) => ({
+              month: month.slice(5), fullKey: month, total,
+              prev: idx > 0 ? arr[idx - 1][1] : null,
+            }));
+            const lastTwo     = sortedMonths.slice(-2);
+            const momCurrent  = lastTwo.length >= 1 ? lastTwo[lastTwo.length - 1][1] : null;
+            const momPrevious = lastTwo.length >= 2 ? lastTwo[lastTwo.length - 2][1] : null;
+            const momDiff     = momCurrent != null && momPrevious != null ? momCurrent - momPrevious : null;
+            const momPct      = momPrevious != null && momPrevious > 0 && momDiff != null ? Math.round((momDiff / momPrevious) * 100) : null;
+            const momUp       = momDiff != null && momDiff >= 0;
+
+            const lastActivity  = records.filter(r => r.date_created).sort((a, b) => new Date(b.date_created!).getTime() - new Date(a.date_created!).getTime())[0];
+            const daysSinceLast = lastActivity?.date_created ? Math.floor((Date.now() - new Date(lastActivity.date_created).getTime()) / 86400000) : 999;
+            const conversionRate = callCount > 0 ? (soCount / callCount) : 0;
+            const prospectScore  = Math.min(100, Math.round((conversionRate * 50) + (actualTotal > 0 ? 30 : 0) + (daysSinceLast < 30 ? 20 : daysSinceLast < 60 ? 10 : 0)));
+            const prospectLabel  = prospectScore >= 70 ? "High" : prospectScore >= 40 ? "Medium" : "Low";
+            const prospectColor  = prospectScore >= 70 ? "#34d399" : prospectScore >= 40 ? "#fbbf24" : "#f87171";
+
+            const tooltipStyle = {
+              contentStyle: { background: "#1e293b", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 8, fontSize: 10, color: "#cbd5e1" },
+              itemStyle: { color: "#94a3b8" },
+              cursor: { fill: "rgba(255,255,255,0.04)" },
+            };
+
+            return (
+              <div className="w-72 shrink-0 flex flex-col border-l border-white/5 bg-[#0a0f16] overflow-y-auto">
+                <div className="px-5 pt-5 pb-3 border-b border-white/5">
+                  <div className="flex items-center gap-2 mb-0.5">
+                    <BarChart2 size={12} className="text-indigo-400" />
+                    <p className="text-[9px] font-bold uppercase tracking-widest text-indigo-400">Analytics</p>
+                  </div>
+                  <p className="text-[10px] text-slate-500 font-mono">Sales pipeline & prospects</p>
+                </div>
+
+                {/* Prospect score */}
+                <div className="px-5 py-4 border-b border-white/5">
+                  <p className="text-[9px] font-bold uppercase tracking-widest text-slate-600 mb-3">Next-Month Prospect</p>
+                  <div className="flex items-center gap-3">
+                    <div className="relative w-14 h-14 shrink-0">
+                      <svg viewBox="0 0 36 36" className="w-14 h-14 -rotate-90">
+                        <circle cx="18" cy="18" r="15.9" fill="none" stroke="rgba(255,255,255,0.05)" strokeWidth="3" />
+                        <circle cx="18" cy="18" r="15.9" fill="none" stroke={prospectColor} strokeWidth="3"
+                          strokeDasharray={`${prospectScore} ${100 - prospectScore}`} strokeLinecap="round" />
+                      </svg>
+                      <span className="absolute inset-0 flex items-center justify-center text-[11px] font-bold tabular-nums" style={{ color: prospectColor }}>{prospectScore}</span>
+                    </div>
+                    <div>
+                      <p className="text-sm font-bold" style={{ color: prospectColor }}>{prospectLabel} Potential</p>
+                      <p className="text-[10px] text-slate-500 font-mono mt-0.5">{daysSinceLast < 999 ? `Last activity ${daysSinceLast}d ago` : "No recent activity"}</p>
+                      <p className="text-[10px] text-slate-500 font-mono">Conv. rate: {callCount > 0 ? `${Math.round(conversionRate * 100)}%` : "—"}</p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Sales funnel */}
+                <div className="px-5 py-4 border-b border-white/5">
+                  <p className="text-[9px] font-bold uppercase tracking-widest text-slate-600 mb-3">Sales Funnel</p>
+                  <div className="space-y-2.5">
+                    {funnelData.map((item) => {
+                      const maxCount = Math.max(...funnelData.map(f => f.count), 1);
+                      const pct = item.count > 0 ? Math.round((item.count / maxCount) * 100) : 0;
+                      return (
+                        <div key={item.label}>
+                          <div className="flex items-center justify-between mb-1">
+                            <span className="text-[10px] text-slate-400 font-mono">{item.label}</span>
+                            <div className="text-right">
+                              {item.count > 0 && <span className="text-[10px] font-bold tabular-nums" style={{ color: item.color }}>{item.count}x</span>}
+                              {item.amount > 0 && <span className="text-[9px] text-slate-500 font-mono ml-1">{item.amount.toLocaleString("en-PH", { style: "currency", currency: "PHP", maximumFractionDigits: 0 })}</span>}
+                            </div>
+                          </div>
+                          {item.count > 0 ? (
+                            <div className="h-1.5 rounded-full bg-white/5 overflow-hidden"><div className="h-full rounded-full" style={{ width: `${pct}%`, background: item.color }} /></div>
+                          ) : item.amount > 0 ? (
+                            <div className="h-1.5 rounded-full bg-white/5 overflow-hidden"><div className="h-full rounded-full" style={{ width: "100%", background: item.color }} /></div>
+                          ) : (
+                            <div className="h-1.5 rounded-full bg-white/5" />
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Monthly trend + MoM */}
+                {monthlyTrend.length > 0 && (
+                  <div className="px-5 py-4 border-b border-white/5">
+                    <p className="text-[9px] font-bold uppercase tracking-widest text-slate-600 mb-3">Actual Sales Trend</p>
+                    {momCurrent != null && (
+                      <div className="rounded-xl bg-white/[0.03] border border-white/5 px-4 py-3 mb-3">
+                        <div className="flex items-start justify-between gap-2">
+                          <div>
+                            <p className="text-[9px] text-slate-500 font-mono uppercase tracking-wide mb-0.5">This Month</p>
+                            <p className="text-base font-bold tabular-nums text-white">{momCurrent.toLocaleString("en-PH", { style: "currency", currency: "PHP", maximumFractionDigits: 0 })}</p>
+                          </div>
+                          {momPrevious != null && (
+                            <div className="text-right">
+                              <p className="text-[9px] text-slate-500 font-mono uppercase tracking-wide mb-0.5">Last Month</p>
+                              <p className="text-sm font-semibold tabular-nums text-slate-400">{momPrevious.toLocaleString("en-PH", { style: "currency", currency: "PHP", maximumFractionDigits: 0 })}</p>
+                            </div>
+                          )}
+                        </div>
+                        {momDiff != null && (
+                          <div className="mt-2 pt-2 border-t border-white/5 flex items-center gap-2">
+                            <span className={`inline-flex items-center gap-1 text-[11px] font-bold tabular-nums ${momUp ? "text-emerald-400" : "text-rose-400"}`}>
+                              {momUp ? "▲" : "▼"}{Math.abs(momDiff).toLocaleString("en-PH", { style: "currency", currency: "PHP", maximumFractionDigits: 0 })}
+                            </span>
+                            {momPct != null && (
+                              <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-md ${momUp ? "bg-emerald-500/15 text-emerald-400" : "bg-rose-500/15 text-rose-400"}`}>
+                                {momUp ? "+" : ""}{momPct}%
+                              </span>
+                            )}
+                            <span className="text-[9px] text-slate-600 font-mono">vs last month</span>
+                          </div>
+                        )}
+                        {momPrevious != null && momPrevious > 0 && (
+                          <div className="mt-2">
+                            <div className="h-1 rounded-full bg-white/5 overflow-hidden">
+                              <div className="h-full rounded-full transition-all" style={{ width: `${Math.min(100, Math.round((momCurrent / Math.max(momCurrent, momPrevious)) * 100))}%`, background: momUp ? "#34d399" : "#f87171" }} />
+                            </div>
+                            <div className="flex justify-between mt-0.5">
+                              <span className="text-[8px] text-slate-600 font-mono">0</span>
+                              <span className="text-[8px] text-slate-600 font-mono">{Math.max(momCurrent, momPrevious).toLocaleString("en-PH", { style: "currency", currency: "PHP", maximumFractionDigits: 0 })}</span>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                    <ResponsiveContainer width="100%" height={90}>
+                      <LineChart data={monthlyTrend} margin={{ top: 4, right: 4, left: -28, bottom: 0 }}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" />
+                        <XAxis dataKey="month" tick={{ fontSize: 9, fill: "#64748b" }} axisLine={false} tickLine={false} />
+                        <YAxis tick={{ fontSize: 9, fill: "#64748b" }} axisLine={false} tickLine={false} tickFormatter={(v) => v >= 1000 ? `${(v/1000).toFixed(0)}k` : v} />
+                        <Tooltip contentStyle={tooltipStyle.contentStyle} itemStyle={tooltipStyle.itemStyle} cursor={{ stroke: "rgba(255,255,255,0.1)" }} formatter={(v: number) => [v.toLocaleString("en-PH", { style: "currency", currency: "PHP" }), "Sales"]} />
+                        <Line type="monotone" dataKey="total" stroke="#34d399" strokeWidth={2}
+                          dot={({ cx, cy, index }: { cx: number; cy: number; index: number }) => {
+                            const isLast = index === monthlyTrend.length - 1;
+                            const isPrev = index === monthlyTrend.length - 2;
+                            const color = isLast ? (momUp ? "#34d399" : "#f87171") : isPrev ? "#94a3b8" : "#34d399";
+                            return <circle key={index} cx={cx} cy={cy} r={isLast ? 4 : 3} fill={color} stroke="none" />;
+                          }}
+                        />
+                      </LineChart>
+                    </ResponsiveContainer>
+                  </div>
+                )}
+
+                {/* Activity mix bar chart */}
+                {Object.keys(grouped).length > 0 && (
+                  <div className="px-5 py-4">
+                    <p className="text-[9px] font-bold uppercase tracking-widest text-slate-600 mb-3">Activity Mix</p>
+                    <ResponsiveContainer width="100%" height={100}>
+                      <BarChart data={Object.entries(grouped).map(([type, count]) => ({ type: type.length > 8 ? type.slice(0, 8) + "…" : type, count }))} margin={{ top: 4, right: 4, left: -28, bottom: 0 }}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" />
+                        <XAxis dataKey="type" tick={{ fontSize: 8, fill: "#64748b" }} axisLine={false} tickLine={false} />
+                        <YAxis tick={{ fontSize: 9, fill: "#64748b" }} axisLine={false} tickLine={false} allowDecimals={false} />
+                        <Tooltip contentStyle={tooltipStyle.contentStyle} itemStyle={tooltipStyle.itemStyle} cursor={tooltipStyle.cursor} formatter={(v: number) => [v, "count"]} />
+                        <Bar dataKey="count" radius={[3, 3, 0, 0]}>
+                          {Object.keys(grouped).map((_, i) => (
+                            <Cell key={i} fill={["#38bdf8","#818cf8","#fbbf24","#34d399","#f87171","#a78bfa"][i % 6]} />
+                          ))}
+                        </Bar>
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                )}
+              </div>
+            );
+          })()}
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/* ─── Company Search Dialog ──────────────────────────────────────── */
+
+function CompanySearchDialog({
+  open, onClose, accounts, onSelect,
+}: {
+  open: boolean;
+  onClose: () => void;
+  accounts: Account[];
+  onSelect: (account: Account) => void;
+}) {
+  const [query, setQuery] = useState("");
+  useEffect(() => { if (!open) setQuery(""); }, [open]);
+
+  const results = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return [];
+    return accounts
+      .filter((a) =>
+        a.company_name.toLowerCase().includes(q) ||
+        a.contact_person?.toLowerCase().includes(q)
+      )
+      .slice(0, 30);
+  }, [query, accounts]);
+
+  return (
+    <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
+      <DialogContent
+        showCloseButton={false}
+        className="max-w-lg w-full p-0 gap-0 rounded-2xl border-0 shadow-2xl overflow-hidden bg-[#0d1117]"
+      >
+        <div className="px-5 py-4 bg-[#161b22] border-b border-white/5 flex items-center justify-between shrink-0">
+          <div className="flex items-center gap-2">
+            <span className="w-3 h-3 rounded-full bg-rose-500/80" />
+            <span className="w-3 h-3 rounded-full bg-amber-400/80" />
+            <span className="w-3 h-3 rounded-full bg-emerald-500/80" />
+            <div className="ml-1">
+              <DialogTitle className="text-white text-[11px] font-bold font-mono tracking-widest uppercase">
+                company_search
+              </DialogTitle>
+              <DialogDescription className="text-slate-500 text-[10px] font-mono">
+                Search any company across all accounts
+              </DialogDescription>
+            </div>
+          </div>
+          <button
+            onClick={onClose}
+            className="w-7 h-7 rounded-full bg-white/5 hover:bg-white/15 flex items-center justify-center text-white/40 hover:text-white transition-all border border-white/5"
+          >
+            <X size={12} />
+          </button>
+        </div>
+
+        <div className="px-5 py-3 border-b border-white/5">
+          <div className="flex items-center gap-2 bg-white/5 rounded-xl px-3 py-2 border border-white/10">
+            <Search size={13} className="text-slate-500 shrink-0" />
+            <input
+              autoFocus
+              type="text"
+              placeholder="Type company or contact name..."
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              className="text-xs bg-transparent outline-none flex-1 text-slate-300 placeholder-slate-600 font-mono"
+            />
+            {query && (
+              <button onClick={() => setQuery("")} className="text-slate-600 hover:text-slate-400 transition-colors">
+                <X size={12} />
+              </button>
             )}
           </div>
         </div>
 
-        <div className="px-6 py-3 border-b border-white/5 shrink-0">
-          <div className="flex items-center gap-2 bg-white/5 rounded-xl px-3 py-2 border border-white/10">
-            <Search size={13} className="text-slate-500 shrink-0" />
-            <input type="text" placeholder="Search activity, quotation, remarks, status..." value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="text-xs bg-transparent outline-none flex-1 text-slate-300 placeholder-slate-600 font-mono" />
-            {search && <button onClick={() => setSearch("")} className="text-slate-600 hover:text-slate-400 transition-colors"><X size={12} /></button>}
-          </div>
-        </div>
-
-        <div className="overflow-y-auto flex-1 px-6 py-4 space-y-2">
-          {loading ? (
-            <div className="flex flex-col items-center justify-center py-16 gap-3">
-              <div className="w-8 h-8 rounded-full border-2 border-white/10 border-t-green-400 animate-spin" />
-              <p className="text-xs text-slate-500 font-mono">Fetching records...</p>
+        <div className="overflow-y-auto max-h-80 px-5 py-3 space-y-1.5">
+          {query.trim() === "" ? (
+            <div className="flex flex-col items-center justify-center py-10 gap-2">
+              <Search size={20} className="text-slate-600" />
+              <p className="text-xs text-slate-600 font-mono">Start typing to search</p>
             </div>
-          ) : filtered.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-16 gap-2">
-              <div className="w-12 h-12 rounded-2xl bg-white/5 flex items-center justify-center border border-white/10">
-                <History size={20} className="text-slate-600" />
-              </div>
-              <p className="text-xs text-slate-600 font-mono">no records found</p>
+          ) : results.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-10 gap-2">
+              <p className="text-xs text-slate-600 font-mono">No companies found</p>
             </div>
-          ) : filtered.map((r, i) => {
-            const key = r.id ?? i;
-            const isOpen = expanded === key;
-            const duration = fmtDuration(r.start_date, r.end_date);
-            const hasExtra = !!(r.quotation_amount || r.quotation_number || r.quotation_status ||
-              r.so_amount || r.so_number || r.dr_number || r.delivery_date ||
-              r.type_client || r.source || r.call_status || r.call_type ||
-              r.actual_sales || r.ticket_reference_number || duration || r.payment_terms);
-
+          ) : results.map((account) => {
+            const typeStyle = getTypeClientStyle(account.type_client);
             return (
-              <div key={key} className="rounded-xl bg-white/[0.03] border border-white/5 hover:border-white/10 transition-all duration-150 overflow-hidden">
-                <div className={`flex gap-3 p-3 ${hasExtra ? "cursor-pointer" : ""}`}
-                  onClick={() => hasExtra && toggleExpand(key)}>
-                  <div className="shrink-0 pt-0.5">
-                    <span className={`inline-block px-2 py-1 rounded-lg text-[9px] font-bold uppercase tracking-wide whitespace-nowrap border font-mono ${getTypeStyle(r.type_activity)}`}>
-                      {r.type_activity ?? ""}
-                    </span>
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-xs text-slate-300 leading-snug font-mono uppercase">
-                      {r.remarks ? r.remarks : <span className="text-slate-600 italic">no remarks</span>}
-                    </p>
-                    <div className="flex flex-wrap items-center gap-2 mt-1">
-                      {r.status && <span className="text-[10px] text-slate-500 font-mono">status: {r.status}</span>}
-                      {r.call_status && <span className="text-[10px] text-slate-500 font-mono">· {r.call_status}</span>}
-                      {r.quotation_number && <span className="flex items-center gap-0.5 text-[10px] text-slate-500 font-mono"><Hash size={9} />{r.quotation_number}</span>}
-                      {r.so_number && <span className="flex items-center gap-0.5 text-[10px] text-slate-500 font-mono"><Hash size={9} />SO {r.so_number}</span>}
-                    </div>
-                  </div>
-                  <div className="shrink-0 text-right flex flex-col items-end gap-1">
-                    <p className="text-[10px] text-slate-600 tabular-nums whitespace-nowrap font-mono">{fmtDate(r.date_created) ?? ""}</p>
-                    {hasExtra && <span className="text-[9px] text-slate-600 font-mono">{isOpen ? "less" : "more"}</span>}
-                  </div>
+              <button
+                key={account.id}
+                onClick={() => { onSelect(account); onClose(); }}
+                className="w-full flex items-center justify-between gap-3 px-3 py-2.5 rounded-xl bg-white/[0.03] border border-white/5 hover:border-indigo-500/40 hover:bg-indigo-500/10 transition-all text-left group"
+              >
+                <div className="min-w-0">
+                  <p className="text-xs font-semibold text-slate-200 truncate group-hover:text-white">
+                    {account.company_name}
+                  </p>
+                  <p className="text-[10px] text-slate-500 font-mono truncate">
+                    {account.contact_person || account.account_reference_number}
+                  </p>
                 </div>
-                {isOpen && hasExtra && (
-                  <div className="px-4 pb-4 pt-1 border-t border-white/5 bg-white/[0.02] space-y-1.5">
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1.5 uppercase">
-                      <DetailField label="Quotation No." value={r.quotation_number} />
-                      <DetailField label="Quotation Status" value={r.quotation_status} />
-                      <DetailField label="Quotation Amount" value={fmtCurrency(r.quotation_amount)} />
-                      <DetailField label="SO Number" value={r.so_number} />
-                      <DetailField label="SO Amount" value={fmtCurrency(r.so_amount)} />
-                      <DetailField label="Actual Sales" value={fmtCurrency(r.actual_sales)} />
-                      <DetailField label="DR Number" value={r.dr_number} />
-                      <DetailField label="Delivery Date" value={fmtDate(r.delivery_date)} />
-                      <DetailField label="Payment Terms" value={r.payment_terms} />
-                      <DetailField label="Ticket Ref." value={r.ticket_reference_number} />
-                      <DetailField label="Type Client" value={r.type_client} />
-                      <DetailField label="Source" value={r.source} />
-                      <DetailField label="Call Status" value={r.call_status} />
-                      <DetailField label="Type" value={r.call_type} />
-                      <DetailField label="Duration" value={duration} />
-                      <DetailField label="Start Date" value={fmtDate(r.start_date)} />
-                      <DetailField label="End Date" value={fmtDate(r.end_date)} />
-                    </div>
-                  </div>
-                )}
-              </div>
+                <span className={`shrink-0 inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold border ${typeStyle.pill}`}>
+                  <span className={`w-1.5 h-1.5 rounded-full ${typeStyle.dot}`} />
+                  {account.type_client?.toUpperCase()}
+                </span>
+              </button>
             );
           })}
         </div>
@@ -812,6 +1139,7 @@ export function AccountsTable({ posts, userDetails, dateCreatedFilterRange }: Ac
   const [loadingHistory, setLoadingHistory] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
   const [activeListOpen, setActiveListOpen] = useState<ListSource>(null);
+  const [companySearchOpen, setCompanySearchOpen] = useState(false);
 
   const hasDateFilter = !!(dateCreatedFilterRange?.from || dateCreatedFilterRange?.to);
   const rangeLabel = formatRangeLabel(dateCreatedFilterRange);
@@ -835,21 +1163,49 @@ export function AccountsTable({ posts, userDetails, dateCreatedFilterRange }: Ac
     let cancelled = false;
     setLoadingActivities(true);
     setAllActivities([]);
+
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 30_000);
-    const params = new URLSearchParams();
-    if (dateCreatedFilterRange?.from) params.set("from", dateCreatedFilterRange.from.toISOString().slice(0, 10));
-    if (dateCreatedFilterRange?.to) params.set("to", dateCreatedFilterRange.to.toISOString().slice(0, 10));
-    fetch(`/api/reports/admin/fetch?${params.toString()}`, { signal: controller.signal })
-      .then((r) => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
-      .then((data) => {
-        if (cancelled) return;
-        const arr = Array.isArray(data) ? data : Array.isArray(data?.activities) ? data.activities : [];
-        setAllActivities(arr);
+    const timeout = setTimeout(() => controller.abort(), 60_000);
+
+    const params = new URLSearchParams({ fetchAll: "true" });
+    if (dateCreatedFilterRange?.from)
+      params.set("from", dateCreatedFilterRange.from.toISOString().slice(0, 10));
+    if (dateCreatedFilterRange?.to)
+      params.set("to", dateCreatedFilterRange.to.toISOString().slice(0, 10));
+
+    fetch(`/api/activities-admin?${params.toString()}`, { signal: controller.signal })
+      .then((r) => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        return r.json();
       })
-      .catch((err) => { if (cancelled || err?.name === "AbortError") return; setAllActivities([]); })
-      .finally(() => { clearTimeout(timeout); if (!cancelled) setLoadingActivities(false); });
-    return () => { cancelled = true; controller.abort(); clearTimeout(timeout); };
+      .then((json) => {
+        if (cancelled) return;
+        const arr = Array.isArray(json?.data) ? json.data : [];
+        // Deduplicate by id — batch fetch can return the same record twice
+        const seen = new Set<string>();
+        const deduped = arr.filter((a: Activity) => {
+          if (a.id == null) return true;
+          const key = String(a.id);
+          if (seen.has(key)) return false;
+          seen.add(key);
+          return true;
+        });
+        setAllActivities(deduped);
+      })
+      .catch((err) => {
+        if (cancelled || err?.name === "AbortError") return;
+        setAllActivities([]);
+      })
+      .finally(() => {
+        clearTimeout(timeout);
+        if (!cancelled) setLoadingActivities(false);
+      });
+
+    return () => {
+      cancelled = true;
+      controller.abort();
+      clearTimeout(timeout);
+    };
   }, [dateCreatedFilterRange]);
 
   const agentMap = useMemo(() => {
@@ -860,34 +1216,118 @@ export function AccountsTable({ posts, userDetails, dateCreatedFilterRange }: Ac
     return map;
   }, [agents]);
 
+  // ── Same filtering logic as page.tsx: status + type_client must be valid ──
+  const EXCLUDED_STATUSES = ["removed", "approved for deletion", "subject for transfer"];
+  const ALLOWED_TYPES = ["top 50", "next 30", "balance 20", "tsa client", "csr client", "new client"];
+
   const allActiveAccounts = useMemo(() =>
-    posts.filter((a) => a.status?.toLowerCase() === "active"),
+    posts.filter((a) => {
+      const status = a.status?.toLowerCase() || "";
+      const typeClient = a.type_client?.toLowerCase() || "";
+      if (!a.status || !a.type_client) return false;
+      if (EXCLUDED_STATUSES.includes(status)) return false;
+      if (!ALLOWED_TYPES.includes(typeClient)) return false;
+      return true;
+    }),
     [posts]);
 
-  // ── Type client filter applied on top of active accounts ──
   const typeClientFilteredAccounts = useMemo(() =>
     typeClientFilter
       ? allActiveAccounts.filter((a) => a.type_client?.toUpperCase() === typeClientFilter)
       : allActiveAccounts,
     [allActiveAccounts, typeClientFilter]);
 
-  // ── Set of active company names (lowercase) — source of truth ──
-  const activeCompanyNames = useMemo(() => {
+  // ── Primary key: account_reference_number (same as page.tsx) ──
+  const activeRefNumbers = useMemo(() => {
     const s = new Set<string>();
-    allActiveAccounts.forEach((a) => s.add(a.company_name.toLowerCase()));
+    allActiveAccounts.forEach((a) => {
+      if (a.account_reference_number) s.add(a.account_reference_number.toLowerCase());
+    });
     return s;
   }, [allActiveAccounts]);
 
-  // ── Filter allActivities to only include companies still in active accounts ──
-  const activeFilteredActivities = useMemo(() =>
-    allActivities.filter((a) =>
-      a.company_name ? activeCompanyNames.has(a.company_name.toLowerCase()) : false
-    ),
-    [allActivities, activeCompanyNames]);
+  // ── Set of agent referenceids who own active accounts ──
+  const activeAgentRefs = useMemo(() => {
+    const s = new Set<string>();
+    allActiveAccounts.forEach((a) => {
+      if (a.referenceid) s.add(a.referenceid.toLowerCase());
+    });
+    return s;
+  }, [allActiveAccounts]);
 
-  // ── Hierarchy Helper ──
-  // We need to know which Manager is linked to which TSM, and which TSM to which Agent.
-  // We'll derive this from the 'agents' array (users collection).
+  // ── Only keep activities for active accounts; null referenceid activities are included
+  //    and treated as belonging to the account's owner agent ──
+  const activeFilteredActivities = useMemo(() =>
+    allActivities.filter((a) => {
+      if (!a.account_reference_number) return false;
+      if (!activeRefNumbers.has(a.account_reference_number.toLowerCase())) return false;
+      // If referenceid is present, it must belong to a known agent
+      if (a.referenceid && !activeAgentRefs.has(a.referenceid.toLowerCase())) return false;
+      return true;
+    }),
+    [allActivities, activeRefNumbers, activeAgentRefs]);
+
+  // ── Composite map: "accountRef|agentRef" → count ──
+  // For activities with null referenceid, use the account owner's referenceid
+  const accountRefToOwner = useMemo(() => {
+    const m: Record<string, string> = {};
+    allActiveAccounts.forEach((a) => {
+      if (a.account_reference_number && a.referenceid)
+        m[a.account_reference_number.toLowerCase()] = a.referenceid.toLowerCase();
+    });
+    return m;
+  }, [allActiveAccounts]);
+
+  const activityCompositeMap = useMemo(() => {
+    const m: Record<string, number> = {};
+    activeFilteredActivities.forEach((a) => {
+      const ref = a.account_reference_number!.toLowerCase();
+      // Use activity's referenceid if present, otherwise fall back to account owner
+      const agentRef = a.referenceid
+        ? a.referenceid.toLowerCase()
+        : (accountRefToOwner[ref] ?? "");
+      if (!agentRef) return;
+      const key = `${ref}|${agentRef}`;
+      m[key] = (m[key] ?? 0) + 1;
+    });
+    return m;
+  }, [activeFilteredActivities, accountRefToOwner]);
+
+  // ── Set of accountRef that have activity for their owner agent ──
+  const refsWithActivity = useMemo(() => {
+    const s = new Set<string>();
+    allActiveAccounts.forEach((a) => {
+      if (!a.account_reference_number || !a.referenceid) return;
+      const key = `${a.account_reference_number.toLowerCase()}|${a.referenceid.toLowerCase()}`;
+      if (activityCompositeMap[key]) s.add(a.account_reference_number.toLowerCase());
+    });
+    return s;
+  }, [allActiveAccounts, activityCompositeMap]);
+
+  // ── Activity count per account (owner-scoped) ──
+  const activityCountByRef = useMemo(() => {
+    const m: Record<string, number> = {};
+    allActiveAccounts.forEach((a) => {
+      if (!a.account_reference_number || !a.referenceid) return;
+      const key = `${a.account_reference_number.toLowerCase()}|${a.referenceid.toLowerCase()}`;
+      const cnt = activityCompositeMap[key] ?? 0;
+      if (cnt > 0) m[a.account_reference_number.toLowerCase()] = cnt;
+    });
+    return m;
+  }, [allActiveAccounts, activityCompositeMap]);
+
+  const accountHasActivity = (account: Account): boolean => {
+    if (!account.account_reference_number) return false;
+    return refsWithActivity.has(account.account_reference_number.toLowerCase());
+  };
+
+  const accountActivityCount = (account: Account): number => {
+    if (!account.account_reference_number) return 0;
+    return activityCountByRef[account.account_reference_number.toLowerCase()] ?? 0;
+  };
+
+  const activityCountMap = activityCountByRef;
+
   const hierarchyMap = useMemo(() => {
     const managers = new Set<string>();
     const tsmToManager: Record<string, string> = {};
@@ -910,7 +1350,6 @@ export function AccountsTable({ posts, userDetails, dateCreatedFilterRange }: Ac
   }, [agents]);
 
   const managerIds = useMemo(() => {
-    // Get all unique manager IDs from accounts that have a TSM assigned
     const s = new Set<string>();
     typeClientFilteredAccounts.forEach((a) => {
       if (a.tsm) {
@@ -925,16 +1364,12 @@ export function AccountsTable({ posts, userDetails, dateCreatedFilterRange }: Ac
   const managerData = useMemo(() => {
     return managerIds.map((managerId) => {
       const managerName = agentMap[managerId] ?? managerId;
-      // TSMs under this manager
       const tsms = Object.entries(hierarchyMap.tsmToManager)
         .filter(([_, mId]) => mId === managerId)
         .map(([tsmId]) => tsmId);
-
-      // Accounts under it
       const managerAccounts = typeClientFilteredAccounts.filter((a) =>
         a.tsm && tsms.includes(a.tsm.toLowerCase())
       );
-
       return { managerId, managerName, accountCount: managerAccounts.length, tsmCount: tsms.length };
     }).sort((a, b) => b.accountCount - a.accountCount);
   }, [managerIds, typeClientFilteredAccounts, agentMap, hierarchyMap]);
@@ -944,11 +1379,8 @@ export function AccountsTable({ posts, userDetails, dateCreatedFilterRange }: Ac
     typeClientFilteredAccounts.forEach((a) => {
       if (a.tsm) {
         const tsmId = a.tsm.toLowerCase();
-        // If we have a selected manager, only include TSMs under that manager
         if (selectedManagerId) {
-          if (hierarchyMap.tsmToManager[tsmId] === selectedManagerId) {
-            s.add(tsmId);
-          }
+          if (hierarchyMap.tsmToManager[tsmId] === selectedManagerId) s.add(tsmId);
         } else {
           s.add(tsmId);
         }
@@ -956,56 +1388,6 @@ export function AccountsTable({ posts, userDetails, dateCreatedFilterRange }: Ac
     });
     return [...s];
   }, [typeClientFilteredAccounts, selectedManagerId, hierarchyMap]);
-
-  // ── activityKeySet uses activeFilteredActivities ──
-  const activityKeySet = useMemo(() => {
-    const s = new Set<string>();
-    activeFilteredActivities.forEach((a) => {
-      if (a.account_reference_number) s.add(a.account_reference_number.toLowerCase());
-      else if (a.company_name) s.add(`name:${a.company_name.toLowerCase()}`);
-    });
-    return s;
-  }, [activeFilteredActivities]);
-
-  const getAccountKey = (account: Account): string => {
-    if (account.account_reference_number) return account.account_reference_number.toLowerCase();
-    return `name:${account.company_name.toLowerCase()}`;
-  };
-
-  // ── companiesWithActivity uses activityKeySet derived from activeFilteredActivities ──
-  const companiesWithActivity = useMemo(() => {
-    const s = new Set<string>();
-    allActiveAccounts.forEach((a) => {
-      if (activityKeySet.has(getAccountKey(a))) s.add(a.company_name.toLowerCase());
-    });
-    return s;
-  }, [allActiveAccounts, activityKeySet]);
-
-  // ── activityCountMap uses activeFilteredActivities ──
-  const activityCountMap = useMemo(() => {
-    const refCount: Record<string, number> = {};
-    const nameCount: Record<string, number> = {};
-    activeFilteredActivities.forEach((a) => {
-      if (a.account_reference_number) {
-        const k = a.account_reference_number.toLowerCase();
-        refCount[k] = (refCount[k] ?? 0) + 1;
-      } else if (a.company_name) {
-        const k = a.company_name.toLowerCase();
-        nameCount[k] = (nameCount[k] ?? 0) + 1;
-      }
-    });
-    const m: Record<string, number> = {};
-    allActiveAccounts.forEach((a) => {
-      const key = a.company_name.toLowerCase();
-      if (a.account_reference_number) {
-        const refKey = a.account_reference_number.toLowerCase();
-        if (refCount[refKey]) m[key] = (m[key] ?? 0) + refCount[refKey];
-      } else if (nameCount[key]) {
-        m[key] = (m[key] ?? 0) + nameCount[key];
-      }
-    });
-    return m;
-  }, [activeFilteredActivities, allActiveAccounts]);
 
   const tsmData = useMemo(() => {
     return tsmIds.map((tsmId) => {
@@ -1022,19 +1404,19 @@ export function AccountsTable({ posts, userDetails, dateCreatedFilterRange }: Ac
     const agentIds = [...new Set(tsmAccounts.map((a) => a.referenceid?.toLowerCase()).filter(Boolean))];
     return agentIds.map((agentId) => {
       const agentAccounts = tsmAccounts.filter((a) => a.referenceid?.toLowerCase() === agentId);
-      const withAct = agentAccounts.filter((a) => companiesWithActivity.has(a.company_name.toLowerCase())).length;
+      const withAct = agentAccounts.filter((a) => accountHasActivity(a)).length;
       const withoutAct = agentAccounts.length - withAct;
       return { agentId, agentName: agentMap[agentId] ?? agentId, accountCount: agentAccounts.length, withActivity: withAct, withoutActivity: withoutAct };
     }).sort((a, b) => b.accountCount - a.accountCount);
-  }, [selectedTSMId, typeClientFilteredAccounts, agentMap, companiesWithActivity]);
+  }, [selectedTSMId, typeClientFilteredAccounts, agentMap, refsWithActivity]);
 
   const agentAccounts = useMemo(() => {
     if (!selectedAgentId) return [];
     return typeClientFilteredAccounts.filter((a) => a.referenceid?.toLowerCase() === selectedAgentId);
   }, [selectedAgentId, typeClientFilteredAccounts]);
 
-  const withActivityAccounts = useMemo(() => agentAccounts.filter((a) => companiesWithActivity.has(a.company_name.toLowerCase())), [agentAccounts, companiesWithActivity]);
-  const withoutActivityAccounts = useMemo(() => agentAccounts.filter((a) => !companiesWithActivity.has(a.company_name.toLowerCase())), [agentAccounts, companiesWithActivity]);
+  const withActivityAccounts = useMemo(() => agentAccounts.filter((a) => accountHasActivity(a)), [agentAccounts, refsWithActivity]);
+  const withoutActivityAccounts = useMemo(() => agentAccounts.filter((a) => !accountHasActivity(a)), [agentAccounts, refsWithActivity]);
 
   const scopedBase = useMemo(() => {
     if (drillLevel === "manager") return typeClientFilteredAccounts;
@@ -1043,10 +1425,9 @@ export function AccountsTable({ posts, userDetails, dateCreatedFilterRange }: Ac
     return agentAccounts;
   }, [drillLevel, typeClientFilteredAccounts, selectedManagerId, selectedTSMId, agentAccounts, hierarchyMap]);
 
-  const scopedWithActivity = useMemo(() => scopedBase.filter((a) => companiesWithActivity.has(a.company_name.toLowerCase())), [scopedBase, companiesWithActivity]);
-  const scopedWithoutActivity = useMemo(() => scopedBase.filter((a) => !companiesWithActivity.has(a.company_name.toLowerCase())), [scopedBase, companiesWithActivity]);
+  const scopedWithActivity = useMemo(() => scopedBase.filter((a) => accountHasActivity(a)), [scopedBase, refsWithActivity]);
+  const scopedWithoutActivity = useMemo(() => scopedBase.filter((a) => !accountHasActivity(a)), [scopedBase, refsWithActivity]);
 
-  // ── Unfiltered scoped base for type client count cards (always shows all types) ──
   const unfilteredScopedBase = useMemo(() => {
     if (drillLevel === "manager") return allActiveAccounts;
     if (drillLevel === "tsm") return allActiveAccounts.filter((a) => a.tsm && hierarchyMap.tsmToManager[a.tsm.toLowerCase()] === selectedManagerId);
@@ -1061,14 +1442,11 @@ export function AccountsTable({ posts, userDetails, dateCreatedFilterRange }: Ac
       c[t] = (c[t] ?? 0) + 1;
     });
     let entries = Object.entries(c).sort((a, b) => b[1] - a[1]);
-
-    // ← THIS IS THE KEY LINE
     if (typeClientFilter) {
       entries = entries.filter(([type]) => type === typeClientFilter);
     }
-
     return entries;
-  }, [unfilteredScopedBase, typeClientFilter]); // ← Add typeClientFilter here
+  }, [unfilteredScopedBase, typeClientFilter]);
 
   const filteredAccounts = useMemo(() => {
     const q = search.toLowerCase();
@@ -1114,22 +1492,34 @@ export function AccountsTable({ posts, userDetails, dateCreatedFilterRange }: Ac
     setTypeClientFilter(null);
   };
 
-  // ── openHistory guards against companies not in active accounts ──
-  const openHistory = (companyName: string, source: ListSource = null) => {
-    const isActive = activeCompanyNames.has(companyName.toLowerCase());
-    if (!isActive) return;
+  // ── openHistory: filter by account_reference_number + selectedAgentId (the drilled-into agent) ──
+  const openHistory = (accountRefNumber: string, source: ListSource = null) => {
+    if (!accountRefNumber) return;
+    const ref = accountRefNumber.toLowerCase();
+    const acct = allActiveAccounts.find(
+      (a) => a.account_reference_number?.toLowerCase() === ref
+    ) ?? null;
+    if (!acct) return;
 
-    const acct = allActiveAccounts.find((a) => a.company_name.toLowerCase() === companyName.toLowerCase()) ?? null;
+    // Use selectedAgentId when drilling into an agent's accounts,
+    // fall back to account.referenceid for dialogs opened from other contexts
+    const agentRef = (selectedAgentId || acct.referenceid?.toLowerCase() || "").toLowerCase();
 
-    setHistoryCompany(companyName);
+    setHistoryCompany(acct.company_name);
     setHistoryAccount(acct);
     setHistorySource(source);
     setHistoryOpen(true);
     setLoadingHistory(true);
 
-    const filtered = activeFilteredActivities.filter((a) =>
-      (a.company_name ?? "").toLowerCase() === companyName.toLowerCase()
+    const filtered = activeFilteredActivities.filter(
+      (a) => {
+        if (a.account_reference_number?.toLowerCase() !== ref) return false;
+        if (!agentRef) return true;
+        // Include if referenceid matches OR if referenceid is null (belongs to account owner)
+        return !a.referenceid || (a.referenceid ?? "").toLowerCase() === agentRef;
+      }
     );
+
     setActivities(filtered);
     setLoadingHistory(false);
   };
@@ -1148,12 +1538,49 @@ export function AccountsTable({ posts, userDetails, dateCreatedFilterRange }: Ac
     withoutAct: scopedWithoutActivity.length,
   }), [scopedBase, scopedWithActivity, scopedWithoutActivity]);
 
+  const categoryStats = useMemo(() => {
+    if (drillLevel !== "accounts") return { customers: 0, leads: 0 };
+    let customers = 0;
+    let leads = 0;
+    scopedBase.forEach((account) => {
+      const ref = account.account_reference_number?.toLowerCase();
+      const ownerRef = account.referenceid?.toLowerCase();
+      if (!ref || !ownerRef) { leads++; return; }
+      const key = `${ref}|${ownerRef}`;
+      const hasAct = !!(activityCompositeMap[key]);
+      if (!hasAct) { leads++; return; }
+      const accountActivities = activeFilteredActivities.filter(
+        (a) =>
+          a.account_reference_number?.toLowerCase() === ref &&
+          (!a.referenceid || (a.referenceid ?? "").toLowerCase() === ownerRef)
+      );
+      const isCustomer = accountActivities.some(
+        (a) => (a.actual_sales ?? 0) > 0 ||
+          (a.type_activity ?? "").toLowerCase().includes("delivered") ||
+          (a.type_activity ?? "").toLowerCase().includes("closed")
+      );
+      if (isCustomer) customers++;
+      else leads++;
+    });
+    return { customers, leads };
+  }, [drillLevel, scopedBase, activeFilteredActivities, activityCompositeMap]);
+
   return (
     <>
       <ExportDialog
         open={exportOpen} onClose={() => setExportOpen(false)}
         rows={drillLevel === "accounts" ? filteredAccounts : allActiveAccounts}
         agentMap={agentMap}
+      />
+
+      <CompanySearchDialog
+        open={companySearchOpen}
+        onClose={() => setCompanySearchOpen(false)}
+        accounts={allActiveAccounts}
+        onSelect={(account) => {
+          if (account.account_reference_number)
+            openHistory(account.account_reference_number, null);
+        }}
       />
 
       <HistoryDialog
@@ -1193,7 +1620,6 @@ export function AccountsTable({ posts, userDetails, dateCreatedFilterRange }: Ac
           </div>
         )}
 
-        {/* ── Active type client filter banner ── */}
         {typeClientFilter && (
           <div className="flex items-center gap-2 rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-2 text-[11px] text-indigo-700 font-medium w-fit">
             <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 shrink-0" />
@@ -1237,6 +1663,32 @@ export function AccountsTable({ posts, userDetails, dateCreatedFilterRange }: Ac
               onClick={() => setTypeClientFilter((prev) => prev === type ? null : type)}
             />
           ))}
+          {drillLevel === "accounts" && (
+          <div className="relative flex flex-col gap-2 rounded-xl border bg-white px-5 py-4 shadow-sm overflow-hidden"
+            style={{ borderLeft: "3px solid #6366f1" }}>
+            <div className="absolute inset-0 opacity-[0.04] pointer-events-none"
+              style={{ background: "radial-gradient(circle at 80% 20%, #6366f1, transparent 70%)" }} />
+            <span className="text-[10px] font-semibold uppercase tracking-widest text-gray-400">Leads / Customers</span>
+            <div className="flex items-center gap-3">
+              <div className="flex flex-col items-center gap-0.5">
+                <span className="text-xl font-bold text-amber-600 tabular-nums">{categoryStats.leads}</span>
+                <span className="text-[9px] font-semibold text-amber-500 uppercase tracking-wide">Leads</span>
+              </div>
+              <div className="w-px h-8 bg-gray-100" />
+              <div className="flex flex-col items-center gap-0.5">
+                <span className="text-xl font-bold text-emerald-600 tabular-nums">{categoryStats.customers}</span>
+                <span className="text-[9px] font-semibold text-emerald-500 uppercase tracking-wide">Customers</span>
+              </div>
+            </div>
+            {(categoryStats.leads + categoryStats.customers) > 0 && (
+              <div className="h-1 rounded-full overflow-hidden bg-gray-100 flex">
+                <div className="h-full bg-amber-400 transition-all"
+                  style={{ width: `${Math.round((categoryStats.leads / (categoryStats.leads + categoryStats.customers)) * 100)}%` }} />
+                <div className="h-full bg-emerald-400 flex-1" />
+              </div>
+            )}
+          </div>
+          )}
         </div>
 
         <div className="bg-white rounded-xl border shadow-sm overflow-hidden">
@@ -1252,6 +1704,15 @@ export function AccountsTable({ posts, userDetails, dateCreatedFilterRange }: Ac
                 onClickAgent={() => goToAgent(selectedTSMId, selectedTSMName)}
               />
             </div>
+
+            {/* Search button — always visible */}
+            <button
+              onClick={() => setCompanySearchOpen(true)}
+              className="flex items-center gap-1.5 rounded-lg bg-white hover:bg-slate-50 px-3 py-1.5 text-xs font-medium text-slate-500 hover:text-indigo-600 border border-slate-200 hover:border-indigo-300 transition-colors shadow-sm"
+            >
+              <Search size={12} />
+              Search Company
+            </button>
 
             {drillLevel !== "manager" && (
               <button
@@ -1348,7 +1809,7 @@ export function AccountsTable({ posts, userDetails, dateCreatedFilterRange }: Ac
                 <Table>
                   <TableHeader>
                     <TableRow className="bg-gray-50 border-b border-gray-100">
-                      {["Actions", "Company", "Contact", "Phone", "Email", "Region", "Type", "Industry", "Date"].map((h) => (
+                      {["Actions", "Category", "Company", "Contact", "Phone", "Email", "Region", "Type", "Industry", "Date"].map((h) => (
                         <TableHead key={h} className="text-[10px] font-bold uppercase tracking-wider text-gray-400 py-3">{h}</TableHead>
                       ))}
                     </TableRow>
@@ -1356,17 +1817,40 @@ export function AccountsTable({ posts, userDetails, dateCreatedFilterRange }: Ac
                   <TableBody>
                     {paginatedAccounts.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={9} className="text-center py-14 text-sm text-gray-400">No accounts found</TableCell>
+                        <TableCell colSpan={10} className="text-center py-14 text-sm text-gray-400">No accounts found</TableCell>
                       </TableRow>
                     ) : paginatedAccounts.map((account) => {
-                      const hasAct = companiesWithActivity.has(account.company_name.toLowerCase());
-                      const actCnt = activityCountMap[account.company_name.toLowerCase()] ?? 0;
+                      const hasAct = accountHasActivity(account);
+                      const actCnt = accountActivityCount(account);
                       const typeStyle = getTypeClientStyle(account.type_client);
+                      const ref = account.account_reference_number?.toLowerCase();
+
+                      // ── Category classification: O(1) composite map lookup, scan only if needed ──
+                      const ownerRef = account.referenceid?.toLowerCase();
+                      const compositeKey = ref && ownerRef ? `${ref}|${ownerRef}` : null;
+                      const hasAnyAct = compositeKey ? !!(activityCompositeMap[compositeKey]) : false;
+                      const accountActivities = hasAnyAct && ref && ownerRef
+                        ? activeFilteredActivities.filter(
+                            (a) =>
+                              a.account_reference_number?.toLowerCase() === ref &&
+                              (!a.referenceid || (a.referenceid ?? "").toLowerCase() === ownerRef)
+                          )
+                        : [];
+                      const isCustomer = accountActivities.some(
+                        (a) => (a.actual_sales ?? 0) > 0 ||
+                          (a.type_activity ?? "").toLowerCase().includes("delivered") ||
+                          (a.type_activity ?? "").toLowerCase().includes("closed")
+                      );
+                      const category = isCustomer ? "Customer" : "Lead";
+                      const categoryStyle = isCustomer
+                        ? { pill: "bg-emerald-50 text-emerald-700 border-emerald-200", dot: "bg-emerald-500" }
+                        : { pill: "bg-amber-50 text-amber-700 border-amber-200", dot: "bg-amber-400" };
+
                       return (
                         <TableRow key={account.id} className="hover:bg-indigo-50/20 transition-colors group">
                           <TableCell>
                             <div className="flex items-center gap-2">
-                              <button onClick={() => openHistory(account.company_name, null)}
+                              <button onClick={() => openHistory(account.account_reference_number ?? "", null)}
                                 className="flex items-center gap-1 text-[11px] font-mono font-semibold text-indigo-500 hover:text-indigo-700 transition-colors whitespace-nowrap">
                                 <History size={11} /> history
                               </button>
@@ -1378,6 +1862,12 @@ export function AccountsTable({ posts, userDetails, dateCreatedFilterRange }: Ac
                               />
                               {actCnt > 0 && <span className="text-[10px] text-slate-400 tabular-nums">{actCnt}</span>}
                             </div>
+                          </TableCell>
+                          <TableCell>
+                            <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold border whitespace-nowrap ${categoryStyle.pill}`}>
+                              <span className={`w-1.5 h-1.5 rounded-full ${categoryStyle.dot}`} />
+                              {category}
+                            </span>
                           </TableCell>
                           <TableCell className="font-semibold text-gray-800 whitespace-nowrap text-sm">{account.company_name}</TableCell>
                           <TableCell className="text-gray-500 whitespace-nowrap text-xs">{account.contact_person}</TableCell>

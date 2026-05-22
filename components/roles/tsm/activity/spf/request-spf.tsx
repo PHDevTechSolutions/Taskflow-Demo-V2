@@ -44,6 +44,8 @@ interface SPFRecord {
     item_description?: string;
     item_photo?: string;
     spf_creation_id?: number | null;
+    date_updated?: string;
+    created_at?: string;
 }
 
 interface SPFProps {
@@ -169,7 +171,12 @@ const SPF: React.FC<SPFProps> = ({ referenceid, tsm, manager, prepared_by, first
             const res = await fetch(`/api/activity/tsm/spf/fetch?referenceid=${encodeURIComponent(referenceid)}`);
             if (!res.ok) throw new Error("Failed to fetch SPF records");
             const data = await res.json();
-            setAllActivities(data.activities || []);
+            const sorted = (data.activities || []).sort((a: SPFRecord, b: SPFRecord) => {
+                const dateA = new Date(a.date_updated || a.created_at || String(a.id)).getTime();
+                const dateB = new Date(b.date_updated || b.created_at || String(b.id)).getTime();
+                return dateB - dateA;
+            });
+            setAllActivities(sorted);
         } catch (err: any) {
             setError(err.message);
         } finally {
@@ -289,7 +296,7 @@ const SPF: React.FC<SPFProps> = ({ referenceid, tsm, manager, prepared_by, first
                         <Table>
                             <TableHeader>
                                 <TableRow className="bg-gray-900 hover:bg-gray-900">
-                                    {["Actions", "Status", "SPF No.", "Customer", "Contact Person", "Contact No.", "Reg. Address", "Delivery", "Billing", "Collection", "Payment", "Warranty", "Delivery Date", "Prepared By", "Approved By"].map((h) => (
+                                    {["Actions", "Status", "SPF No.", "Customer", "Contact Person", "Contact No.", "Reg. Address", "Delivery", "Billing", "Collection", "Payment", "Warranty", "Delivery Date", "Prepared By", "Approved By", "Date Modified"].map((h) => (
                                         <TableHead key={h} className="text-[10px] font-bold uppercase tracking-wider text-white whitespace-nowrap px-3 py-2.5">{h}</TableHead>
                                     ))}
                                 </TableRow>
@@ -338,6 +345,18 @@ const SPF: React.FC<SPFProps> = ({ referenceid, tsm, manager, prepared_by, first
                                             <TableCell className="px-3 py-2 whitespace-nowrap font-mono text-[10px] text-gray-600">{item.delivery_date || "—"}</TableCell>
                                             <TableCell className="px-3 py-2 whitespace-nowrap text-gray-600">{item.prepared_by || "—"}</TableCell>
                                             <TableCell className="px-3 py-2 whitespace-nowrap text-gray-600">{item.approved_by || "—"}</TableCell>
+                                            <TableCell className="px-3 py-2 whitespace-nowrap text-gray-600">
+                                                {item.date_updated
+                                                    ? new Date(item.date_updated).toLocaleString("en-PH", {
+                                                        timeZone: "Asia/Manila",
+                                                        year: "numeric",
+                                                        month: "short",
+                                                        day: "2-digit",
+                                                        hour: "2-digit",
+                                                        minute: "2-digit",
+                                                    })
+                                                    : "—"}
+                                            </TableCell>
                                         </TableRow>
                                     );
                                 })}

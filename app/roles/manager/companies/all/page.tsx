@@ -9,8 +9,12 @@ import {
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import {
   X, Search, History, FileText, Hash,
-  Phone, Mail, TrendingUp, User,
+  Phone, Mail, TrendingUp, User, BarChart2, ArrowLeft,
 } from "lucide-react";
+import {
+  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
+  LineChart, Line, CartesianGrid, Cell,
+} from "recharts";
 
 import { UserProvider, useUser } from "@/contexts/UserContext";
 import { FormatProvider } from "@/contexts/FormatContext";
@@ -175,12 +179,12 @@ const getDisplayName = (firstName?: string, lastName?: string, fallback?: string
 /* ─── Type client color map ───────────────────────────────────────── */
 
 const TYPE_CLIENT_STYLES: Record<string, { pill: string; dot: string }> = {
-  "TOP 50":     { pill: "bg-amber-100 text-amber-700 border-amber-200",   dot: "bg-amber-500"   },
-  "NEXT 30":    { pill: "bg-blue-100 text-blue-700 border-blue-200",      dot: "bg-blue-500"    },
-  "BALANCE 20": { pill: "bg-violet-100 text-violet-700 border-violet-200",dot: "bg-violet-500"  },
+  "TOP 50": { pill: "bg-amber-100 text-amber-700 border-amber-200", dot: "bg-amber-500" },
+  "NEXT 30": { pill: "bg-blue-100 text-blue-700 border-blue-200", dot: "bg-blue-500" },
+  "BALANCE 20": { pill: "bg-violet-100 text-violet-700 border-violet-200", dot: "bg-violet-500" },
   "NEW CLIENT": { pill: "bg-emerald-100 text-emerald-700 border-emerald-200", dot: "bg-emerald-500" },
-  "TSA CLIENT": { pill: "bg-rose-100 text-rose-700 border-rose-200",      dot: "bg-rose-500"    },
-  "CSR CLIENT": { pill: "bg-slate-100 text-slate-600 border-slate-200",   dot: "bg-slate-400"   },
+  "TSA CLIENT": { pill: "bg-rose-100 text-rose-700 border-rose-200", dot: "bg-rose-500" },
+  "CSR CLIENT": { pill: "bg-slate-100 text-slate-600 border-slate-200", dot: "bg-slate-400" },
 };
 
 function getTypeClientStyle(type: string) {
@@ -231,9 +235,9 @@ function StatCard({
 /* ─── TSM Card ──────────────────────────────────────────────────── */
 
 function TSMCard({ tsm, onClick }: { tsm: TSMWithStats; onClick: () => void }) {
-  const withPct    = tsm.totalAccounts > 0 ? Math.round((tsm.withActivity    / tsm.totalAccounts) * 100) : 0;
+  const withPct = tsm.totalAccounts > 0 ? Math.round((tsm.withActivity / tsm.totalAccounts) * 100) : 0;
   const withoutPct = tsm.totalAccounts > 0 ? Math.round((tsm.withoutActivity / tsm.totalAccounts) * 100) : 0;
-  const fullName   = `${tsm.FirstName || ""} ${tsm.LastName || ""}`.trim() || tsm.ReferenceID;
+  const fullName = `${tsm.FirstName || ""} ${tsm.LastName || ""}`.trim() || tsm.ReferenceID;
 
   return (
     <div
@@ -272,6 +276,119 @@ function TSMCard({ tsm, onClick }: { tsm: TSMWithStats; onClick: () => void }) {
   );
 }
 
+/* ─── Company Search Dialog ──────────────────────────────────────── */
+
+function CompanySearchDialog({
+  open,
+  onClose,
+  accounts,
+  onSelect,
+}: {
+  open: boolean;
+  onClose: () => void;
+  accounts: Account[];
+  onSelect: (account: Account) => void;
+}) {
+  const [query, setQuery] = useState("");
+
+  useEffect(() => { if (!open) setQuery(""); }, [open]);
+
+  const results = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return [];
+    return accounts
+      .filter((a) => a.company_name.toLowerCase().includes(q))
+      .slice(0, 30);
+  }, [query, accounts]);
+
+  return (
+    <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
+      <DialogContent className="max-w-lg w-full p-0 gap-0 rounded-2xl border-0 shadow-2xl overflow-hidden bg-[#0d1117]">
+        {/* Header */}
+        <div className="px-5 py-4 bg-[#161b22] border-b border-white/5 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <span className="w-3 h-3 rounded-full bg-rose-500/80" />
+            <span className="w-3 h-3 rounded-full bg-amber-400/80" />
+            <span className="w-3 h-3 rounded-full bg-emerald-500/80" />
+            <div className="ml-1">
+              <DialogTitle className="text-white text-[11px] font-bold font-mono tracking-widest uppercase">
+                company_search
+              </DialogTitle>
+              <DialogDescription className="text-slate-500 text-[10px] font-mono">
+                Search by company name
+              </DialogDescription>
+            </div>
+          </div>
+          <button
+            onClick={onClose}
+            className="w-7 h-7 rounded-full bg-white/5 hover:bg-white/15 flex items-center justify-center text-white/40 hover:text-white transition-all border border-white/5"
+          >
+            <X size={12} />
+          </button>
+        </div>
+
+        {/* Search input */}
+        <div className="px-5 py-3 border-b border-white/5">
+          <div className="flex items-center gap-2 bg-white/5 rounded-xl px-3 py-2 border border-white/10">
+            <Search size={13} className="text-slate-500 shrink-0" />
+            <input
+              autoFocus
+              type="text"
+              placeholder="Type company name..."
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              className="text-xs bg-transparent outline-none flex-1 text-slate-300 placeholder-slate-600 font-mono"
+            />
+            {query && (
+              <button onClick={() => setQuery("")} className="text-slate-600 hover:text-slate-400">
+                <X size={12} />
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Results */}
+        <div className="overflow-y-auto max-h-80 px-5 py-3 space-y-1.5">
+          {query.trim() === "" ? (
+            <div className="flex flex-col items-center justify-center py-10 gap-2">
+              <Search size={20} className="text-slate-600" />
+              <p className="text-xs text-slate-600 font-mono">Start typing to search</p>
+            </div>
+          ) : results.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-10 gap-2">
+              <p className="text-xs text-slate-600 font-mono">No companies found</p>
+            </div>
+          ) : (
+            results.map((account) => {
+              const typeStyle = getTypeClientStyle(account.type_client);
+              return (
+                <button
+                  key={account.id}
+                  onClick={() => { onSelect(account); onClose(); }}
+                  className="w-full flex items-center justify-between gap-3 px-3 py-2.5 rounded-xl bg-white/[0.03] border border-white/5 hover:border-indigo-500/40 hover:bg-indigo-500/10 transition-all text-left group"
+                >
+                  <div className="min-w-0">
+                    <p className="text-xs font-semibold text-slate-200 truncate group-hover:text-white">
+                      {account.company_name}
+                    </p>
+                    <p className="text-[10px] text-slate-500 font-mono truncate">
+                      {account.contact_person || account.email_address || account.account_reference_number}
+                    </p>
+                  </div>
+                  <span className={`shrink-0 inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold border ${typeStyle.pill}`}>
+                    <span className={`w-1.5 h-1.5 rounded-full ${typeStyle.dot}`} />
+                    {account.type_client?.toUpperCase()}
+                  </span>
+                </button>
+              );
+            })
+          )}
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 /* ─── History Dialog ──────────────────────────────────────────────── */
 
 function DetailField({ label, value }: { label: string; value: string | null | undefined }) {
@@ -284,9 +401,10 @@ function DetailField({ label, value }: { label: string; value: string | null | u
   );
 }
 
-function HistoryDialog({ open, onClose, companyName, loading, records, account }: {
+function HistoryDialog({ open, onClose, companyName, loading, records, account, onBackToSearch }: {
   open: boolean; onClose: () => void; companyName: string | null;
   loading: boolean; records: Activity[]; account?: Account | null;
+  onBackToSearch?: () => void;
 }) {
   const [search, setSearch] = useState("");
   const [expanded, setExpanded] = useState<string | number | null>(null);
@@ -300,8 +418,8 @@ function HistoryDialog({ open, onClose, companyName, loading, records, account }
     if (!q) return records;
     return records.filter((r) =>
       (r.type_activity ?? "").toLowerCase().includes(q) ||
-      (r.remarks      ?? "").toLowerCase().includes(q) ||
-      (r.status       ?? "").toLowerCase().includes(q)
+      (r.remarks ?? "").toLowerCase().includes(q) ||
+      (r.status ?? "").toLowerCase().includes(q)
     );
   }, [search, records]);
 
@@ -312,51 +430,80 @@ function HistoryDialog({ open, onClose, companyName, loading, records, account }
   }, [records]);
 
   const typeStyles: Record<string, string> = {
-    Call:     "bg-sky-500/15 text-sky-300 border-sky-500/20",
-    Email:    "bg-violet-500/15 text-violet-300 border-violet-500/20",
-    Meeting:  "bg-amber-500/15 text-amber-300 border-amber-500/20",
-    Demo:     "bg-emerald-500/15 text-emerald-300 border-emerald-500/20",
+    Call: "bg-sky-500/15 text-sky-300 border-sky-500/20",
+    Email: "bg-violet-500/15 text-violet-300 border-violet-500/20",
+    Meeting: "bg-amber-500/15 text-amber-300 border-amber-500/20",
+    Demo: "bg-emerald-500/15 text-emerald-300 border-emerald-500/20",
     Proposal: "bg-rose-500/15 text-rose-300 border-rose-500/20",
   };
-  const getTypeStyle  = (t?: string) => typeStyles[t ?? ""] ?? "bg-slate-700/60 text-slate-300 border-slate-600/30";
-  const toggleExpand  = (key: string | number | null) => setExpanded((prev) => (prev === key ? null : key));
+  const getTypeStyle = (t?: string) => typeStyles[t ?? ""] ?? "bg-slate-700/60 text-slate-300 border-slate-600/30";
+  const toggleExpand = (key: string | number | null) => setExpanded((prev) => (prev === key ? null : key));
+
+  const totalQuotationAmount = useMemo(() => records.reduce((sum, r) => sum + (r.quotation_amount ?? 0), 0), [records]);
+  const totalSoAmount = useMemo(() => records.reduce((sum, r) => sum + (r.so_amount ?? 0), 0), [records]);
+  const typeClientStyle = account ? getTypeClientStyle(account.type_client) : null;
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
-      <DialogContent className="max-w-2xl w-full max-h-[85vh] flex flex-col p-0 gap-0 rounded-2xl border-0 shadow-2xl overflow-hidden bg-[#0d1117]">
+      <DialogContent
+        className="!max-w-[70vw] !w-[95vw] !h-[90vh] p-0 gap-0 rounded-2xl border-0 shadow-2xl overflow-hidden bg-[#0d1117] flex flex-col"
+        style={{ maxWidth: "95vw", width: "95vw", height: "90vh" }}
+      >
+
+        {/* ── Title bar ── */}
         <div className="px-6 py-4 bg-[#161b22] border-b border-white/5 flex items-center justify-between shrink-0">
           <div className="flex items-center gap-2">
             <span className="w-3 h-3 rounded-full bg-rose-500/80" />
             <span className="w-3 h-3 rounded-full bg-amber-400/80" />
             <span className="w-3 h-3 rounded-full bg-emerald-500/80" />
-            <div className="ml-1">
+            <div className="ml-2">
               <DialogTitle className="text-white text-[11px] font-bold font-mono tracking-widest uppercase">activity_history</DialogTitle>
               <DialogDescription className="text-slate-500 text-[10px] font-mono">{companyName}</DialogDescription>
             </div>
           </div>
-          <button onClick={onClose} className="w-7 h-7 rounded-full bg-white/5 hover:bg-white/15 flex items-center justify-center text-white/40 hover:text-white transition-all border border-white/5">
-            <X size={12} />
-          </button>
+          <div className="flex items-center gap-2">
+            {onBackToSearch && (
+              <button
+                onClick={() => { onClose(); onBackToSearch(); }}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-slate-400 hover:text-white text-[10px] font-mono transition-all"
+              >
+                <Search size={10} />
+                back to search
+              </button>
+            )}
+            <button onClick={onClose} className="w-7 h-7 rounded-full bg-white/5 hover:bg-white/15 flex items-center justify-center text-white/40 hover:text-white transition-all border border-white/5">
+              <X size={12} />
+            </button>
+          </div>
         </div>
 
-        {!loading && records.length > 0 && (
-          <div className="px-6 py-3 flex flex-wrap gap-2 border-b border-white/5 bg-[#161b22]/50 shrink-0">
-            <span className="px-3 py-1 rounded-full bg-white/10 text-white text-[11px] font-bold font-mono border border-white/10">{records.length} records</span>
-            {Object.entries(grouped).map(([type, count]) => (
-              <span key={type} className={`px-3 py-1 rounded-full text-[11px] font-mono font-medium border ${getTypeStyle(type)}`}>
-                {type} · <strong>{count}</strong>
-              </span>
-            ))}
-          </div>
-        )}
+        {/* ── Two-column body ── */}
+        <div className="flex flex-1 min-h-0">
 
-        <div className="px-6 py-3 border-b border-white/5 bg-[#0d1117] shrink-0">
-          <div className="flex flex-wrap items-start gap-4">
-            <div className="flex-1 min-w-0 grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1.5">
+          {/* ── LEFT: Company info panel ── */}
+          <div className="w-80 shrink-0 flex flex-col border-r border-white/5 bg-[#0d1117] overflow-y-auto">
+
+            {/* Company name + type badge */}
+            <div className="px-6 pt-6 pb-4 border-b border-white/5">
+              {typeClientStyle && (
+                <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold border mb-2 ${typeClientStyle.pill}`}>
+                  <span className={`w-1.5 h-1.5 rounded-full ${typeClientStyle.dot}`} />
+                  {account?.type_client?.toUpperCase()}
+                </span>
+              )}
+              <h2 className="text-base font-bold text-white leading-snug">{companyName}</h2>
+              {account?.account_reference_number && (
+                <p className="text-[10px] font-mono text-slate-500 mt-0.5">{account.account_reference_number}</p>
+              )}
+            </div>
+
+            {/* Contact details */}
+            <div className="px-6 py-4 border-b border-white/5 space-y-2.5">
+              <p className="text-[9px] font-bold uppercase tracking-widest text-slate-600 mb-1">Contact</p>
               {account?.contact_person && (
                 <div className="flex items-center gap-2 text-[11px]">
                   <User size={11} className="text-slate-500 shrink-0" />
-                  <span className="text-slate-300 font-mono truncate">{account.contact_person}</span>
+                  <span className="text-slate-300 font-mono">{account.contact_person}</span>
                 </div>
               )}
               {account?.contact_number && (
@@ -368,93 +515,439 @@ function HistoryDialog({ open, onClose, companyName, loading, records, account }
               {account?.email_address && (
                 <div className="flex items-center gap-2 text-[11px]">
                   <Mail size={11} className="text-slate-500 shrink-0" />
-                  <span className="text-slate-300 font-mono truncate">{account.email_address}</span>
+                  <span className="text-slate-300 font-mono break-all">{account.email_address}</span>
                 </div>
               )}
             </div>
-            {totalActualSales > 0 && (
-              <div className="shrink-0 flex flex-col items-end gap-0.5 bg-emerald-500/10 border border-emerald-500/20 rounded-xl px-4 py-2.5">
-                <div className="flex items-center gap-1.5 text-[10px] text-emerald-400 font-semibold font-mono uppercase tracking-wide">
-                  <TrendingUp size={10} /> Total Actual Sales
+
+            {/* Account details */}
+            {(account?.region || account?.industry || account?.address) && (
+              <div className="px-6 py-4 border-b border-white/5 space-y-2">
+                <p className="text-[9px] font-bold uppercase tracking-widest text-slate-600 mb-1">Details</p>
+                {account?.region && (
+                  <div className="flex items-start gap-2 text-[11px]">
+                    <span className="text-slate-500 font-mono w-16 shrink-0">Region</span>
+                    <span className="text-slate-300 font-mono">{account.region}</span>
+                  </div>
+                )}
+                {account?.industry && (
+                  <div className="flex items-start gap-2 text-[11px]">
+                    <span className="text-slate-500 font-mono w-16 shrink-0">Industry</span>
+                    <span className="text-slate-300 font-mono">{account.industry}</span>
+                  </div>
+                )}
+                {account?.address && (
+                  <div className="flex items-start gap-2 text-[11px]">
+                    <span className="text-slate-500 font-mono w-16 shrink-0">Address</span>
+                    <span className="text-slate-300 font-mono">{account.address}</span>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Financial summary */}
+            <div className="px-6 py-4 border-b border-white/5 space-y-3">
+              <p className="text-[9px] font-bold uppercase tracking-widest text-slate-600 mb-1">Financials</p>
+              {totalActualSales > 0 && (
+                <div className="rounded-xl bg-emerald-500/10 border border-emerald-500/20 px-4 py-3">
+                  <div className="flex items-center gap-1.5 text-[9px] text-emerald-400 font-semibold font-mono uppercase tracking-wide mb-1">
+                    <TrendingUp size={9} /> Total Actual Sales
+                  </div>
+                  <span className="text-emerald-300 font-bold font-mono text-lg tabular-nums">
+                    {totalActualSales.toLocaleString("en-PH", { style: "currency", currency: "PHP" })}
+                  </span>
                 </div>
-                <span className="text-emerald-300 font-bold font-mono text-base tabular-nums">
-                  {totalActualSales.toLocaleString("en-PH", { style: "currency", currency: "PHP" })}
-                </span>
+              )}
+              {totalQuotationAmount > 0 && (
+                <div className="rounded-xl bg-blue-500/10 border border-blue-500/20 px-4 py-3">
+                  <div className="text-[9px] text-blue-400 font-semibold font-mono uppercase tracking-wide mb-1">Total Quotation</div>
+                  <span className="text-blue-300 font-bold font-mono text-base tabular-nums">
+                    {totalQuotationAmount.toLocaleString("en-PH", { style: "currency", currency: "PHP" })}
+                  </span>
+                </div>
+              )}
+              {totalSoAmount > 0 && (
+                <div className="rounded-xl bg-violet-500/10 border border-violet-500/20 px-4 py-3">
+                  <div className="text-[9px] text-violet-400 font-semibold font-mono uppercase tracking-wide mb-1">Total SO Amount</div>
+                  <span className="text-violet-300 font-bold font-mono text-base tabular-nums">
+                    {totalSoAmount.toLocaleString("en-PH", { style: "currency", currency: "PHP" })}
+                  </span>
+                </div>
+              )}
+              {totalActualSales === 0 && totalQuotationAmount === 0 && totalSoAmount === 0 && (
+                <p className="text-[10px] text-slate-600 font-mono">No financial data</p>
+              )}
+            </div>
+
+            {/* Activity breakdown */}
+            {!loading && records.length > 0 && (
+              <div className="px-6 py-4 space-y-2">
+                <p className="text-[9px] font-bold uppercase tracking-widest text-slate-600 mb-2">Activity Breakdown</p>
+                <div className="flex flex-wrap gap-1.5">
+                  <span className="px-2.5 py-1 rounded-full bg-white/10 text-white text-[10px] font-bold font-mono border border-white/10">
+                    {records.length} total
+                  </span>
+                  {Object.entries(grouped).map(([type, count]) => (
+                    <span key={type} className={`px-2.5 py-1 rounded-full text-[10px] font-mono font-medium border ${getTypeStyle(type)}`}>
+                      {type} · <strong>{count}</strong>
+                    </span>
+                  ))}
+                </div>
               </div>
             )}
           </div>
-        </div>
 
-        <div className="px-6 py-3 border-b border-white/5 shrink-0">
-          <div className="flex items-center gap-2 bg-white/5 rounded-xl px-3 py-2 border border-white/10">
-            <Search size={13} className="text-slate-500 shrink-0" />
-            <input type="text" placeholder="Search activity..." value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="text-xs bg-transparent outline-none flex-1 text-slate-300 placeholder-slate-600 font-mono" />
-            {search && <button onClick={() => setSearch("")} className="text-slate-600 hover:text-slate-400"><X size={12} /></button>}
-          </div>
-        </div>
+          {/* ── RIGHT: Activity feed ── */}
+          <div className="flex-1 flex flex-col min-w-0">
 
-        <div className="overflow-y-auto flex-1 px-6 py-4 space-y-2">
-          {loading ? (
-            <div className="flex flex-col items-center justify-center py-16 gap-3">
-              <div className="w-8 h-8 rounded-full border-2 border-white/10 border-t-green-400 animate-spin" />
-              <p className="text-xs text-slate-500 font-mono">Fetching records…</p>
-            </div>
-          ) : filtered.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-16 gap-2">
-              <div className="w-12 h-12 rounded-2xl bg-white/5 flex items-center justify-center border border-white/10">
-                <History size={20} className="text-slate-600" />
+            {/* Search bar */}
+            <div className="px-6 py-3 border-b border-white/5 shrink-0">
+              <div className="flex items-center gap-2 bg-white/5 rounded-xl px-3 py-2 border border-white/10">
+                <Search size={13} className="text-slate-500 shrink-0" />
+                <input
+                  type="text"
+                  placeholder="Search activity, remarks, status..."
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  className="text-xs bg-transparent outline-none flex-1 text-slate-300 placeholder-slate-600 font-mono"
+                />
+                {search && (
+                  <button onClick={() => setSearch("")} className="text-slate-600 hover:text-slate-400">
+                    <X size={12} />
+                  </button>
+                )}
               </div>
-              <p className="text-xs text-slate-600 font-mono">no records found</p>
             </div>
-          ) : filtered.map((r, i) => {
-            const key      = `${r.id ?? "no-id"}-${i}`;
-            const isOpen   = expanded === key;
-            const duration = fmtDuration(r.start_date, r.end_date);
-            const hasExtra = !!(r.quotation_amount || r.quotation_number || r.actual_sales);
+
+            {/* Records list */}
+            <div className="overflow-y-auto flex-1 px-6 py-4 space-y-2">
+              {loading ? (
+                <div className="flex flex-col items-center justify-center py-20 gap-3">
+                  <div className="w-8 h-8 rounded-full border-2 border-white/10 border-t-green-400 animate-spin" />
+                  <p className="text-xs text-slate-500 font-mono">Fetching records…</p>
+                </div>
+              ) : filtered.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-20 gap-2">
+                  <div className="w-12 h-12 rounded-2xl bg-white/5 flex items-center justify-center border border-white/10">
+                    <History size={20} className="text-slate-600" />
+                  </div>
+                  <p className="text-xs text-slate-600 font-mono">no records found</p>
+                </div>
+              ) : filtered.map((r, i) => {
+                const key = `${r.id ?? "no-id"}-${i}`;
+                const isOpen = expanded === key;
+                const duration = fmtDuration(r.start_date, r.end_date);
+                const hasExtra = !!(r.quotation_amount || r.quotation_number || r.actual_sales);
+
+                return (
+                  <div key={key} className="rounded-xl bg-white/[0.03] border border-white/5 hover:border-white/10 transition-all overflow-hidden">
+                    <div className={`flex gap-3 p-3 ${hasExtra ? "cursor-pointer" : ""}`} onClick={() => hasExtra && toggleExpand(key)}>
+                      <div className="shrink-0 pt-0.5">
+                        <span className={`inline-block px-2 py-1 rounded-lg text-[9px] font-bold uppercase border font-mono ${getTypeStyle(r.type_activity)}`}>
+                          {r.type_activity ?? "—"}
+                        </span>
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs text-slate-300 font-mono uppercase">
+                          {r.remarks || <span className="text-slate-600 italic">no remarks</span>}
+                        </p>
+                        <div className="flex flex-wrap items-center gap-2 mt-1">
+                          {r.status && <span className="text-[10px] text-slate-500 font-mono">status: {r.status}</span>}
+                          {r.quotation_number && (
+                            <span className="flex items-center gap-0.5 text-[10px] text-slate-500 font-mono">
+                              <Hash size={9} />{r.quotation_number}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      <div className="shrink-0 text-right">
+                        <p className="text-[10px] text-slate-400 font-mono">{fmtDate(r.date_created) ?? "—"}</p>
+                        <p className="text-[9px] text-slate-600 font-mono">created</p>
+                        {hasExtra && (
+                          <span className="text-[9px] text-slate-600 font-mono">{isOpen ? "▲ less" : "▼ more"}</span>
+                        )}
+                      </div>
+                    </div>
+
+                    {isOpen && hasExtra && (
+                      <div className="px-4 pb-4 pt-1 border-t border-white/5 bg-white/[0.02] space-y-1.5">
+                        <div className="grid grid-cols-2 gap-x-6 gap-y-1.5 uppercase">
+                          <DetailField label="Quotation No."    value={r.quotation_number} />
+                          <DetailField label="Quotation Status" value={r.quotation_status} />
+                          <DetailField label="Quotation Amount" value={fmtCurrency(r.quotation_amount)} />
+                          <DetailField label="SO Number"        value={r.so_number} />
+                          <DetailField label="SO Amount"        value={fmtCurrency(r.so_amount)} />
+                          <DetailField label="Actual Sales"     value={fmtCurrency(r.actual_sales)} />
+                          <DetailField label="DR Number"        value={r.dr_number} />
+                          <DetailField label="Delivery Date"    value={fmtDate(r.delivery_date)} />
+                          <DetailField label="Payment Terms"    value={r.payment_terms} />
+                          <DetailField label="Duration"         value={duration} />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* ── FAR RIGHT: Analytics & Prospects ── */}
+          {(() => {
+            // ── Sales funnel data ──
+            const callCount       = records.filter(r => (r.type_activity ?? "").toLowerCase().includes("call")).length;
+            const quotationCount  = records.filter(r => r.quotation_number).length;
+            const quotationTotal  = records.reduce((s, r) => s + (r.quotation_amount ?? 0), 0);
+            const soCount         = records.filter(r => r.so_number).length;
+            const soTotal         = records.reduce((s, r) => s + (r.so_amount ?? 0), 0);
+            const actualTotal     = records.reduce((s, r) => s + (r.actual_sales ?? 0), 0);
+
+            const funnelData = [
+              { label: "Calls",       count: callCount,      amount: 0,             color: "#38bdf8" },
+              { label: "Quotations",  count: quotationCount, amount: quotationTotal, color: "#818cf8" },
+              { label: "Sales Orders",count: soCount,        amount: soTotal,        color: "#a78bfa" },
+              { label: "Actual Sales",count: 0,              amount: actualTotal,    color: "#34d399" },
+            ];
+
+            // ── Monthly actual sales trend + MoM comparison ──
+            const monthlyMap: Record<string, number> = {};
+            records.forEach(r => {
+              if (!r.actual_sales || !r.date_created) return;
+              const d = new Date(r.date_created);
+              if (isNaN(d.getTime())) return;
+              const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+              monthlyMap[key] = (monthlyMap[key] ?? 0) + r.actual_sales;
+            });
+            const sortedMonths = Object.entries(monthlyMap).sort(([a], [b]) => a.localeCompare(b));
+            const monthlyTrend = sortedMonths.slice(-6).map(([month, total], idx, arr) => ({
+              month: month.slice(5),
+              fullKey: month,
+              total,
+              prev: idx > 0 ? arr[idx - 1][1] : null,
+            }));
+            // MoM comparison: last two months
+            const lastTwo = sortedMonths.slice(-2);
+            const momCurrent  = lastTwo.length >= 1 ? lastTwo[lastTwo.length - 1][1] : null;
+            const momPrevious = lastTwo.length >= 2 ? lastTwo[lastTwo.length - 2][1] : null;
+            const momDiff     = momCurrent != null && momPrevious != null ? momCurrent - momPrevious : null;
+            const momPct      = momPrevious != null && momPrevious > 0 && momDiff != null
+              ? Math.round((momDiff / momPrevious) * 100) : null;
+            const momUp       = momDiff != null && momDiff >= 0;
+
+            // ── Prospect score (simple heuristic) ──
+            const lastActivity = records
+              .filter(r => r.date_created)
+              .sort((a, b) => new Date(b.date_created!).getTime() - new Date(a.date_created!).getTime())[0];
+            const daysSinceLast = lastActivity?.date_created
+              ? Math.floor((Date.now() - new Date(lastActivity.date_created).getTime()) / 86400000)
+              : 999;
+            const conversionRate = callCount > 0 ? (soCount / callCount) : 0;
+            const prospectScore  = Math.min(100, Math.round(
+              (conversionRate * 50) +
+              (actualTotal > 0 ? 30 : 0) +
+              (daysSinceLast < 30 ? 20 : daysSinceLast < 60 ? 10 : 0)
+            ));
+            const prospectLabel  = prospectScore >= 70 ? "High" : prospectScore >= 40 ? "Medium" : "Low";
+            const prospectColor  = prospectScore >= 70 ? "#34d399" : prospectScore >= 40 ? "#fbbf24" : "#f87171";
+
+            const tooltipStyle = {
+              contentStyle: { background: "#1e293b", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 8, fontSize: 10, color: "#cbd5e1" },
+              itemStyle: { color: "#94a3b8" },
+              cursor: { fill: "rgba(255,255,255,0.04)" },
+            };
 
             return (
-              <div key={key} className="rounded-xl bg-white/[0.03] border border-white/5 hover:border-white/10 transition-all overflow-hidden">
-                <div className={`flex gap-3 p-3 ${hasExtra ? "cursor-pointer" : ""}`} onClick={() => hasExtra && toggleExpand(key)}>
-                  <div className="shrink-0 pt-0.5">
-                    <span className={`inline-block px-2 py-1 rounded-lg text-[9px] font-bold uppercase border font-mono ${getTypeStyle(r.type_activity)}`}>
-                      {r.type_activity ?? "—"}
-                    </span>
+              <div className="w-72 shrink-0 flex flex-col border-l border-white/5 bg-[#0a0f16] overflow-y-auto">
+
+                {/* Header */}
+                <div className="px-5 pt-5 pb-3 border-b border-white/5">
+                  <div className="flex items-center gap-2 mb-0.5">
+                    <BarChart2 size={12} className="text-indigo-400" />
+                    <p className="text-[9px] font-bold uppercase tracking-widest text-indigo-400">Analytics</p>
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-xs text-slate-300 font-mono uppercase">{r.remarks || <span className="text-slate-600 italic">no remarks</span>}</p>
-                    <div className="flex flex-wrap items-center gap-2 mt-1">
-                      {r.status           && <span className="text-[10px] text-slate-500 font-mono">status: {r.status}</span>}
-                      {r.quotation_number && <span className="flex items-center gap-0.5 text-[10px] text-slate-500 font-mono"><Hash size={9} />{r.quotation_number}</span>}
+                  <p className="text-[10px] text-slate-500 font-mono">Sales pipeline & prospects</p>
+                </div>
+
+                {/* Prospect score */}
+                <div className="px-5 py-4 border-b border-white/5">
+                  <p className="text-[9px] font-bold uppercase tracking-widest text-slate-600 mb-3">Next-Month Prospect</p>
+                  <div className="flex items-center gap-3">
+                    <div className="relative w-14 h-14 shrink-0">
+                      <svg viewBox="0 0 36 36" className="w-14 h-14 -rotate-90">
+                        <circle cx="18" cy="18" r="15.9" fill="none" stroke="rgba(255,255,255,0.05)" strokeWidth="3" />
+                        <circle cx="18" cy="18" r="15.9" fill="none"
+                          stroke={prospectColor} strokeWidth="3"
+                          strokeDasharray={`${prospectScore} ${100 - prospectScore}`}
+                          strokeLinecap="round"
+                        />
+                      </svg>
+                      <span className="absolute inset-0 flex items-center justify-center text-[11px] font-bold tabular-nums" style={{ color: prospectColor }}>
+                        {prospectScore}
+                      </span>
                     </div>
-                  </div>
-                  <div className="shrink-0 text-right">
-                    <p className="text-[10px] text-slate-400 font-mono">{fmtDate(r.date_created) ?? "—"}</p>
-                    <p className="text-[9px] text-slate-600 font-mono">created</p>
-                    {hasExtra && <span className="text-[9px] text-slate-600 font-mono">{isOpen ? "▲ less" : "▼ more"}</span>}
+                    <div>
+                      <p className="text-sm font-bold" style={{ color: prospectColor }}>{prospectLabel} Potential</p>
+                      <p className="text-[10px] text-slate-500 font-mono mt-0.5">
+                        {daysSinceLast < 999 ? `Last activity ${daysSinceLast}d ago` : "No recent activity"}
+                      </p>
+                      <p className="text-[10px] text-slate-500 font-mono">
+                        Conv. rate: {callCount > 0 ? `${Math.round(conversionRate * 100)}%` : "—"}
+                      </p>
+                    </div>
                   </div>
                 </div>
 
-                {isOpen && hasExtra && (
-                  <div className="px-4 pb-4 pt-1 border-t border-white/5 bg-white/[0.02] space-y-1.5">
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1.5 uppercase">
-                      <DetailField label="Quotation No."     value={r.quotation_number} />
-                      <DetailField label="Quotation Status"  value={r.quotation_status} />
-                      <DetailField label="Quotation Amount"  value={fmtCurrency(r.quotation_amount)} />
-                      <DetailField label="SO Number"         value={r.so_number} />
-                      <DetailField label="SO Amount"         value={fmtCurrency(r.so_amount)} />
-                      <DetailField label="Actual Sales"      value={fmtCurrency(r.actual_sales)} />
-                      <DetailField label="DR Number"         value={r.dr_number} />
-                      <DetailField label="Delivery Date"     value={fmtDate(r.delivery_date)} />
-                      <DetailField label="Payment Terms"     value={r.payment_terms} />
-                      <DetailField label="Duration"          value={duration} />
-                    </div>
+                {/* Sales funnel bars */}
+                <div className="px-5 py-4 border-b border-white/5">
+                  <p className="text-[9px] font-bold uppercase tracking-widest text-slate-600 mb-3">Sales Funnel</p>
+                  <div className="space-y-2.5">
+                    {funnelData.map((item) => {
+                      const maxCount = Math.max(...funnelData.map(f => f.count), 1);
+                      const pct = item.count > 0 ? Math.round((item.count / maxCount) * 100) : 0;
+                      return (
+                        <div key={item.label}>
+                          <div className="flex items-center justify-between mb-1">
+                            <span className="text-[10px] text-slate-400 font-mono">{item.label}</span>
+                            <div className="text-right">
+                              {item.count > 0 && <span className="text-[10px] font-bold tabular-nums" style={{ color: item.color }}>{item.count}x</span>}
+                              {item.amount > 0 && <span className="text-[9px] text-slate-500 font-mono ml-1">{item.amount.toLocaleString("en-PH", { style: "currency", currency: "PHP", maximumFractionDigits: 0 })}</span>}
+                            </div>
+                          </div>
+                          {item.count > 0 ? (
+                            <div className="h-1.5 rounded-full bg-white/5 overflow-hidden">
+                              <div className="h-full rounded-full transition-all" style={{ width: `${pct}%`, background: item.color }} />
+                            </div>
+                          ) : item.amount > 0 ? (
+                            <div className="h-1.5 rounded-full bg-white/5 overflow-hidden">
+                              <div className="h-full rounded-full" style={{ width: "100%", background: item.color }} />
+                            </div>
+                          ) : (
+                            <div className="h-1.5 rounded-full bg-white/5" />
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Monthly actual sales trend + MoM comparison */}
+                {monthlyTrend.length > 0 && (
+                  <div className="px-5 py-4 border-b border-white/5">
+                    <p className="text-[9px] font-bold uppercase tracking-widest text-slate-600 mb-3">Actual Sales Trend</p>
+
+                    {/* MoM comparison card */}
+                    {momCurrent != null && (
+                      <div className="rounded-xl bg-white/[0.03] border border-white/5 px-4 py-3 mb-3">
+                        <div className="flex items-start justify-between gap-2">
+                          <div>
+                            <p className="text-[9px] text-slate-500 font-mono uppercase tracking-wide mb-0.5">This Month</p>
+                            <p className="text-base font-bold tabular-nums text-white">
+                              {momCurrent.toLocaleString("en-PH", { style: "currency", currency: "PHP", maximumFractionDigits: 0 })}
+                            </p>
+                          </div>
+                          {momPrevious != null && (
+                            <div className="text-right">
+                              <p className="text-[9px] text-slate-500 font-mono uppercase tracking-wide mb-0.5">Last Month</p>
+                              <p className="text-sm font-semibold tabular-nums text-slate-400">
+                                {momPrevious.toLocaleString("en-PH", { style: "currency", currency: "PHP", maximumFractionDigits: 0 })}
+                              </p>
+                            </div>
+                          )}
+                        </div>
+
+                        {momDiff != null && (
+                          <div className="mt-2 pt-2 border-t border-white/5 flex items-center gap-2">
+                            <span className={`inline-flex items-center gap-1 text-[11px] font-bold tabular-nums ${momUp ? "text-emerald-400" : "text-rose-400"}`}>
+                              {momUp ? "▲" : "▼"}
+                              {Math.abs(momDiff).toLocaleString("en-PH", { style: "currency", currency: "PHP", maximumFractionDigits: 0 })}
+                            </span>
+                            {momPct != null && (
+                              <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-md ${momUp ? "bg-emerald-500/15 text-emerald-400" : "bg-rose-500/15 text-rose-400"}`}>
+                                {momUp ? "+" : ""}{momPct}%
+                              </span>
+                            )}
+                            <span className="text-[9px] text-slate-600 font-mono">vs last month</span>
+                          </div>
+                        )}
+
+                        {/* Mini progress bar showing current vs previous */}
+                        {momPrevious != null && momPrevious > 0 && (
+                          <div className="mt-2">
+                            <div className="h-1 rounded-full bg-white/5 overflow-hidden">
+                              <div
+                                className="h-full rounded-full transition-all"
+                                style={{
+                                  width: `${Math.min(100, Math.round((momCurrent / Math.max(momCurrent, momPrevious)) * 100))}%`,
+                                  background: momUp ? "#34d399" : "#f87171",
+                                }}
+                              />
+                            </div>
+                            <div className="flex justify-between mt-0.5">
+                              <span className="text-[8px] text-slate-600 font-mono">0</span>
+                              <span className="text-[8px] text-slate-600 font-mono">
+                                {Math.max(momCurrent, momPrevious).toLocaleString("en-PH", { style: "currency", currency: "PHP", maximumFractionDigits: 0 })}
+                              </span>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Line chart */}
+                    <ResponsiveContainer width="100%" height={90}>
+                      <LineChart data={monthlyTrend} margin={{ top: 4, right: 4, left: -28, bottom: 0 }}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" />
+                        <XAxis dataKey="month" tick={{ fontSize: 9, fill: "#64748b" }} axisLine={false} tickLine={false} />
+                        <YAxis tick={{ fontSize: 9, fill: "#64748b" }} axisLine={false} tickLine={false}
+                          tickFormatter={(v) => v >= 1000 ? `${(v/1000).toFixed(0)}k` : v} />
+                        <Tooltip
+                          contentStyle={tooltipStyle.contentStyle}
+                          itemStyle={tooltipStyle.itemStyle}
+                          cursor={{ stroke: "rgba(255,255,255,0.1)" }}
+                          formatter={(v: number) => [v.toLocaleString("en-PH", { style: "currency", currency: "PHP" }), "Sales"]}
+                        />
+                        <Line type="monotone" dataKey="total" stroke="#34d399" strokeWidth={2}
+                          dot={({ cx, cy, index }: { cx: number; cy: number; index: number }) => {
+                            const isLast = index === monthlyTrend.length - 1;
+                            const isPrev = index === monthlyTrend.length - 2;
+                            const color = isLast ? (momUp ? "#34d399" : "#f87171") : isPrev ? "#94a3b8" : "#34d399";
+                            return <circle key={index} cx={cx} cy={cy} r={isLast ? 4 : 3} fill={color} stroke="none" />;
+                          }}
+                        />
+                      </LineChart>
+                    </ResponsiveContainer>
+                  </div>
+                )}
+
+                {/* Activity type bar chart */}
+                {Object.keys(grouped).length > 0 && (
+                  <div className="px-5 py-4">
+                    <p className="text-[9px] font-bold uppercase tracking-widest text-slate-600 mb-3">Activity Mix</p>
+                    <ResponsiveContainer width="100%" height={100}>
+                      <BarChart
+                        data={Object.entries(grouped).map(([type, count]) => ({ type: type.length > 8 ? type.slice(0, 8) + "…" : type, count }))}
+                        margin={{ top: 4, right: 4, left: -28, bottom: 0 }}
+                      >
+                        <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" />
+                        <XAxis dataKey="type" tick={{ fontSize: 8, fill: "#64748b" }} axisLine={false} tickLine={false} />
+                        <YAxis tick={{ fontSize: 9, fill: "#64748b" }} axisLine={false} tickLine={false} allowDecimals={false} />
+                        <Tooltip
+                          contentStyle={tooltipStyle.contentStyle}
+                          itemStyle={tooltipStyle.itemStyle}
+                          cursor={tooltipStyle.cursor}
+                          formatter={(v: number) => [v, "count"]}
+                        />
+                        <Bar dataKey="count" radius={[3, 3, 0, 0]}>
+                          {Object.keys(grouped).map((_, i) => (
+                            <Cell key={i} fill={["#38bdf8","#818cf8","#fbbf24","#34d399","#f87171","#a78bfa"][i % 6]} />
+                          ))}
+                        </Bar>
+                      </BarChart>
+                    </ResponsiveContainer>
                   </div>
                 )}
               </div>
             );
-          })}
+          })()}
         </div>
       </DialogContent>
     </Dialog>
@@ -509,6 +1002,10 @@ function DashboardContent() {
   const [selectedAgentId, setSelectedAgentId] = useState<string | null>(null);
   const [selectedAgentName, setSelectedAgentName] = useState<string | null>(null);
 
+  // ─── Company search dialog ───
+  const [companySearchOpen, setCompanySearchOpen] = useState(false);
+  const [historyFromSearch, setHistoryFromSearch] = useState(false);
+
   const queryUserId = searchParams?.get("id") ?? "";
 
   useEffect(() => {
@@ -526,10 +1023,10 @@ function DashboardContent() {
         const data = await response.json();
         setUserDetails({
           referenceid: data.ReferenceID || "",
-          tsm:         data.TSM         || "",
-          manager:     data.Manager     || "",
-          firstname:   data.FirstName   || "",
-          lastname:    data.LastName    || "",
+          tsm: data.TSM || "",
+          manager: data.Manager || "",
+          firstname: data.FirstName || "",
+          lastname: data.LastName || "",
         });
         sileo.success({ title: "Success", description: "User data loaded successfully!", duration: 3000, position: "top-right", fill: "black", styles: { title: "text-white!", description: "text-white" } });
       } catch (err) {
@@ -570,8 +1067,8 @@ function DashboardContent() {
         const fetchActivitiesSmart = async () => {
           if (dateCreatedFilterRange?.from) {
             const fromDate = dateCreatedFilterRange.from.toISOString().split("T")[0];
-            const toDate   = dateCreatedFilterRange.to?.toISOString().split("T")[0] || fromDate;
-            const actRes   = await fetch(`/api/activities-manager?manager=${encodeURIComponent(userDetails.referenceid)}&from=${fromDate}&to=${toDate}&fetchAll=true`);
+            const toDate = dateCreatedFilterRange.to?.toISOString().split("T")[0] || fromDate;
+            const actRes = await fetch(`/api/activities-manager?manager=${encodeURIComponent(userDetails.referenceid)}&from=${fromDate}&to=${toDate}&fetchAll=true`);
             if (actRes.ok) {
               const actData = await actRes.json();
               return Array.isArray(actData) ? actData : actData.data ?? [];
@@ -590,7 +1087,17 @@ function DashboardContent() {
           return [];
         };
 
-        setActivities(await fetchActivitiesSmart());
+        const rawActivities = await fetchActivitiesSmart();
+        // Deduplicate by id — batch fetch can return the same record twice
+        const seen = new Set<string>();
+        const deduped = rawActivities.filter((a: Activity) => {
+          if (a.id == null) return true;
+          const key = String(a.id);
+          if (seen.has(key)) return false;
+          seen.add(key);
+          return true;
+        });
+        setActivities(deduped);
       } catch (err) {
         console.error("Fetch error:", err);
         setError("Failed to load data");
@@ -613,7 +1120,7 @@ function DashboardContent() {
   const tsmStats = useMemo(() => {
     const activityRefs = new Set(
       filteredActivitiesByDate
-        .map((act) => act.account_reference_number)
+        .map((act) => act.account_reference_number?.toLowerCase())
         .filter((ref): ref is string => Boolean(ref))
     );
     const tsmRefs = new Set(
@@ -647,7 +1154,7 @@ function DashboardContent() {
       const tsmRef = normalizeReference(tsm.ReferenceID || tsm.referenceid);
       const tsmAccs = tsmBuckets.get(tsmRef) ?? [];
       const withActivity = tsmAccs.reduce(
-        (count, account) => count + (activityRefs.has(account.account_reference_number) ? 1 : 0),
+        (count, account) => count + (activityRefs.has(account.account_reference_number?.toLowerCase() ?? "") ? 1 : 0),
         0
       );
       return {
@@ -660,7 +1167,7 @@ function DashboardContent() {
 
     if (unassignedAccounts.length > 0) {
       const withActivity = unassignedAccounts.reduce(
-        (count, account) => count + (activityRefs.has(account.account_reference_number) ? 1 : 0),
+        (count, account) => count + (activityRefs.has(account.account_reference_number?.toLowerCase() ?? "") ? 1 : 0),
         0
       );
       stats.push({
@@ -685,7 +1192,7 @@ function DashboardContent() {
   const agentStats = useMemo<AgentWithStats[]>(() => {
     const activityRefs = new Set(
       selectedTsmActivitiesByDate
-        .map((act) => act.account_reference_number)
+        .map((act) => act.account_reference_number?.toLowerCase())
         .filter((ref): ref is string => Boolean(ref))
     );
     const agentRefs = new Set(
@@ -711,7 +1218,7 @@ function DashboardContent() {
       const agentRef = normalizeReference(agent.ReferenceID || agent.referenceid);
       const agentAccs = agentBuckets.get(agentRef) ?? [];
       const withActivity = agentAccs.reduce(
-        (count, account) => count + (activityRefs.has(account.account_reference_number) ? 1 : 0),
+        (count, account) => count + (activityRefs.has(account.account_reference_number?.toLowerCase() ?? "") ? 1 : 0),
         0
       );
       return {
@@ -724,7 +1231,7 @@ function DashboardContent() {
 
     if (unassignedAccounts.length > 0) {
       const withActivity = unassignedAccounts.reduce(
-        (count, account) => count + (activityRefs.has(account.account_reference_number) ? 1 : 0),
+        (count, account) => count + (activityRefs.has(account.account_reference_number?.toLowerCase() ?? "") ? 1 : 0),
         0
       );
       stats.push({
@@ -751,15 +1258,15 @@ function DashboardContent() {
       }),
       { total: 0, withActivity: 0, withoutActivity: 0 }
     );
-    const activitySet  = new Set(filteredActivitiesByDate.map((act) => act.account_reference_number));
+    const activitySet = new Set(filteredActivitiesByDate.map((act) => act.account_reference_number?.toLowerCase()).filter(Boolean));
     const typeStats: Record<string, { total: number; withActivity: number; withoutActivity: number }> = {};
     allActiveAccounts.forEach((a) => {
-      const t      = (a.type_client ?? "Unknown").toUpperCase();
-      const hasAct = activitySet.has(a.account_reference_number);
+      const t = (a.type_client ?? "Unknown").toUpperCase();
+      const hasAct = activitySet.has(a.account_reference_number?.toLowerCase() ?? "");
       if (!typeStats[t]) typeStats[t] = { total: 0, withActivity: 0, withoutActivity: 0 };
       typeStats[t].total += 1;
       if (hasAct) typeStats[t].withActivity += 1;
-      else        typeStats[t].withoutActivity += 1;
+      else typeStats[t].withoutActivity += 1;
     });
     return {
       total: tableTotals.total,
@@ -789,15 +1296,17 @@ function DashboardContent() {
 
   const scopedAccountsWithActivity = useMemo(() => {
     const s = new Set<string>();
-    scopedActivities.forEach((a) => { if (a.account_reference_number) s.add(a.account_reference_number); });
+    scopedActivities.forEach((a) => { if (a.account_reference_number) s.add(a.account_reference_number.toLowerCase()); });
     return s;
   }, [scopedActivities]);
 
   const activityCountMap = useMemo(() => {
     const m: Record<string, number> = {};
     scopedActivities.forEach((a) => {
-      if (a.account_reference_number)
-        m[a.account_reference_number] = (m[a.account_reference_number] ?? 0) + 1;
+      if (a.account_reference_number) {
+        const key = a.account_reference_number.toLowerCase();
+        m[key] = (m[key] ?? 0) + 1;
+      }
     });
     return m;
   }, [scopedActivities]);
@@ -806,7 +1315,7 @@ function DashboardContent() {
     const m: Record<string, string> = {};
     scopedActivities.forEach((a) => {
       if (a.account_reference_number && a.date_created) {
-        const key = a.account_reference_number;
+        const key = a.account_reference_number.toLowerCase();
         if (!m[key] || new Date(a.date_created) > new Date(m[key])) m[key] = a.date_created;
       }
     });
@@ -816,12 +1325,12 @@ function DashboardContent() {
   const typeClientStats = useMemo(() => {
     const stats: Record<string, { total: number; withActivity: number; withoutActivity: number }> = {};
     scopedAccounts.forEach((a) => {
-      const t           = (a.type_client ?? "Unknown").toUpperCase();
-      const hasActivity = scopedAccountsWithActivity.has(a.account_reference_number);
+      const t = (a.type_client ?? "Unknown").toUpperCase();
+      const hasActivity = scopedAccountsWithActivity.has(a.account_reference_number?.toLowerCase() ?? "");
       if (!stats[t]) stats[t] = { total: 0, withActivity: 0, withoutActivity: 0 };
       stats[t].total += 1;
       if (hasActivity) stats[t].withActivity += 1;
-      else             stats[t].withoutActivity += 1;
+      else stats[t].withoutActivity += 1;
     });
     return Object.entries(stats)
       .map(([type, data]) => ({ type, ...data }))
@@ -830,8 +1339,8 @@ function DashboardContent() {
 
   const filteredAccounts = useMemo(() => {
     let list = scopedAccounts;
-    if (activityFilter === "with")    list = list.filter((a) =>  scopedAccountsWithActivity.has(a.account_reference_number));
-    else if (activityFilter === "without") list = list.filter((a) => !scopedAccountsWithActivity.has(a.account_reference_number));
+    if (activityFilter === "with") list = list.filter((a) => scopedAccountsWithActivity.has(a.account_reference_number?.toLowerCase() ?? ""));
+    else if (activityFilter === "without") list = list.filter((a) => !scopedAccountsWithActivity.has(a.account_reference_number?.toLowerCase() ?? ""));
     if (typeFilter) list = list.filter((a) => a.type_client?.toUpperCase() === typeFilter);
     const q = search.toLowerCase();
     if (!q) return list;
@@ -872,8 +1381,35 @@ function DashboardContent() {
   const visibleAgentStats = paginatedAgentStats.slice(0, agentVisibleCount);
   const hasMoreAgentRowsInPage = visibleAgentStats.length < paginatedAgentStats.length;
 
-  const withActivityCount = scopedAccounts.filter((a) => scopedAccountsWithActivity.has(a.account_reference_number)).length;
+  const withActivityCount = scopedAccounts.filter((a) => scopedAccountsWithActivity.has(a.account_reference_number?.toLowerCase() ?? "")).length;
   const withoutActivityCount = scopedAccounts.length - withActivityCount;
+
+  // ── Customer set: pre-built for O(1) lookup ──
+  const customerRefSet = useMemo(() => {
+    const s = new Set<string>();
+    scopedActivities.forEach((a) => {
+      if (!a.account_reference_number) return;
+      if (
+        (a.actual_sales ?? 0) > 0 ||
+        (a.type_activity ?? "").toLowerCase().includes("delivered") ||
+        (a.type_activity ?? "").toLowerCase().includes("closed")
+      ) {
+        s.add(a.account_reference_number.toLowerCase());
+      }
+    });
+    return s;
+  }, [scopedActivities]);
+
+  // ── Customer / Lead classification ──
+  const categoryStats = useMemo(() => {
+    let customers = 0;
+    let leads = 0;
+    scopedAccounts.forEach((account) => {
+      if (customerRefSet.has(account.account_reference_number?.toLowerCase() ?? "")) customers++;
+      else leads++;
+    });
+    return { customers, leads };
+  }, [scopedAccounts, customerRefSet]);
 
   const agentCardTotals = useMemo(
     () => agentStats.reduce(
@@ -921,6 +1457,7 @@ function DashboardContent() {
   }, [paginatedAgentStats.length, agentCurrentPage]);
 
   const openHistory = (account: Account) => {
+    setHistoryFromSearch(false);
     setHistoryCompany(account.company_name);
     setHistoryAccount(account);
     setHistoryOpen(true);
@@ -931,7 +1468,7 @@ function DashboardContent() {
         ? tsmActivities
         : activities;
     const records = sourceActivities.filter((a) => {
-      if (a.account_reference_number !== account.account_reference_number) return false;
+      if (a.account_reference_number?.toLowerCase() !== account.account_reference_number?.toLowerCase()) return false;
       if (!dateCreatedFilterRange?.from) return true;
       if (!a.date_created) return false;
       return isDateInRange(a.date_created, dateCreatedFilterRange);
@@ -1101,8 +1638,12 @@ function DashboardContent() {
       });
 
       const agentAccRefs = new Set(agentAccounts.map((account) => account.account_reference_number));
+      // Only include activities logged by this agent (referenceid match), or null-referenceid ones
       const agentActivities = selectedTsmActivitiesByDate.filter(
-        (activity) => activity.account_reference_number && agentAccRefs.has(activity.account_reference_number)
+        (activity) =>
+          activity.account_reference_number &&
+          agentAccRefs.has(activity.account_reference_number) &&
+          (!activity.referenceid || normalizeReference(activity.referenceid) === agentRef)
       );
 
       setAgentAccounts(agentAccounts);
@@ -1138,7 +1679,13 @@ function DashboardContent() {
           </header>
 
           <main className="flex flex-1 flex-col gap-4 p-4 overflow-auto">
-            <HistoryDialog open={historyOpen} onClose={() => setHistoryOpen(false)} companyName={historyCompany} loading={loadingHistory} records={historyRecords} account={historyAccount} />
+            <HistoryDialog open={historyOpen} onClose={() => setHistoryOpen(false)} companyName={historyCompany} loading={loadingHistory} records={historyRecords} account={historyAccount} onBackToSearch={historyFromSearch ? () => setCompanySearchOpen(true) : undefined} />
+            <CompanySearchDialog
+              open={companySearchOpen}
+              onClose={() => setCompanySearchOpen(false)}
+              accounts={allActiveAccounts}
+              onSelect={(account) => { setHistoryFromSearch(true); openHistory(account); }}
+            />
 
             {loading ? (
               <div className="flex justify-center items-center py-10">
@@ -1245,8 +1792,44 @@ function DashboardContent() {
                           isActive={typeFilter === stat.type}
                           sublabel={`${stat.withActivity} with / ${stat.withoutActivity} without`} />
                       ))}
+                      {/* ── Leads & Customers combined card ── */}
+                      <div className="relative flex flex-col gap-2 rounded-xl border bg-white px-5 py-4 shadow-sm overflow-hidden"
+                        style={{ borderLeft: "3px solid #6366f1" }}>
+                        <div className="absolute inset-0 opacity-[0.04] pointer-events-none"
+                          style={{ background: "radial-gradient(circle at 80% 20%, #6366f1, transparent 70%)" }} />
+                        <span className="text-[10px] font-semibold uppercase tracking-widest text-gray-400">Leads / Customers</span>
+                        <div className="flex items-center gap-3">
+                          <div className="flex flex-col items-center gap-0.5">
+                            <span className="text-xl font-bold text-amber-600 tabular-nums">{categoryStats.leads}</span>
+                            <span className="text-[9px] font-semibold text-amber-500 uppercase tracking-wide">Leads</span>
+                          </div>
+                          <div className="w-px h-8 bg-gray-100" />
+                          <div className="flex flex-col items-center gap-0.5">
+                            <span className="text-xl font-bold text-emerald-600 tabular-nums">{categoryStats.customers}</span>
+                            <span className="text-[9px] font-semibold text-emerald-500 uppercase tracking-wide">Customers</span>
+                          </div>
+                        </div>
+                        {/* mini bar */}
+                        {(categoryStats.leads + categoryStats.customers) > 0 && (
+                          <div className="h-1 rounded-full overflow-hidden bg-gray-100 flex">
+                            <div className="h-full bg-amber-400 transition-all"
+                              style={{ width: `${Math.round((categoryStats.leads / (categoryStats.leads + categoryStats.customers)) * 100)}%` }} />
+                            <div className="h-full bg-emerald-400 flex-1" />
+                          </div>
+                        )}
+                      </div>
                     </>
                   )}
+                </div>
+
+                <div>
+                  <button
+                    onClick={() => setCompanySearchOpen(true)}
+                    className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 rounded-lg transition-colors border border-indigo-200"
+                  >
+                    <Search size={12} />
+                    Search Company
+                  </button>
                 </div>
 
                 {/* Active Filters */}
@@ -1284,84 +1867,77 @@ function DashboardContent() {
                 {/* TSMs List or Accounts Table */}
                 {drillLevel === "tsms" ? (
                   <div className="space-y-3">
-                    <div className="flex items-center gap-2 bg-slate-50 rounded-xl px-3 py-2 border border-slate-200">
-                      <Search size={13} className="text-slate-400" />
-                      <input type="text" placeholder="Search TSM name or reference..."
-                        value={tsmSearch} onChange={(e) => setTsmSearch(e.target.value)}
-                        className="text-xs bg-transparent outline-none flex-1 text-slate-700 placeholder-slate-400" />
-                      {tsmSearch && <button onClick={() => setTsmSearch("")} className="text-slate-400 hover:text-slate-600"><X size={12} /></button>}
-                    </div>
                     <div className="bg-white rounded-xl border shadow-sm overflow-hidden">
-                    <div className="overflow-auto">
-                      <Table>
-                        <TableHeader>
-                          <TableRow className="bg-gray-50 border-b border-gray-100">
-                            {["TSM", "Total Accounts", "Action"].map((h) => (
-                              <TableHead key={h} className="text-[10px] font-bold uppercase tracking-wider text-gray-400 py-3">{h}</TableHead>
-                            ))}
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {filteredTsmStats.length === 0 ? (
-                            <TableRow>
-                              <TableCell colSpan={3} className="text-center py-14 text-sm text-gray-400">
-                                {tsmSearch ? "No TSMs match your search" : "No TSMs found"}
-                              </TableCell>
+                      <div className="overflow-auto">
+                        <Table>
+                          <TableHeader>
+                            <TableRow className="bg-gray-50 border-b border-gray-100">
+                              {["TSM", "Total Accounts", "Action"].map((h) => (
+                                <TableHead key={h} className="text-[10px] font-bold uppercase tracking-wider text-gray-400 py-3">{h}</TableHead>
+                              ))}
                             </TableRow>
-                          ) : visibleTsmStats.map((tsm) => {
-                            const fullName = getDisplayName(tsm.FirstName, tsm.LastName, tsm.ReferenceID);
-                            return (
-                              <TableRow key={`${tsm.ReferenceID}-${fullName}`} className="hover:bg-indigo-50/20 transition-colors">
-                                <TableCell className="font-semibold text-gray-800">
-                                  <div className="flex flex-col gap-0.5">
-                                    <span className={`text-sm ${tsm.isUnassigned ? "text-amber-700" : "capitalize"}`}>{fullName}</span>
-                                    <span className="text-[10px] text-gray-400 font-mono">{tsm.ReferenceID}</span>
-                                  </div>
-                                </TableCell>
-                                <TableCell>
-                                  <span className="text-sm font-bold text-gray-800">{tsm.totalAccounts.toLocaleString()}</span>
-                                </TableCell>
-                                <TableCell>
-                                  <button onClick={() => selectTsm(tsm.ReferenceID, fullName)} className="flex items-center gap-1 px-3 py-1.5 text-xs font-semibold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 rounded-lg transition-colors border border-indigo-200">
-                                    View TSAs <span className="text-indigo-400">→</span>
-                                  </button>
+                          </TableHeader>
+                          <TableBody>
+                            {filteredTsmStats.length === 0 ? (
+                              <TableRow>
+                                <TableCell colSpan={3} className="text-center py-14 text-sm text-gray-400">
+                                  {tsmSearch ? "No TSMs match your search" : "No TSMs found"}
                                 </TableCell>
                               </TableRow>
-                            );
-                          })}
-                        </TableBody>
-                      </Table>
-                    </div>
-
-                    {hasMoreTsmRowsInPage && (
-                      <div className="border-t px-4 py-2 flex justify-center">
-                        <button
-                          onClick={() => setTsmVisibleCount((count) => Math.min(count + LAZY_BATCH_SIZE, paginatedTsmStats.length))}
-                          className="text-xs font-semibold text-indigo-600 hover:text-indigo-700"
-                        >
-                          Load more rows
-                        </button>
+                            ) : visibleTsmStats.map((tsm) => {
+                              const fullName = getDisplayName(tsm.FirstName, tsm.LastName, tsm.ReferenceID);
+                              return (
+                                <TableRow key={`${tsm.ReferenceID}-${fullName}`} className="hover:bg-indigo-50/20 transition-colors">
+                                  <TableCell className="font-semibold text-gray-800">
+                                    <div className="flex flex-col gap-0.5">
+                                      <span className={`text-sm ${tsm.isUnassigned ? "text-amber-700" : "capitalize"}`}>{fullName}</span>
+                                      <span className="text-[10px] text-gray-400 font-mono">{tsm.ReferenceID}</span>
+                                    </div>
+                                  </TableCell>
+                                  <TableCell>
+                                    <span className="text-sm font-bold text-gray-800">{tsm.totalAccounts.toLocaleString()}</span>
+                                  </TableCell>
+                                  <TableCell>
+                                    <button onClick={() => selectTsm(tsm.ReferenceID, fullName)} className="flex items-center gap-1 px-3 py-1.5 text-xs font-semibold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 rounded-lg transition-colors border border-indigo-200">
+                                      View TSAs <span className="text-indigo-400">→</span>
+                                    </button>
+                                  </TableCell>
+                                </TableRow>
+                              );
+                            })}
+                          </TableBody>
+                        </Table>
                       </div>
-                    )}
 
-                    {filteredTsmStats.length > 0 && (
-                      <div className="flex items-center justify-between px-4 py-3 border-t bg-gray-50/50 text-xs text-gray-500">
-                        <span>
-                          Showing <span className="font-semibold">{Math.min((tsmCurrentPage - 1) * ITEMS_PER_PAGE + 1, filteredTsmStats.length)}-{Math.min((tsmCurrentPage - 1) * ITEMS_PER_PAGE + visibleTsmStats.length, filteredTsmStats.length)}</span> of <span className="font-semibold">{filteredTsmStats.length}</span>
-                        </span>
-                        <div className="flex items-center gap-1">
-                          <button onClick={() => setTsmCurrentPage((p) => Math.max(p - 1, 1))} disabled={tsmCurrentPage === 1} className="border rounded-lg px-2.5 py-1 hover:bg-white disabled:opacity-30">Prev</button>
-                          {Array.from({ length: Math.min(tsmTotalPages, 5) }, (_, i) => {
-                            const page = Math.max(1, Math.min(tsmCurrentPage - 2, tsmTotalPages - 4)) + i;
-                            return page <= tsmTotalPages ? (
-                              <button key={page} onClick={() => setTsmCurrentPage(page)} className={`rounded-lg px-2.5 py-1 ${page === tsmCurrentPage ? "bg-indigo-600 text-white" : "border hover:bg-white"}`}>{page}</button>
-                            ) : null;
-                          })}
-                          <button onClick={() => setTsmCurrentPage((p) => Math.min(p + 1, tsmTotalPages))} disabled={tsmCurrentPage === tsmTotalPages} className="border rounded-lg px-2.5 py-1 hover:bg-white disabled:opacity-30">Next</button>
+                      {hasMoreTsmRowsInPage && (
+                        <div className="border-t px-4 py-2 flex justify-center">
+                          <button
+                            onClick={() => setTsmVisibleCount((count) => Math.min(count + LAZY_BATCH_SIZE, paginatedTsmStats.length))}
+                            className="text-xs font-semibold text-indigo-600 hover:text-indigo-700"
+                          >
+                            Load more rows
+                          </button>
                         </div>
-                      </div>
-                    )}
-                  </div>
+                      )}
+
+                      {filteredTsmStats.length > 0 && (
+                        <div className="flex items-center justify-between px-4 py-3 border-t bg-gray-50/50 text-xs text-gray-500">
+                          <span>
+                            Showing <span className="font-semibold">{Math.min((tsmCurrentPage - 1) * ITEMS_PER_PAGE + 1, filteredTsmStats.length)}-{Math.min((tsmCurrentPage - 1) * ITEMS_PER_PAGE + visibleTsmStats.length, filteredTsmStats.length)}</span> of <span className="font-semibold">{filteredTsmStats.length}</span>
+                          </span>
+                          <div className="flex items-center gap-1">
+                            <button onClick={() => setTsmCurrentPage((p) => Math.max(p - 1, 1))} disabled={tsmCurrentPage === 1} className="border rounded-lg px-2.5 py-1 hover:bg-white disabled:opacity-30">Prev</button>
+                            {Array.from({ length: Math.min(tsmTotalPages, 5) }, (_, i) => {
+                              const page = Math.max(1, Math.min(tsmCurrentPage - 2, tsmTotalPages - 4)) + i;
+                              return page <= tsmTotalPages ? (
+                                <button key={page} onClick={() => setTsmCurrentPage(page)} className={`rounded-lg px-2.5 py-1 ${page === tsmCurrentPage ? "bg-indigo-600 text-white" : "border hover:bg-white"}`}>{page}</button>
+                              ) : null;
+                            })}
+                            <button onClick={() => setTsmCurrentPage((p) => Math.min(p + 1, tsmTotalPages))} disabled={tsmCurrentPage === tsmTotalPages} className="border rounded-lg px-2.5 py-1 hover:bg-white disabled:opacity-30">Next</button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 ) : loadingTsmData ? (
                   <div className="flex justify-center items-center py-16">
@@ -1369,84 +1945,77 @@ function DashboardContent() {
                   </div>
                 ) : drillLevel === "agents" ? (
                   <div className="space-y-3">
-                    <div className="flex items-center gap-2 bg-slate-50 rounded-xl px-3 py-2 border border-slate-200">
-                      <Search size={13} className="text-slate-400" />
-                      <input type="text" placeholder="Search TSA name or reference..."
-                        value={agentSearch} onChange={(e) => setAgentSearch(e.target.value)}
-                        className="text-xs bg-transparent outline-none flex-1 text-slate-700 placeholder-slate-400" />
-                      {agentSearch && <button onClick={() => setAgentSearch("")} className="text-slate-400 hover:text-slate-600"><X size={12} /></button>}
-                    </div>
                     <div className="bg-white rounded-xl border shadow-sm overflow-hidden">
-                    <div className="overflow-auto">
-                      <Table>
-                        <TableHeader>
-                          <TableRow className="bg-gray-50 border-b border-gray-100">
-                            {["TSA", "Total Accounts", "Action"].map((h) => (
-                              <TableHead key={h} className="text-[10px] font-bold uppercase tracking-wider text-gray-400 py-3">{h}</TableHead>
-                            ))}
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {filteredAgentStats.length === 0 ? (
-                            <TableRow>
-                              <TableCell colSpan={3} className="text-center py-14 text-sm text-gray-400">
-                                {agentSearch ? "No TSAs match your search" : "No TSAs found"}
-                              </TableCell>
+                      <div className="overflow-auto">
+                        <Table>
+                          <TableHeader>
+                            <TableRow className="bg-gray-50 border-b border-gray-100">
+                              {["TSA", "Total Accounts", "Action"].map((h) => (
+                                <TableHead key={h} className="text-[10px] font-bold uppercase tracking-wider text-gray-400 py-3">{h}</TableHead>
+                              ))}
                             </TableRow>
-                          ) : visibleAgentStats.map((agent) => {
-                            const fullName = getDisplayName(agent.FirstName, agent.LastName, agent.ReferenceID);
-                            return (
-                              <TableRow key={`${agent.ReferenceID}-${fullName}`} className="hover:bg-indigo-50/20 transition-colors">
-                                <TableCell className="font-semibold text-gray-800">
-                                  <div className="flex flex-col gap-0.5">
-                                    <span className={`text-sm ${agent.isUnassigned ? "text-amber-700" : "capitalize"}`}>{fullName}</span>
-                                    <span className="text-[10px] text-gray-400 font-mono">{agent.ReferenceID}</span>
-                                  </div>
-                                </TableCell>
-                                <TableCell>
-                                  <span className="text-sm font-bold text-gray-800">{agent.totalAccounts.toLocaleString()}</span>
-                                </TableCell>
-                                <TableCell>
-                                  <button onClick={() => selectAgent(agent.ReferenceID, fullName)} className="flex items-center gap-1 px-3 py-1.5 text-xs font-semibold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 rounded-lg transition-colors border border-indigo-200">
-                                    View Accounts <span className="text-indigo-400">→</span>
-                                  </button>
+                          </TableHeader>
+                          <TableBody>
+                            {filteredAgentStats.length === 0 ? (
+                              <TableRow>
+                                <TableCell colSpan={3} className="text-center py-14 text-sm text-gray-400">
+                                  {agentSearch ? "No TSAs match your search" : "No TSAs found"}
                                 </TableCell>
                               </TableRow>
-                            );
-                          })}
-                        </TableBody>
-                      </Table>
-                    </div>
-
-                    {hasMoreAgentRowsInPage && (
-                      <div className="border-t px-4 py-2 flex justify-center">
-                        <button
-                          onClick={() => setAgentVisibleCount((count) => Math.min(count + LAZY_BATCH_SIZE, paginatedAgentStats.length))}
-                          className="text-xs font-semibold text-indigo-600 hover:text-indigo-700"
-                        >
-                          Load more rows
-                        </button>
+                            ) : visibleAgentStats.map((agent) => {
+                              const fullName = getDisplayName(agent.FirstName, agent.LastName, agent.ReferenceID);
+                              return (
+                                <TableRow key={`${agent.ReferenceID}-${fullName}`} className="hover:bg-indigo-50/20 transition-colors">
+                                  <TableCell className="font-semibold text-gray-800">
+                                    <div className="flex flex-col gap-0.5">
+                                      <span className={`text-sm ${agent.isUnassigned ? "text-amber-700" : "capitalize"}`}>{fullName}</span>
+                                      <span className="text-[10px] text-gray-400 font-mono">{agent.ReferenceID}</span>
+                                    </div>
+                                  </TableCell>
+                                  <TableCell>
+                                    <span className="text-sm font-bold text-gray-800">{agent.totalAccounts.toLocaleString()}</span>
+                                  </TableCell>
+                                  <TableCell>
+                                    <button onClick={() => selectAgent(agent.ReferenceID, fullName)} className="flex items-center gap-1 px-3 py-1.5 text-xs font-semibold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 rounded-lg transition-colors border border-indigo-200">
+                                      View Accounts <span className="text-indigo-400">→</span>
+                                    </button>
+                                  </TableCell>
+                                </TableRow>
+                              );
+                            })}
+                          </TableBody>
+                        </Table>
                       </div>
-                    )}
 
-                    {filteredAgentStats.length > 0 && (
-                      <div className="flex items-center justify-between px-4 py-3 border-t bg-gray-50/50 text-xs text-gray-500">
-                        <span>
-                          Showing <span className="font-semibold">{Math.min((agentCurrentPage - 1) * ITEMS_PER_PAGE + 1, filteredAgentStats.length)}-{Math.min((agentCurrentPage - 1) * ITEMS_PER_PAGE + visibleAgentStats.length, filteredAgentStats.length)}</span> of <span className="font-semibold">{filteredAgentStats.length}</span>
-                        </span>
-                        <div className="flex items-center gap-1">
-                          <button onClick={() => setAgentCurrentPage((p) => Math.max(p - 1, 1))} disabled={agentCurrentPage === 1} className="border rounded-lg px-2.5 py-1 hover:bg-white disabled:opacity-30">Prev</button>
-                          {Array.from({ length: Math.min(agentTotalPages, 5) }, (_, i) => {
-                            const page = Math.max(1, Math.min(agentCurrentPage - 2, agentTotalPages - 4)) + i;
-                            return page <= agentTotalPages ? (
-                              <button key={page} onClick={() => setAgentCurrentPage(page)} className={`rounded-lg px-2.5 py-1 ${page === agentCurrentPage ? "bg-indigo-600 text-white" : "border hover:bg-white"}`}>{page}</button>
-                            ) : null;
-                          })}
-                          <button onClick={() => setAgentCurrentPage((p) => Math.min(p + 1, agentTotalPages))} disabled={agentCurrentPage === agentTotalPages} className="border rounded-lg px-2.5 py-1 hover:bg-white disabled:opacity-30">Next</button>
+                      {hasMoreAgentRowsInPage && (
+                        <div className="border-t px-4 py-2 flex justify-center">
+                          <button
+                            onClick={() => setAgentVisibleCount((count) => Math.min(count + LAZY_BATCH_SIZE, paginatedAgentStats.length))}
+                            className="text-xs font-semibold text-indigo-600 hover:text-indigo-700"
+                          >
+                            Load more rows
+                          </button>
                         </div>
-                      </div>
-                    )}
-                  </div>
+                      )}
+
+                      {filteredAgentStats.length > 0 && (
+                        <div className="flex items-center justify-between px-4 py-3 border-t bg-gray-50/50 text-xs text-gray-500">
+                          <span>
+                            Showing <span className="font-semibold">{Math.min((agentCurrentPage - 1) * ITEMS_PER_PAGE + 1, filteredAgentStats.length)}-{Math.min((agentCurrentPage - 1) * ITEMS_PER_PAGE + visibleAgentStats.length, filteredAgentStats.length)}</span> of <span className="font-semibold">{filteredAgentStats.length}</span>
+                          </span>
+                          <div className="flex items-center gap-1">
+                            <button onClick={() => setAgentCurrentPage((p) => Math.max(p - 1, 1))} disabled={agentCurrentPage === 1} className="border rounded-lg px-2.5 py-1 hover:bg-white disabled:opacity-30">Prev</button>
+                            {Array.from({ length: Math.min(agentTotalPages, 5) }, (_, i) => {
+                              const page = Math.max(1, Math.min(agentCurrentPage - 2, agentTotalPages - 4)) + i;
+                              return page <= agentTotalPages ? (
+                                <button key={page} onClick={() => setAgentCurrentPage(page)} className={`rounded-lg px-2.5 py-1 ${page === agentCurrentPage ? "bg-indigo-600 text-white" : "border hover:bg-white"}`}>{page}</button>
+                              ) : null;
+                            })}
+                            <button onClick={() => setAgentCurrentPage((p) => Math.min(p + 1, agentTotalPages))} disabled={agentCurrentPage === agentTotalPages} className="border rounded-lg px-2.5 py-1 hover:bg-white disabled:opacity-30">Next</button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 ) : loadingAgentData ? (
                   <div className="flex justify-center items-center py-16">
@@ -1469,7 +2038,7 @@ function DashboardContent() {
                         <Table>
                           <TableHeader>
                             <TableRow className="bg-gray-50 border-b border-gray-100">
-                              {["Actions", "Activities", "Last Touch", "Company", "Type"].map((h) => (
+                              {["Actions", "Activities", "Last Touch", "Company", "Type", "Category"].map((h) => (
                                 <TableHead key={h} className="text-[10px] font-bold uppercase tracking-wider text-gray-400 py-3">{h}</TableHead>
                               ))}
                             </TableRow>
@@ -1477,14 +2046,22 @@ function DashboardContent() {
                           <TableBody>
                             {filteredAccounts.length === 0 ? (
                               <TableRow>
-                                <TableCell colSpan={5} className="text-center py-14 text-sm text-gray-400">
+                                <TableCell colSpan={6} className="text-center py-14 text-sm text-gray-400">
                                   {search || typeFilter ? "No accounts match your filters" : "No accounts found"}
                                 </TableCell>
                               </TableRow>
                             ) : visiblePaginatedAccounts.map((account) => {
-                              const actCount  = activityCountMap[account.account_reference_number] ?? 0;
-                              const hasAct    = actCount > 0;
+                              const actCount = activityCountMap[account.account_reference_number?.toLowerCase() ?? ""] ?? 0;
+                              const hasAct = actCount > 0;
                               const typeStyle = getTypeClientStyle(account.type_client);
+
+                              // ── Category classification ──
+                              const isCustomer = customerRefSet.has(account.account_reference_number?.toLowerCase() ?? "");
+                              const category = isCustomer ? "Customer" : "Lead";
+                              const categoryStyle = isCustomer
+                                ? { pill: "bg-emerald-50 text-emerald-700 border-emerald-200", dot: "bg-emerald-500" }
+                                : { pill: "bg-amber-50 text-amber-700 border-amber-200", dot: "bg-amber-400" };
+
                               return (
                                 <TableRow key={account.id} className="hover:bg-indigo-50/20 transition-colors">
                                   <TableCell>
@@ -1500,10 +2077,10 @@ function DashboardContent() {
                                   </TableCell>
                                   <TableCell>
                                     {(() => {
-                                      const lastActDate  = lastActivityDateMap[account.account_reference_number];
+                                      const lastActDate = lastActivityDateMap[account.account_reference_number?.toLowerCase() ?? ""];
                                       const fallbackDate = account.date_created;
-                                      const hasActivity  = !!lastActDate;
-                                      const displayDate  = hasActivity ? lastActDate : fallbackDate;
+                                      const hasActivity = !!lastActDate;
+                                      const displayDate = hasActivity ? lastActDate : fallbackDate;
                                       return (
                                         <span className={`text-[10px] font-mono ${hasActivity ? "text-gray-500" : "text-amber-600"}`}>
                                           {fmtDate(displayDate) ?? "—"}
@@ -1516,6 +2093,12 @@ function DashboardContent() {
                                   <TableCell>
                                     <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold border ${typeStyle.pill}`}>
                                       <span className={`w-1.5 h-1.5 rounded-full ${typeStyle.dot}`} /> {account.type_client?.toUpperCase()}
+                                    </span>
+                                  </TableCell>
+                                  <TableCell>
+                                    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold border ${categoryStyle.pill}`}>
+                                      <span className={`w-1.5 h-1.5 rounded-full ${categoryStyle.dot}`} />
+                                      {category}
                                     </span>
                                   </TableCell>
                                 </TableRow>

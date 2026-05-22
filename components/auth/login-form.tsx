@@ -312,7 +312,11 @@ export function LoginForm({ className, ...props }: React.ComponentProps<"div">) 
     });
     setUserId(result.userId);
     await new Promise((r) => setTimeout(r, 500));
-    if (result.Department === "CSR") { router.push(`/roles/csr/activity/quotation/quotation-list?id=${result.userId}`); return; }
+
+    if (result.Department === "CSR") {
+      router.push(`/roles/csr/activity/quotation/quotation-list?id=${result.userId}`);
+      return;
+    }
 
     if (result.Department === "Accounting") {
       router.push(`/roles/accounting/activity/quotation/quotation-list?id=${result.userId}`);
