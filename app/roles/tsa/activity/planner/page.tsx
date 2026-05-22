@@ -51,9 +51,7 @@ interface Account {
   status: string; company_group?: string;
   account_reference_number: string;
   tsm: string;
-  tsm: string;
   manager: string;
-  next_available_date?: string | null;
   next_available_date?: string | null;
 }
 
