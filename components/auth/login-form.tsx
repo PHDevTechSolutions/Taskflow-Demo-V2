@@ -315,6 +315,11 @@ export function LoginForm({ className, ...props }: React.ComponentProps<"div">) 
       return;
     }
 
+    if (result.Department === "Accounting") {
+      router.push(`/roles/accounting/activity/quotation/quotation-list?id=${result.userId}`);
+      return;
+    }
+
     if (result.Department === "Procurement") {
       router.push(`/roles/admin/dashboard?id=${result.userId}`);
       return;
@@ -325,6 +330,8 @@ export function LoginForm({ className, ...props }: React.ComponentProps<"div">) 
         router.push(`/roles/tsm/agent?id=${result.userId}`); break;
       case "Manager":
         router.push(`/roles/manager/dashboard?id=${result.userId}`); break;
+      // case "User":
+      //   router.push(`/roles/accounting/activity/quotation/quotation-list?id=${result.userId}`); break;
       case "Staff":
       case "Admin":
         router.push(`/roles/csr/activity/quotation/quotation-list?id=${result.userId}`); break;
