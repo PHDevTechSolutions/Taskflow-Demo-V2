@@ -1828,7 +1828,7 @@ function DashboardContent() {
                     className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 rounded-lg transition-colors border border-indigo-200"
                   >
                     <Search size={12} />
-                    Search Company
+                    Advance Search
                   </button>
                 </div>
 

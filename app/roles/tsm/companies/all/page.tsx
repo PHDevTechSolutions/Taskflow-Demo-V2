@@ -838,7 +838,7 @@ function DashboardContent() {
                     {/* Search Company button */}
                     <button onClick={() => setSearchDialogOpen(true)}
                       className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-slate-600 bg-white border border-slate-200 hover:border-indigo-300 hover:text-indigo-600 rounded-lg transition-all shadow-sm">
-                      <Search size={12} /> Search Company
+                      <Search size={12} /> Advance Search
                     </button>
                     {drillLevel === "accounts" && (
                       <button onClick={goToAgents} className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors">

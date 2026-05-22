@@ -1711,7 +1711,7 @@ export function AccountsTable({ posts, userDetails, dateCreatedFilterRange }: Ac
               className="flex items-center gap-1.5 rounded-lg bg-white hover:bg-slate-50 px-3 py-1.5 text-xs font-medium text-slate-500 hover:text-indigo-600 border border-slate-200 hover:border-indigo-300 transition-colors shadow-sm"
             >
               <Search size={12} />
-              Search Company
+              Advance Search
             </button>
 
             {drillLevel !== "manager" && (
