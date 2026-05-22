@@ -1,33 +1,51 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { supabase } from "@/utils/supabase";
 
-const BATCH_SIZE = 5000;
+export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+  const { referenceid, from, to, page = "1", limit = "10", search } = req.query;
 
-async function* fetchHistoryBatches(
-  referenceid: string,
-  fromDate?: string,
-  toDate?: string
-) {
-  let lastId: number | null = null;
+  if (!referenceid || typeof referenceid !== "string") {
+    return res.status(400).json({ message: "Missing or invalid referenceid" });
+  }
 
-  while (true) {
+  const pageNum = parseInt(page as string, 10);
+  const limitNum = parseInt(limit as string, 10);
+
+  if (isNaN(pageNum) || pageNum < 1 || isNaN(limitNum) || limitNum < 1) {
+    return res.status(400).json({ message: "Invalid pagination parameters" });
+  }
+
+  const offset = (pageNum - 1) * limitNum;
+
+  const fromDate = !from ? undefined : Array.isArray(from) ? from[0] : from;
+  const toDate = !to ? undefined : Array.isArray(to) ? to[0] : to;
+
+  try {
     let query = supabase
       .from("spf_request")
-      .select("*")
+      .select("*", { count: "exact" })
       .eq("manager", referenceid)
       .order("id", { ascending: true })
-      .limit(BATCH_SIZE);
+      .range(offset, offset + limitNum - 1);
 
-    if (lastId) query = query.gt("id", lastId);
-    if (fromDate && toDate) query = query.gte("date_created", fromDate).lte("date_created", toDate);
+    if (fromDate && toDate) {
+      query = query.gte("date_created", fromDate).lte("date_created", toDate);
+    }
 
-    const { data, error } = await query;
+    // Apply search filter
+    if (search && typeof search === "string" && search.trim()) {
+      const searchLower = search.trim().toLowerCase();
+      query = query.or(
+        `customer_name.ilike.%${searchLower}%,contact_person.ilike.%${searchLower}%,spf_number.ilike.%${searchLower}%`
+      );
+    }
+
+    const { data, error, count } = await query;
+
     if (error) throw error;
 
-    if (!data || data.length === 0) break;
-
     // Fetch status and creation id from spf_creation table for each SPF request
-    const spfNumbers = data.map(item => item.spf_number).filter(Boolean);
+    const spfNumbers = data?.map(item => item.spf_number).filter(Boolean) || [];
     let statusMap = new Map();
     let creationIdMap = new Map();
     
@@ -46,49 +64,32 @@ async function* fetchHistoryBatches(
     }
 
     // Merge status and creation id into the data
-    const mergedData = data.map(item => ({
+    const mergedData = (data || []).map(item => ({
       ...item,
       status: statusMap.get(item.spf_number) || item.status || "pending",
       spf_creation_id: creationIdMap.get(item.spf_number) || null
     }));
 
-    yield mergedData;
+    const totalCount = count ?? 0;
+    const totalPages = Math.ceil(totalCount / limitNum);
+    const hasMore = pageNum < totalPages;
 
-    lastId = data[data.length - 1].id;
-  }
-}
-
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  const { referenceid, from, to } = req.query;
-
-  if (!referenceid || typeof referenceid !== "string") {
-    return res.status(400).json({ message: "Missing or invalid referenceid" });
-  }
-
-  const fromDate = typeof from === "string" ? from : undefined;
-  const toDate = typeof to === "string" ? to : undefined;
-
-  try {
-    res.setHeader("Content-Type", "application/json");
-    res.write(`{"activities":[`); // start JSON array
-    let first = true;
-    let total = 0;
-
-    for await (const batch of fetchHistoryBatches(referenceid, fromDate, toDate)) {
-      for (const row of batch) {
-        const json = JSON.stringify(row);
-        res.write(first ? json : `,${json}`);
-        first = false;
-        total++;
+    return res.status(200).json({
+      success: true,
+      activities: mergedData,
+      pagination: {
+        currentPage: pageNum,
+        totalPages,
+        totalCount,
+        hasMore,
+        limit: limitNum
       }
-    }
-
-    res.write(`],"total":${total},"cached":false}`);
-    res.end();
+    });
   } catch (err: any) {
     console.error("Server error:", err);
-    if (!res.writableEnded) {
-      res.status(500).json({ message: err.message || "Server error" });
-    }
+    return res.status(500).json({ 
+      success: false, 
+      message: err.message || "Server error" 
+    });
   }
 }

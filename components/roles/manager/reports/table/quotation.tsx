@@ -703,6 +703,15 @@ export const QuotationTable: React.FC<QuotationProps> = ({
                         );
                       })}
                     </TableBody>
+                    <tfoot>
+                      <TableRow className="bg-gray-50 text-xs font-semibold font-mono">
+                        <TableCell colSpan={2} className="text-right">Total</TableCell>
+                        <TableCell className="text-right">
+                          {group.rows.reduce((sum, row) => sum + (row.quotation_amount ?? 0), 0).toLocaleString(undefined, { style: "currency", currency: "PHP" })}
+                        </TableCell>
+                        <TableCell colSpan={7}></TableCell>
+                      </TableRow>
+                    </tfoot>
                   </Table>
                 </div>
               </div>

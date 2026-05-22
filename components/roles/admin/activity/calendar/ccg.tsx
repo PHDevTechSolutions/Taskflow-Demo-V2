@@ -283,21 +283,18 @@ export const CCG: React.FC<{
   // ── Fetch activities ───────────────────────────────────────────────────────
 
   const fetchActivities = useCallback(() => {
+    if (!selectedDate) {
+      setActivities([]);
+      return;
+    }
+    
     setLoading(true);
     setError(null);
 
-    const from = dateCreatedFilterRange?.from
-      ? new Date(dateCreatedFilterRange.from).toISOString().slice(0, 10)
-      : null;
-    const to = dateCreatedFilterRange?.to
-      ? new Date(dateCreatedFilterRange.to).toISOString().slice(0, 10)
-      : null;
+    const selectedDateStr = formatDateLocal(selectedDate);
 
     const url = new URL("/api/activity/admin/calendar/fetch", window.location.origin);
-    if (from && to) {
-      url.searchParams.append("from", from);
-      url.searchParams.append("to", to);
-    }
+    url.searchParams.append("date", selectedDateStr);
 
     fetch(url.toString())
       .then(async (res) => {
@@ -307,39 +304,45 @@ export const CCG: React.FC<{
       .then((data) => setActivities(data.activities || []))
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false));
-  }, [dateCreatedFilterRange]);
+  }, [selectedDate]);
 
   // ── Realtime ───────────────────────────────────────────────────────────────
 
   useEffect(() => {
-    fetchActivities();
+    if (selectedDate) {
+      fetchActivities();
+    }
 
     const chan = supabase
-      .channel(`public:history:admin`)
+      .channel(`public:history:admin:${formatDateLocal(selectedDate || today)}`)
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "history" },
         (payload) => {
           const newRec = payload.new as CCGItem;
           const oldRec = payload.old as CCGItem;
-          setActivities((curr) => {
-            switch (payload.eventType) {
-              case "INSERT":
-                return curr.some((a) => a.id === newRec.id) ? curr : [...curr, newRec];
-              case "UPDATE":
-                return curr.map((a) => (a.id === newRec.id ? newRec : a));
-              case "DELETE":
-                return curr.filter((a) => a.id !== oldRec.id);
-              default:
-                return curr;
-            }
-          });
+          
+          // Only update if record is for the selected date
+          if (newRec && formatDateLocal(new Date(newRec.date_updated)) === formatDateLocal(selectedDate || today)) {
+            setActivities((curr) => {
+              switch (payload.eventType) {
+                case "INSERT":
+                  return curr.some((a) => a.id === newRec.id) ? curr : [...curr, newRec];
+                case "UPDATE":
+                  return curr.map((a) => (a.id === newRec.id ? newRec : a));
+                case "DELETE":
+                  return curr.filter((a) => a.id !== oldRec.id);
+                default:
+                  return curr;
+              }
+            });
+          }
         }
       )
       .subscribe();
 
     return () => { supabase.removeChannel(chan); };
-  }, [fetchActivities]);
+  }, [selectedDate, today]);
 
   // ── Derived Data ───────────────────────────────────────────────────────────
 

@@ -39,6 +39,7 @@ interface Account {
     status?: string;
     transfer_to: string;
     date_transferred: string;
+    remarks: string;
 }
 
 interface UserDetails {

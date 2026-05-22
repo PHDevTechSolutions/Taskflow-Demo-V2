@@ -89,8 +89,6 @@ interface Completed {
   quotation_subject?: string;
   discounted_priced?: string;
   discounted_amount?: string;
-
-  // Quotation display configuration
   hide_discount_in_preview?: boolean;
   show_discount_columns?: boolean;
   show_summary_discounts?: boolean;
@@ -99,8 +97,6 @@ interface Completed {
   show_margin_alerts?: boolean;
   product_view_mode?: string;
   visible_columns?: any;
-
-  // Product flags (serialized as comma-separated values)
   product_is_promo?: string;
   product_is_hidden?: string;
   product_display_mode?: string;
@@ -590,6 +586,9 @@ export default function TaskListEditDialog({
     onCancel: () => void;
   } | null>(null);
   const [pdfOption, setPdfOption] = useState<"with-discount" | "default-only">("default-only");
+  // NEW: 2-step PDF dialog states
+  const [pdfStep, setPdfStep] = useState<1 | 2>(1);
+  const [pdfDescriptionStyle, setPdfDescriptionStyle] = useState<'plain' | 'table'>('table');
   // NEW: Hide discount columns in preview (for SRP-only quotes)
   // Helper to convert database value to boolean (handles strings like "true"/"false")
   const toBoolean = (value: any, defaultValue: boolean): boolean => {
@@ -835,14 +834,14 @@ export default function TaskListEditDialog({
   // Check if there are unsaved changes (for PDF security)
   const hasUnsavedChanges = useCallback(() => {
     if (!originalConfig) return false;
-    
+
     // Compare products
     if (products.length !== originalProducts.length) return true;
-    
+
     const productsChanged = products.some((product, index) => {
       const original = originalProducts[index];
       if (!original) return true;
-      
+
       // Compare key fields
       return (
         product.product_quantity !== original.product_quantity ||
@@ -860,9 +859,9 @@ export default function TaskListEditDialog({
         product.isHidden !== original.isHidden
       );
     });
-    
+
     if (productsChanged) return true;
-    
+
     // Compare configuration
     if (vatTypeState !== originalConfig.vatType) return true;
     if (deliveryFeeState !== originalConfig.deliveryFee) return true;
@@ -872,7 +871,7 @@ export default function TaskListEditDialog({
     if (hideDiscountInPreview !== originalConfig.hideDiscountInPreview) return true;
     if (showDiscountColumns !== originalConfig.showDiscountColumns) return true;
     if (showSummaryDiscounts !== originalConfig.showSummaryDiscounts) return true;
-    
+
     return false;
   }, [products, originalProducts, originalConfig, vatTypeState, deliveryFeeState, restockingFeeState, whtTypeState, quotationSubjectState, hideDiscountInPreview, showDiscountColumns, showSummaryDiscounts]);
 
@@ -1621,7 +1620,7 @@ export default function TaskListEditDialog({
     pdf.text(`Page ${pageNum} of ${totalPages}`, pdfWidth / 2, footerY + 14, { align: "center" });
   };
 
-  const DownloadPDF = async (showDiscount: boolean = false, summaryDiscounts: boolean = showSummaryDiscounts) => {
+  const DownloadPDF = async (showDiscount: boolean = false, summaryDiscounts: boolean = showSummaryDiscounts, pdfDescriptionStyle: 'plain' | 'table' = 'table') => {
     if (typeof window === "undefined") return;
     const PRIMARY_CHARCOAL = "#121212";
     const OFF_WHITE = "#F9FAFA";
@@ -1697,12 +1696,13 @@ export default function TaskListEditDialog({
             .main-table th { padding: 6px 8px; font-size: 8.5px; font-weight: 900; color: white; background: ${PRIMARY_CHARCOAL}; text-transform: uppercase; border-right: 1px solid #374151; letter-spacing: 0.04em; }
             .main-table th:last-child { border-right: none; }
             .main-table td { padding: 8px; vertical-align: top; border-right: 1px solid #d1d5db; border-bottom: 1px solid #d1d5db; font-size: 9px; }
+            .main-table tr { page-break-inside: avoid; }
             .main-table td:last-child { border-right: none; }
             .item-no { color: #9ca3af; font-weight: 700; text-align: center; font-size: 11px; vertical-align: middle; }
             .qty-col { font-weight: 900; text-align: center; font-size: 12px; color: ${PRIMARY_CHARCOAL}; vertical-align: middle; }
             .product-title { font-weight: 900; text-transform: uppercase; font-size: 9.5px; margin: 0 0 2px 0; color: ${PRIMARY_CHARCOAL}; line-height: 1.3; }
             .sku-text { color: #2563eb; font-weight: 700; font-size: 8px; margin: 0 0 4px 0; }
-            .desc-text { font-size: 8px; color: #374151; line-height: 1.3; margin: 0; }
+            .desc-text { font-size: 8px; color: #374151; line-height: 1.3; margin: 0; page-break-inside: avoid; }
             .desc-remarks { background: #fed7aa; padding: 2px 5px; text-transform: uppercase; color: #7c2d12; display: inline-block; font-weight: 900; font-size: 7.5px; margin-top: 3px; }
             .price-col { font-size: 9.5px; font-weight: 600; text-align: right; color: #374151; vertical-align: middle; padding-right: 8px; }
             .total-col { font-size: 9.5px; font-weight: 900; text-align: right; color: ${PRIMARY_CHARCOAL}; vertical-align: middle; padding-right: 8px; }
@@ -1863,12 +1863,12 @@ export default function TaskListEditDialog({
       for (const [index, item] of payload.items.entries()) {
         // discountAmount is already per-unit (stored as per-unit in the data)
         const perUnitDiscountAmount = item.discountAmount || 0;
-        
+
         // Calculate net unit price (unit price - per unit discount)
         const netUnitPrice = item.discount && item.discount > 0 && perUnitDiscountAmount > 0
           ? item.unitPrice - perUnitDiscountAmount
           : item.unitPrice;
-          
+
         const mode = item.displayMode || 'transparent';
         const isRequest = mode === 'request';
         const isNetOnly = mode === 'net_only';
@@ -1933,9 +1933,77 @@ export default function TaskListEditDialog({
           totalContent = `₱${item.totalAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}${savingsHtml}`;
         }
 
-        // ===== SECTION-AWARE INTELLIGENT PAGE SPLITTING =====
-        // Strategy: Try full item first. If it doesn't fit, split into sections
+        // ===== INTELLIGENT PAGE SPLITTING =====
+        // Strategy: Treat each product as an unbreakable unit. If it doesn't fit, move to next page.
         const usablePageHeight = pdfHeight - 50;
+
+        const formatDescriptionByStyle = (descContent: string, style: string): string => {
+  if (!descContent || descContent.trim() === '') {
+    return '<div style="color:#9ca3af;font-style:italic;">No specifications provided.</div>';
+  }
+
+          if (style === 'plain') {
+            let result = descContent;
+            let plainText = '';
+
+            // Step 1: Replace section headers with placeholder
+            result = result.replace(
+              /<div[^>]*background:\s*#121212[^>]*>([\s\S]*?)<\/div>/gi,
+              (_, inner) => {
+                const cleanTitle = inner ? inner.replace(/<[^>]*>/g, '').trim() : '';
+                return cleanTitle ? `\n%%SECTION:${cleanTitle}%%\n` : '';
+              }
+            );
+
+            // Step 2: Replace tables with placeholders
+            result = result.replace(
+              /<table[^>]*>([\s\S]*?)<\/table>/gi,
+              (_, tableContent) => {
+                let tableText = '\n';
+                const trMatches = tableContent.match(/<tr[^>]*>[\s\S]*?<\/tr>/gi) || [];
+                trMatches.forEach((tr: string) => {
+                  const tdMatches = tr.match(/<td[^>]*>([\s\S]*?)<\/td>/gi) || [];
+                  if (tdMatches.length >= 2) {
+                    const key = tdMatches[0] ? tdMatches[0].replace(/<[^>]*>/g, '').trim() : '';
+                    const value = tdMatches[1] ? tdMatches[1].replace(/<[^>]*>/g, '').trim() : '';
+                    if (key && value) tableText += `%%ROW:${key}|${value}%%\n`;
+                    else if (key) tableText += `%%ROW:${key}|%%\n`;
+                  }
+                });
+                return tableText;
+              }
+            );
+
+            // Step 3: Strip all remaining HTML
+            result = result.replace(/<[^>]*>/g, '');
+
+            // Step 4: Process line by line
+            const lines = result.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+
+            lines.forEach(line => {
+              if (line.startsWith('%%SECTION:')) {
+                const title = line.replace('%%SECTION:', '').replace('%%', '').trim();
+                plainText += `<div style="font-weight:700;text-transform:uppercase;font-size:9px;margin-top:5px;margin-bottom:4px;color:#374151;">${title}</div>`;
+              } else if (line.startsWith('%%ROW:')) {
+                const content = line.replace('%%ROW:', '').replace(/%%$/, '');
+                const pipeIdx = content.indexOf('|');
+                const key = content.substring(0, pipeIdx).trim();
+                const value = content.substring(pipeIdx + 1).trim();
+                if (key && value) {
+                  plainText += `<div style="display:block;margin-bottom:2px"><span style="font-weight:600;color:#374151">${key}:</span> <span style="color:#374151">${value}</span></div>`;
+                } else if (key) {
+                  plainText += `<div style="display:block;margin-bottom:2px;color:#374151">${key}</div>`;
+                }
+              } else {
+                plainText += `<div style="color:#374151;margin-bottom:2px">${line}</div>`;
+              }
+            });
+
+            return plainText.trim() || 'No specifications provided.';
+          } else {
+            return descContent;
+          }
+        };
 
         // Helper: Build complete row HTML
         const buildFullRowHtml = (descContent: string): string => {
@@ -1954,7 +2022,7 @@ export default function TaskListEditDialog({
           </div>
           ${item.sku ? `<p class="sku-text">ITEM CODE: ${item.sku}</p>` : ""}
           ${item.procurementLeadTime ? `<div style="display:inline-flex;align-items:center;gap:4px;margin:3px 0 4px;"><span style="font-size:8px;font-weight:900;text-transform:uppercase;color:#6b7280;">Lead Time:</span><span style="font-size:9px;font-weight:700;color:#b45309;background:#fff7ed;border:1px solid #fed7aa;padding:1px 6px;">${item.procurementLeadTime}</span></div>` : ""}
-          <div class="desc-text">${descContent}</div>
+          <div class="desc-text">${formatDescriptionByStyle(descContent, pdfDescriptionStyle)}</div>
           ${item.remarks ? `<div class="desc-remarks">${item.remarks}</div>` : ""}
           </td>
           <td style="width:60px;text-align:center;${hidePriceCols ? 'background:#f9fafb;' : ''}" class="price-col">${unitPriceContent}</td>
@@ -1964,151 +2032,25 @@ export default function TaskListEditDialog({
           </tr></table></div>`;
         };
 
-        // Step 1: Try rendering the FULL item first
+        // Step 1: Try rendering the complete product
         const fullRowBlock = await renderBlock(buildFullRowHtml(item.product_description || ''));
 
-        // Step 2: If it fits on current page, place it and continue
+        // Step 2: If it fits on current page, place it and continue to next product
         if (currentY + fullRowBlock.h <= usablePageHeight) {
           pdf.addImage(fullRowBlock.img, "JPEG", 0, currentY, pdfWidth, fullRowBlock.h);
           currentY += fullRowBlock.h;
           continue;
         }
 
-        // Step 3: Full item doesn't fit - split into sections
-        const parseSections = (html: string): string[] => {
-          if (!html) return [];
-          const parts = html.split(/(?=<div[^>]*background:#121212[^>]*>)/i);
-          return parts.map(s => s.trim()).filter(Boolean);
-        };
-
-        const sections = parseSections(item.product_description);
-        if (sections.length === 0) {
-          // No sections to split - put on new page
-          finalizeCurrentPage();
-          pdf.addPage([612, 936]);
-          pageCount++;
-          currentY = await initiateNewPage();
-          pdf.addImage(headerBlock.img, "JPEG", 0, currentY, pdfWidth, headerBlock.h);
-          currentY += 28;
-          pdf.addImage(fullRowBlock.img, "JPEG", 0, currentY, pdfWidth, fullRowBlock.h);
-          currentY += fullRowBlock.h;
-          continue;
-        }
-
-        // Step 4: Measure each section in real table context
-        type MeasuredSection = { html: string; h: number };
-        const measuredSections: MeasuredSection[] = [];
-
-        for (const section of sections) {
-          const sectionBlock = await renderBlock(`
-            <div class="content-area">
-            <table class="main-table" style="border:1.5px solid black;border-top:none;">
-            <tr>
-            <td style="width:35px;">&nbsp;</td>
-            <td style="width:40px;">&nbsp;</td>
-            <td style="width:105px;">&nbsp;</td>
-            <td style="padding:8px 10px;vertical-align:top;">
-              <div class="desc-text">${section}</div>
-            </td>
-            <td style="width:60px;">&nbsp;</td>
-            ${showDiscount ? `<td style="width:80px;">&nbsp;</td><td style="width:80px;">&nbsp;</td>` : ""}
-            <td style="width:90px;">&nbsp;</td>
-            </tr></table></div>`);
-          measuredSections.push({ html: section, h: sectionBlock.h });
-        }
-
-        // Step 5: Measure overhead (title, photo, prices)
-        const overheadBlock = await renderBlock(`
-          <div class="content-area">
-          <table class="main-table" style="border:1.5px solid black;border-top:none;">
-          <tr>
-          <td style="width:35px;" class="item-no">${index + 1}</td>
-          <td style="width:40px;" class="qty-col">${item.qty}</td>
-          <td style="width:105px;padding:8px;text-align:center;vertical-align:top;">
-          <img src="${item.photo}" style="mix-blend-mode:multiply;width:82px;height:82px;object-fit:contain;display:block;margin:0 auto;">
-          </td>
-          <td style="padding:8px 10px;vertical-align:top;">
-          <div style="display:flex;align-items:center;flex-wrap:wrap;gap:4px;margin-bottom:4px;">
-            <p class="product-title" style="margin:0;">${item.title}</p>
-            ${badges.join('')}
-          </div>
-          ${item.sku ? `<p class="sku-text">ITEM CODE: ${item.sku}</p>` : ""}
-          ${item.procurementLeadTime ? `<div style="display:inline-flex;align-items:center;gap:4px;margin:3px 0 4px;"><span style="font-size:8px;font-weight:900;text-transform:uppercase;color:#6b7280;">Lead Time:</span><span style="font-size:9px;font-weight:700;color:#b45309;background:#fff7ed;border:1px solid #fed7aa;padding:1px 6px;">${item.procurementLeadTime}</span></div>` : ""}
-          </td>
-          <td style="width:60px;text-align:center;" class="price-col">${unitPriceContent}</td>
-          ${showDiscount ? `<td style="width:80px;text-align:center;font-weight:700;">${discContent}</td>
-          <td style="width:80px;text-align:center;font-weight:600;">${discountPriceContent}</td>` : ""}
-          <td style="width:90px;text-align:center;" class="total-col">${totalContent}</td>
-          </tr></table></div>`);
-        const topOverheadH = overheadBlock.h;
-
-        // Step 6: Bin-pack sections into page groups
-        type PageGroup = { sections: string[]; isFirst: boolean };
-        const pageGroups: PageGroup[] = [];
-
-        const headerHeight = 28;
-        const freshPageAvailable = usablePageHeight - headerHeight;
-
-        let currentGroup: string[] = [];
-        let currentGroupH = 0;
-        let isFirstGroup = true;
-
-        for (const section of measuredSections) {
-          const overhead = isFirstGroup && currentGroup.length === 0 ? topOverheadH : 0;
-          const projectedH = overhead + currentGroupH + section.h;
-          const available = isFirstGroup ? (usablePageHeight - currentY) : freshPageAvailable;
-
-          if (currentGroup.length > 0 && projectedH > available) {
-            pageGroups.push({ sections: [...currentGroup], isFirst: isFirstGroup });
-            isFirstGroup = false;
-            currentGroup = [section.html];
-            currentGroupH = section.h;
-          } else {
-            currentGroup.push(section.html);
-            currentGroupH += section.h;
-          }
-        }
-        if (currentGroup.length > 0) {
-          pageGroups.push({ sections: currentGroup, isFirst: isFirstGroup });
-        }
-
-        // Step 7: Render each group
-        let isFirstPg = true;
-        for (const group of pageGroups) {
-          const combinedDesc = group.sections.join('\n');
-          const groupHtml = group.isFirst
-            ? buildFullRowHtml(combinedDesc)
-            : `<div class="content-area">
-            <table class="main-table" style="border:1.5px solid black;border-top:none;">
-            <tr>
-            <td style="width:35px;" class="item-no">&nbsp;</td>
-            <td style="width:40px;" class="qty-col">&nbsp;</td>
-            <td style="width:105px;padding:8px;">&nbsp;</td>
-            <td style="padding:8px 10px;vertical-align:top;">
-            <div class="desc-text">${combinedDesc}</div>
-            </td>
-            <td style="width:60px;" class="price-col">&nbsp;</td>
-            ${showDiscount ? `<td style="width:80px;">&nbsp;</td><td style="width:80px;">&nbsp;</td>` : ""}
-            <td style="width:90px;" class="total-col">&nbsp;</td>
-            </tr></table></div>`;
-
-          const groupBlock = await renderBlock(groupHtml);
-          const spaceNeeded = groupBlock.h;
-          const spaceAvailable = isFirstPg ? (usablePageHeight - currentY) : freshPageAvailable;
-
-          if (!isFirstPg || currentY + spaceNeeded > usablePageHeight) {
-            if (!isFirstPg) finalizeCurrentPage();
-            pdf.addPage([612, 936]);
-            pageCount++;
-            currentY = await initiateNewPage();
-            pdf.addImage(headerBlock.img, "JPEG", 0, currentY, pdfWidth, headerBlock.h);
-            currentY += headerHeight;
-          }
-
-          pdf.addImage(groupBlock.img, "JPEG", 0, currentY, pdfWidth, groupBlock.h);
-          currentY += groupBlock.h;
-          isFirstPg = false;
-        }
+        // Step 3: Product doesn't fit - move entire product to new page
+        finalizeCurrentPage();
+        pdf.addPage([612, 936]);
+        pageCount++;
+        currentY = await initiateNewPage();
+        pdf.addImage(headerBlock.img, "JPEG", 0, currentY, pdfWidth, headerBlock.h);
+        currentY += 28;
+        pdf.addImage(fullRowBlock.img, "JPEG", 0, currentY, pdfWidth, fullRowBlock.h);
+        currentY += fullRowBlock.h;
       }
 
       // ✅ Helper (put above this block if possible)
@@ -2367,7 +2309,26 @@ ${payload.whtType && payload.whtType !== "none"
       currentY += logisticsBlock.h;
 
       const termsAndSigBlock = await renderBlock(
-        `<div class="content-area" style="padding-top:0;"><div class="terms-grid"><div class="terms-label">Payment:</div><div class="terms-val"><p><strong style="color:red;">For Cash on Delivery (COD)</strong></p><p><strong>NOTE: Orders below 10,000 pesos can be paid in cash at the time of delivery.</strong></p><p><strong>BANK DETAILS</strong></p><p><b>Payee to: </b><strong>${isEcoshift ? "ECOSHIFT CORPORATION" : "DISRUPTIVE SOLUTIONS INC."}</strong></p><div class="bank-grid" style="display:flex;gap:20px;"><div><strong>BANK: METROBANK</strong><br/>Account Name: ${isEcoshift ? "ECOSHIFT CORPORATION" : "DISRUPTIVE SOLUTIONS INC."}<br/>Account Number: ${isEcoshift ? "243-7-243805100" : "243-7-24354164-2"}</div><div><strong>BANK: BDO</strong><br/>Account Name: ${isEcoshift ? "ECOSHIFT CORPORATION" : "DISRUPTIVE SOLUTIONS INC."}<br/>Account Number: ${isEcoshift ? "0021-8801-7271" : "0021-8801-9258"}</div></div></div><div class="terms-label">DELIVERY:</div><div class="terms-val terms-highlight"><p>Delivery/Pick up is subject to confirmation.</p></div><div class="terms-label">Validity:</div><div class="terms-val"><p class="text-red-strong"><u>Thirty (30) calendar days from the date of this offer.</u></p></div><div class="terms-label">CANCELLATION:</div><div class="terms-val terms-highlight"><p>1. Above quoted items are non-cancellable.</p><p>2. Downpayment for items not in stock/indent and order/special items are non-refundable.</p><p>5. Cancellation for Special Projects (SPF) are not allowed and will be subject to a 100% charge.</p></div></div><div class="sig-hierarchy"><p class="sig-message">Thank you for allowing us to service your requirements. We hope that the above offer merits your acceptance. Unless otherwise indicated, you are deemed to have accepted the Terms and Conditions of this Quotation.</p><div class="sig-grid"><div class="sig-side-internal"><div style="position:relative;min-height:85px;"><p class="sig-italic">${isEcoshift ? "Ecoshift Corporation" : "Disruptive Solutions Inc"}</p>${payload.agentSignature ? `<img src="${payload.agentSignature}" style="position:absolute;top:28px;left:0;width:110px;height:auto;object-fit:contain;"/>` : ""}<p class="sig-name" style="margin-top:${payload.agentSignature ? "46px" : "8px"};">${payload.salesRepresentative}</p><div class="sig-line" style="width:220px;margin-top:2px;"></div><p class="sig-sub-label">Sales Representative</p><p class="sig-detail">Mobile: ${payload.agentContactNumber || "N/A"}</p><p class="sig-detail">Email: ${payload.agentEmailAddress || "N/A"}</p></div><div style="position:relative;min-height:85px;"><p class="sig-approved-label">Approved By:</p>${payload.TsmSignature ? `<img src="${payload.TsmSignature}" style="position:absolute;top:22px;left:0;width:110px;height:auto;object-fit:contain;"/>` : ""}<p class="sig-name" style="margin-top:${payload.TsmSignature ? "46px" : "8px"};">${payload.salestsmname}</p><div class="sig-line" style="width:220px;margin-top:2px;"></div><p class="sig-sub-label">Sales Manager</p><p class="sig-detail">Mobile: ${payload.TsmContactNumber || "N/A"}</p><p class="sig-detail">Email: ${payload.TsmEmailAddress || "N/A"}</p></div><div style="position:relative;min-height:75px;"><p class="sig-approved-label">Noted By:</p>${payload.ManagerSignature ? `<img src="${payload.ManagerSignature}" style="position:absolute;top:22px;left:0;width:110px;height:auto;object-fit:contain;"/>` : ""}<p class="sig-name" style="margin-top:${payload.ManagerSignature ? "46px" : "8px"};">${payload.salesmanagername}</p><div class="sig-line" style="width:220px;margin-top:2px;"></div><p class="sig-sub-label">Sales-B2B</p></div></div><div class="sig-side-client"><div style="text-align:center;"><div class="sig-line" style="margin-top:68px;width:220px;"></div><p class="sig-client-label">Company Authorized Representative</p><p class="sig-client-sub">(Please Sign Over Printed Name)</p></div><div style="text-align:center;"><div class="sig-line" style="margin-top:55px;width:220px;"></div><p class="sig-client-label">Payment Release Date</p></div><div style="text-align:center;"><div class="sig-line" style="margin-top:55px;width:220px;"></div><p class="sig-client-label">Position in the Company</p></div></div></div></div></div>`,
+        `<div class="content-area" style="padding-top:0;">
+        <div class="terms-grid">
+        <div class="terms-label">Payment:</div>
+        <div class="terms-val">
+        <p><strong style="color:red;">For Cash on Delivery (COD)</strong></p>
+        <p><strong>NOTE: Orders below 10,000 pesos can be paid in cash at the time of delivery.</strong></p>
+        <p><strong>BANK DETAILS</strong></p>
+        <p><b>Payee to: </b><strong>${isEcoshift ? "ECOSHIFT CORPORATION" : "DISRUPTIVE SOLUTIONS INC."}</strong></p>
+        <div class="bank-grid" style="display:flex;gap:20px;">
+        <div><strong>BANK: METROBANK</strong><br/>Account Name: ${isEcoshift ? "ECOSHIFT CORPORATION" : "DISRUPTIVE SOLUTIONS INC."}<br/>Account Number: ${isEcoshift ? "243-7-243805100" : "243-7-24354164-2"}</div>
+        <div><strong>BANK: BDO</strong><br/>Account Name: ${isEcoshift ? "ECOSHIFT CORPORATION" : "DISRUPTIVE SOLUTIONS INC."}<br/>Account Number: ${isEcoshift ? "0021-8801-7271" : "0021-8801-9258"}</div></div></div>
+        <div class="terms-label">DELIVERY:</div><div class="terms-val terms-highlight"><p>Delivery/Pick up is subject to confirmation.</p></div><div class="terms-label">Validity:</div><div class="terms-val"><p class="text-red-strong"><u>Thirty (30) calendar days from the date of this offer.</u></p></div>
+        <div class="terms-label">CANCELLATION:</div>
+        <div class="terms-val terms-highlight">
+        <p>1. Above quoted items are non-cancellable.</p>
+        <p>2. If the customer cancels the order under any circumstances, the client shall be responsible for 100% cost incurred by Disruptive, including freight and delivery charges.</p>
+        <p>3. Downpayment for items not in stock/indent and order/special items are non-refundable and will be forfeited if the order is canceled.</p>
+        <p>4. COD transaction payments should be ready upon delivery. If the payment is not ready within seven (7) days from the date of order, the transaction is automatically canceled.</p>
+        <p>5. Cancellation for Special Projects (SPF) are not allowed and will be subject to a 100% charge.</p>
+        </div></div><div class="sig-hierarchy"><p class="sig-message">Thank you for allowing us to service your requirements. We hope that the above offer merits your acceptance. Unless otherwise indicated, you are deemed to have accepted the Terms and Conditions of this Quotation.</p><div class="sig-grid"><div class="sig-side-internal"><div style="position:relative;min-height:85px;"><p class="sig-italic">${isEcoshift ? "Ecoshift Corporation" : "Disruptive Solutions Inc"}</p>${payload.agentSignature ? `<img src="${payload.agentSignature}" style="position:absolute;top:28px;left:0;width:110px;height:auto;object-fit:contain;"/>` : ""}<p class="sig-name" style="margin-top:${payload.agentSignature ? "46px" : "8px"};">${payload.salesRepresentative}</p><div class="sig-line" style="width:220px;margin-top:2px;"></div><p class="sig-sub-label">Sales Representative</p><p class="sig-detail">Mobile: ${payload.agentContactNumber || "N/A"}</p><p class="sig-detail">Email: ${payload.agentEmailAddress || "N/A"}</p></div><div style="position:relative;min-height:85px;"><p class="sig-approved-label">Approved By:</p>${payload.TsmSignature ? `<img src="${payload.TsmSignature}" style="position:absolute;top:22px;left:0;width:110px;height:auto;object-fit:contain;"/>` : ""}<p class="sig-name" style="margin-top:${payload.TsmSignature ? "46px" : "8px"};">${payload.salestsmname}</p><div class="sig-line" style="width:220px;margin-top:2px;"></div><p class="sig-sub-label">Sales Manager</p><p class="sig-detail">Mobile: ${payload.TsmContactNumber || "N/A"}</p><p class="sig-detail">Email: ${payload.TsmEmailAddress || "N/A"}</p></div><div style="position:relative;min-height:75px;"><p class="sig-approved-label">Noted By:</p>${payload.ManagerSignature ? `<img src="${payload.ManagerSignature}" style="position:absolute;top:22px;left:0;width:110px;height:auto;object-fit:contain;"/>` : ""}<p class="sig-name" style="margin-top:${payload.ManagerSignature ? "46px" : "8px"};">${payload.salesmanagername}</p><div class="sig-line" style="width:220px;margin-top:2px;"></div><p class="sig-sub-label">Sales-B2B</p></div></div><div class="sig-side-client"><div style="text-align:center;"><div class="sig-line" style="margin-top:68px;width:220px;"></div><p class="sig-client-label">Company Authorized Representative</p><p class="sig-client-sub">(Please Sign Over Printed Name)</p></div><div style="text-align:center;"><div class="sig-line" style="margin-top:55px;width:220px;"></div><p class="sig-client-label">Payment Release Date</p></div><div style="text-align:center;"><div class="sig-line" style="margin-top:55px;width:220px;"></div><p class="sig-client-label">Position in the Company</p></div></div></div></div></div>`,
 
       );
       if (currentY + termsAndSigBlock.h > pdfHeight - BOTTOM_MARGIN) {
@@ -2951,30 +2912,67 @@ ${payload.whtType && payload.whtType !== "none"
                                             specsHtml += `</table>`;
                                           });
                                         }
+
+                                        // Normalize all item code variants from itemCodes (object/array) + itemCode (string fallback)
+                                        const rawItemCodes = data.itemCodes;
+                                        const fallbackCode = data.itemCode || "";
+                                        const allCodes: string[] = [];
+
+                                        if (rawItemCodes && typeof rawItemCodes === "object" && !Array.isArray(rawItemCodes)) {
+                                          Object.values(rawItemCodes as Record<string, string>).forEach((c) => {
+                                            if (c && String(c).trim()) allCodes.push(String(c).trim());
+                                          });
+                                        } else if (Array.isArray(rawItemCodes)) {
+                                          rawItemCodes.forEach((entry: any) => {
+                                            const c = entry?.code ?? entry?.itemCode ?? entry;
+                                            if (c && String(c).trim()) allCodes.push(String(c).trim());
+                                          });
+                                        } else if (typeof rawItemCodes === "string" && rawItemCodes.trim()) {
+                                          rawItemCodes.split(",").forEach((c) => {
+                                            if (c.trim()) allCodes.push(c.trim());
+                                          });
+                                        }
+
+                                        if (allCodes.length === 0 && fallbackCode.trim()) {
+                                          allCodes.push(fallbackCode.trim());
+                                        }
+
+                                        const defaultSku = allCodes[0] || fallbackCode;
+                                        const allCodesText = allCodes.join(" ");
+
+                                        const tempSearchMetadata = (
+                                          data.name +
+                                          " " +
+                                          allCodesText +
+                                          " " +
+                                          rawSpecsText
+                                        ).toUpperCase();
+
                                         return {
                                           id: doc.id,
                                           title: data.name || "No Name",
-                                          price:
-                                            data.salePrice || data.regularPrice || 0,
+                                          price: data.salePrice || data.regularPrice || 0,
                                           description: specsHtml,
-                                          images: data.mainImage
-                                            ? [{ src: data.mainImage }]
-                                            : [],
-                                          skus: data.itemCode ? [data.itemCode] : [],
+                                          images: data.mainImage ? [{ src: data.mainImage }] : [],
+                                          skus: defaultSku ? [defaultSku] : [],
                                           discount: 0,
-                                          tempSearchMetadata: (
-                                            data.name +
-                                            " " +
-                                            (data.itemCode || "") +
-                                            " " +
-                                            rawSpecsText
-                                          ).toUpperCase(),
+                                          tempSearchMetadata,
                                         };
                                       })
                                       .filter((p) =>
                                         p.tempSearchMetadata.includes(searchUpper),
                                       );
-                                    setSearchResults(firebaseResults);
+
+                                    // Deduplicate by doc ID — same product can appear
+                                    // multiple times if Firebase returns duplicate snapshots
+                                    const seen = new Set<string>();
+                                    const dedupedResults = firebaseResults.filter((p) => {
+                                      if (seen.has(p.id)) return false;
+                                      seen.add(p.id);
+                                      return true;
+                                    });
+
+                                    setSearchResults(dedupedResults);
                                   }
                                 } catch (err) {
                                   console.error("Search error:", err);
@@ -3644,7 +3642,7 @@ ${payload.whtType && payload.whtType !== "none"
                                   setVatTypeState(v as "vat_inc" | "vat_exe" | "zero_rated");
                                   setDiscount(v === "vat_exe" ? 12 : 0);
                                 },
-                                onCancel: () => {}
+                                onCancel: () => { }
                               });
                             }}
                             className={`flex items-center gap-0.5 px-1 py-0.5 rounded transition-all ${vatTypeState === v ? "text-[#121212]" : "text-gray-300 hover:text-gray-500"}`}
@@ -3677,7 +3675,7 @@ ${payload.whtType && payload.whtType !== "none"
                                 description: explanation,
                                 example: example,
                                 onConfirm: () => setWhtTypeState(v as "none" | "wht_1" | "wht_2"),
-                                onCancel: () => {}
+                                onCancel: () => { }
                               });
                             }}
                             className={`flex items-center gap-0.5 px-1 py-0.5 rounded transition-all ${whtTypeState === v ? "text-[#121212]" : "text-gray-300 hover:text-gray-500"}`}
@@ -4043,7 +4041,7 @@ ${payload.whtType && payload.whtType !== "none"
                                               return copy;
                                             });
                                           },
-                                          onCancel: () => {}
+                                          onCancel: () => { }
                                         });
                                       }}
                                     >
@@ -4619,7 +4617,7 @@ ${payload.whtType && payload.whtType !== "none"
                 <span className="text-[11px] font-bold uppercase tracking-wider">Review Quotation</span>
               </Button>
 
-              {(ApprovedStatus === "Approved" || ApprovedStatus === "Approved By Sales Head") && !hasDeleted && !hasUnsavedChanges() && (
+              {(ApprovedStatus === "Approved" || ApprovedStatus === "Approved By Sales Head") && (
                 <>
                   <Button
                     type="button"
@@ -4685,59 +4683,185 @@ ${payload.whtType && payload.whtType !== "none"
         </DialogContent>
       </Dialog>
 
-      {/* PDF Download Options Modal */}
-      <Dialog open={pdfOptionsOpen} onOpenChange={setPdfOptionsOpen}>
-        <DialogContent className="max-w-[400px] w-[90vw] p-6 border-none bg-white shadow-2xl">
-          <DialogHeader>
-            <DialogTitle className="text-lg font-bold uppercase tracking-wider">Download PDF</DialogTitle>
-            <DialogDescription className="text-sm text-gray-500">
-              Select PDF format option
-            </DialogDescription>
-          </DialogHeader>
+      {/* ── NEW: 2-Step PDF Download Options Dialog ───────────────────────────── */}
+      <Dialog open={pdfOptionsOpen} onOpenChange={(open) => { if (!open) { setPdfOptionsOpen(false); setPdfStep(1); } }}>
+        <DialogContent className="max-w-[440px] w-[92vw] p-0 border-none bg-white shadow-2xl overflow-hidden rounded-xl">
 
-          <div className="py-4">
-            <RadioGroup
-              value={pdfOption}
-              onValueChange={(value) => setPdfOption(value as "with-discount" | "default-only")}
-              className="flex flex-col gap-3"
-            >
-              <div className={`flex items-center gap-3 p-3 border rounded cursor-pointer transition-colors ${pdfOption === "with-discount" ? "border-yellow-500 bg-yellow-50" : "border-gray-200 hover:border-gray-300"}`}>
-                <RadioGroupItem value="with-discount" id="pdf-with-discount" />
-                <label htmlFor="pdf-with-discount" className="flex-1 cursor-pointer">
-                  <div className="font-bold text-sm">With Discount</div>
-                  <div className="text-xs text-gray-500">Include discount % and discounted price columns</div>
-                </label>
-              </div>
-
-              <div className={`flex items-center gap-3 p-3 border rounded cursor-pointer transition-colors ${pdfOption === "default-only" ? "border-yellow-500 bg-yellow-50" : "border-gray-200 hover:border-gray-300"}`}>
-                <RadioGroupItem value="default-only" id="pdf-default-only" />
-                <label htmlFor="pdf-default-only" className="flex-1 cursor-pointer">
-                  <div className="font-bold text-sm">Default Only</div>
-                  <div className="text-xs text-gray-500">No discount columns - clean standard format</div>
-                </label>
-              </div>
-            </RadioGroup>
+          {/* Header */}
+          <div className="bg-[#121212] px-5 py-4 flex items-center justify-between">
+            <div>
+              <DialogTitle className="text-white text-sm font-black uppercase tracking-widest leading-tight">
+                Download PDF
+              </DialogTitle>
+              <p className="text-gray-400 text-[10px] mt-0.5 uppercase tracking-wider">
+                Step {pdfStep} of 2 — {pdfStep === 1 ? 'Pricing format' : 'Description layout'}
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-black border-2 transition-all ${pdfStep >= 1 ? 'bg-yellow-500 border-yellow-500 text-black' : 'border-gray-600 text-gray-600'}`}>1</div>
+              <div className={`w-8 h-px transition-all ${pdfStep >= 2 ? 'bg-yellow-500' : 'bg-gray-700'}`} />
+              <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-black border-2 transition-all ${pdfStep >= 2 ? 'bg-yellow-500 border-yellow-500 text-black' : 'border-gray-600 text-gray-600'}`}>2</div>
+            </div>
           </div>
 
-          <DialogFooter className="flex gap-2">
-            <Button
-              variant="outline"
-              onClick={() => setPdfOptionsOpen(false)}
-              className="rounded-none flex-1"
-            >
-              Cancel
-            </Button>
-            <Button
-              onClick={() => {
-                setPdfOptionsOpen(false);
-                DownloadPDF(pdfOption === "with-discount", showSummaryDiscounts);
-              }}
-              className="rounded-none flex-1 bg-yellow-600 hover:bg-yellow-700"
-            >
-              <FileText className="w-4 h-4 mr-2" />
-              Download
-            </Button>
-          </DialogFooter>
+          <div className="px-5 py-5">
+            {/* ── STEP 1: Pricing format ── */}
+            {pdfStep === 1 && (
+              <div className="space-y-3">
+                <p className="text-[11px] text-gray-500 uppercase font-bold tracking-wider mb-4">Choose pricing format</p>
+                <RadioGroup value={pdfOption} onValueChange={(value) => setPdfOption(value as "with-discount" | "default-only")} className="flex flex-col gap-3">
+
+                  {/* Default Only */}
+                  <label htmlFor="pdf-default-only"
+                    className={`flex items-start gap-3 p-3.5 border-2 rounded-lg cursor-pointer transition-all ${pdfOption === "default-only" ? "border-[#121212] bg-gray-50" : "border-gray-200 hover:border-gray-300"}`}>
+                    <RadioGroupItem value="default-only" id="pdf-default-only" className="mt-0.5 shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="font-black text-sm text-[#121212]">Default Only</span>
+                        <span className="text-[9px] bg-gray-100 text-gray-500 px-2 py-0.5 rounded font-bold uppercase tracking-wider">Standard</span>
+                      </div>
+                      <p className="text-[10px] text-gray-500 mt-1 leading-snug">Clean format — Unit Price and Total only. No discount columns visible to client.</p>
+                      <div className="mt-2 border border-gray-200 rounded overflow-hidden">
+                        <div className="grid grid-cols-[1fr_50px_60px] bg-gray-900 text-white text-[8px] font-bold uppercase">
+                          <div className="px-2 py-1">Product</div>
+                          <div className="px-2 py-1 text-right">Unit</div>
+                          <div className="px-2 py-1 text-right">Total</div>
+                        </div>
+                        <div className="grid grid-cols-[1fr_50px_60px] text-[9px]">
+                          <div className="px-2 py-1 truncate font-medium">LED Bulb E27</div>
+                          <div className="px-2 py-1 text-right">₱400</div>
+                          <div className="px-2 py-1 text-right font-bold">₱4,000</div>
+                        </div>
+                      </div>
+                    </div>
+                  </label>
+
+                  {/* With Discount */}
+                  <label htmlFor="pdf-with-discount"
+                    className={`flex items-start gap-3 p-3.5 border-2 rounded-lg cursor-pointer transition-all ${pdfOption === "with-discount" ? "border-[#121212] bg-gray-50" : "border-gray-200 hover:border-gray-300"}`}>
+                    <RadioGroupItem value="with-discount" id="pdf-with-discount" className="mt-0.5 shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="font-black text-sm text-[#121212]">With Discount</span>
+                        <span className="text-[9px] bg-yellow-100 text-yellow-700 px-2 py-0.5 rounded font-bold uppercase tracking-wider">Detailed</span>
+                      </div>
+                      <p className="text-[10px] text-gray-500 mt-1 leading-snug">Shows Discount %, Discounted Price alongside Unit Price — full transparency.</p>
+                      <div className="mt-2 border border-gray-200 rounded overflow-hidden">
+                        <div className="grid grid-cols-[1fr_40px_50px_60px_60px] bg-gray-900 text-white text-[8px] font-bold uppercase">
+                          <div className="px-2 py-1">Product</div>
+                          <div className="px-2 py-1 text-right">Unit</div>
+                          <div className="px-2 py-1 text-right text-yellow-400">Disc</div>
+                          <div className="px-2 py-1 text-right text-blue-300">Net</div>
+                          <div className="px-2 py-1 text-right">Total</div>
+                        </div>
+                        <div className="grid grid-cols-[1fr_40px_50px_60px_60px] text-[9px]">
+                          <div className="px-2 py-1 truncate font-medium">LED Bulb E27</div>
+                          <div className="px-2 py-1 text-right">₱500</div>
+                          <div className="px-2 py-1 text-right text-red-500 font-bold">20%</div>
+                          <div className="px-2 py-1 text-right text-blue-600 font-bold">₱400</div>
+                          <div className="px-2 py-1 text-right font-bold">₱4,000</div>
+                        </div>
+                      </div>
+                    </div>
+                  </label>
+                </RadioGroup>
+              </div>
+            )}
+
+            {/* ── STEP 2: Description layout ── */}
+            {pdfStep === 2 && (
+              <div className="space-y-3">
+                <p className="text-[11px] text-gray-500 uppercase font-bold tracking-wider mb-4">Choose description layout</p>
+
+                {/* Table layout */}
+                <label
+                  className={`flex items-start gap-3 p-3.5 border-2 rounded-lg cursor-pointer transition-all ${pdfDescriptionStyle === 'table' ? 'border-[#121212] bg-gray-50' : 'border-gray-200 hover:border-gray-300'}`}
+                  onClick={() => setPdfDescriptionStyle('table')}
+                >
+                  <div className={`w-4 h-4 mt-0.5 rounded-full border-2 flex items-center justify-center shrink-0 transition-all ${pdfDescriptionStyle === 'table' ? 'border-[#121212]' : 'border-gray-300'}`}>
+                    {pdfDescriptionStyle === 'table' && <div className="w-2 h-2 rounded-full bg-[#121212]" />}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="font-black text-sm text-[#121212]">Table Layout</span>
+                      <span className="text-[9px] bg-gray-100 text-gray-500 px-2 py-0.5 rounded font-bold uppercase tracking-wider">Original</span>
+                    </div>
+                    <p className="text-[10px] text-gray-500 mt-1 leading-snug">Specifications shown in structured tables with grouped sections — professional technical look.</p>
+                    <div className="mt-2 border border-gray-200 rounded overflow-hidden text-[8px]">
+                      <div className="bg-gray-900 text-white px-2 py-1 font-bold uppercase tracking-wider">Electrical Specs</div>
+                      <div className="grid grid-cols-2 border-b border-gray-100">
+                        <div className="px-2 py-1 bg-gray-50 font-bold border-r border-gray-100">Wattage</div>
+                        <div className="px-2 py-1">18W</div>
+                      </div>
+                      <div className="grid grid-cols-2">
+                        <div className="px-2 py-1 bg-gray-50 font-bold border-r border-gray-100">Voltage</div>
+                        <div className="px-2 py-1">220V</div>
+                      </div>
+                    </div>
+                  </div>
+                </label>
+
+                {/* Plain text layout */}
+                <label
+                  className={`flex items-start gap-3 p-3.5 border-2 rounded-lg cursor-pointer transition-all ${pdfDescriptionStyle === 'plain' ? 'border-[#121212] bg-gray-50' : 'border-gray-200 hover:border-gray-300'}`}
+                  onClick={() => setPdfDescriptionStyle('plain')}
+                >
+                  <div className={`w-4 h-4 mt-0.5 rounded-full border-2 flex items-center justify-center shrink-0 transition-all ${pdfDescriptionStyle === 'plain' ? 'border-[#121212]' : 'border-gray-300'}`}>
+                    {pdfDescriptionStyle === 'plain' && <div className="w-2 h-2 rounded-full bg-[#121212]" />}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="font-black text-sm text-[#121212]">Plain Text</span>
+                      <span className="text-[9px] bg-blue-100 text-blue-700 px-2 py-0.5 rounded font-bold uppercase tracking-wider">Compact</span>
+                    </div>
+                    <p className="text-[10px] text-gray-500 mt-1 leading-snug">Specifications as readable left-aligned text. Cleaner, more compact — saves vertical space.</p>
+                    <div className="mt-2 border border-gray-200 rounded p-2 text-[8px] bg-white text-left space-y-0.5">
+                      <div className="font-black uppercase text-gray-600 border-b border-gray-200 pb-0.5 mb-1">Electrical Specs</div>
+                      <div><span className="font-bold text-gray-700">Wattage:</span> <span className="text-gray-500">18W</span></div>
+                      <div><span className="font-bold text-gray-700">Voltage:</span> <span className="text-gray-500">220V</span></div>
+                    </div>
+                  </div>
+                </label>
+              </div>
+            )}
+          </div>
+
+          {/* Footer */}
+          <div className="px-5 py-4 bg-gray-50 border-t border-gray-100 flex items-center justify-between gap-2">
+            {pdfStep === 1 ? (
+              <>
+                <Button variant="outline" onClick={() => { setPdfOptionsOpen(false); setPdfStep(1); }} className="rounded-none h-10 px-5 border-2">
+                  Cancel
+                </Button>
+                <Button onClick={() => setPdfStep(2)} className="rounded-none h-10 px-6 bg-[#121212] hover:bg-gray-900 flex items-center gap-2">
+                  Next — Layout
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                  </svg>
+                </Button>
+              </>
+            ) : (
+              <>
+                <Button variant="outline" onClick={() => setPdfStep(1)} className="rounded-none h-10 px-5 border-2 flex items-center gap-2">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                  </svg>
+                  Back
+                </Button>
+                <Button
+                  onClick={() => {
+                    setPdfOptionsOpen(false);
+                    setPdfStep(1);
+                    DownloadPDF(pdfOption === "with-discount", showSummaryDiscounts, pdfDescriptionStyle);
+                  }}
+                  className="rounded-none h-10 px-6 bg-yellow-600 hover:bg-yellow-700 flex items-center gap-2"
+                >
+                  <FileText className="w-4 h-4" />
+                  Download PDF
+                </Button>
+              </>
+            )}
+          </div>
         </DialogContent>
       </Dialog>
 
@@ -5173,7 +5297,7 @@ ${payload.whtType && payload.whtType !== "none"
                     Example Preview
                   </p>
                 </div>
-                
+
                 {/* VAT Type Indicator */}
                 <div className="px-3 py-2 bg-white">
                   <div className="flex items-center gap-2 mb-2">
@@ -5184,7 +5308,7 @@ ${payload.whtType && payload.whtType !== "none"
                       <span className={`text-[9px] px-1.5 py-0.5 rounded ${confirmDialog?.title?.toLowerCase().includes('zero') ? 'bg-yellow-400 text-yellow-900 font-bold' : 'bg-gray-100 text-gray-400'}`}>ZERO-RATED</span>
                     </div>
                   </div>
-                  
+
                   {/* Mini Invoice Preview */}
                   <div className="space-y-1 text-[10px]">
                     <div className="flex justify-between py-0.5">
@@ -5290,20 +5414,20 @@ ${payload.whtType && payload.whtType !== "none"
                     Example Preview
                   </p>
                 </div>
-                
+
                 <div className="px-3 py-2 bg-white">
                   {/* Display Mode Indicator */}
                   <div className="flex items-center gap-2 mb-2">
                     <span className="text-[9px] font-bold text-gray-400 uppercase">Display Mode:</span>
                     <span className="text-[9px] px-1.5 py-0.5 rounded bg-purple-400 text-white font-bold">
-                      {confirmDialog?.title?.includes('Net Only') ? 'NET ONLY' : 
-                       confirmDialog?.title?.includes('Full') ? 'FULL' :
-                       confirmDialog?.title?.includes('Savings') ? 'SAVINGS' :
-                       confirmDialog?.title?.includes('Bundle') ? 'BUNDLE' :
-                       confirmDialog?.title?.includes('On Request') ? 'ON REQUEST' : 'CUSTOM'}
+                      {confirmDialog?.title?.includes('Net Only') ? 'NET ONLY' :
+                        confirmDialog?.title?.includes('Full') ? 'FULL' :
+                          confirmDialog?.title?.includes('Savings') ? 'SAVINGS' :
+                            confirmDialog?.title?.includes('Bundle') ? 'BUNDLE' :
+                              confirmDialog?.title?.includes('On Request') ? 'ON REQUEST' : 'CUSTOM'}
                     </span>
                   </div>
-                  
+
                   {/* Product Table Preview */}
                   <div className="overflow-hidden rounded border border-gray-200">
                     <table className="w-full text-[10px] border-collapse">
@@ -5349,7 +5473,7 @@ ${payload.whtType && payload.whtType !== "none"
                       </tbody>
                     </table>
                   </div>
-                  
+
                   {/* Client View Note */}
                   <div className="mt-2 text-[9px] text-purple-600 italic">
                     {confirmDialog?.title?.includes('Net Only') && 'Client sees: Only final net price, unit price hidden'}
@@ -5392,17 +5516,15 @@ ${payload.whtType && payload.whtType !== "none"
       {/* ── PREMIUM TOAST NOTIFICATION ──────────────────────────────────────── */}
       {toast.show && (
         <div className="fixed top-6 right-6 z-[100] animate-in slide-in-from-top-2 fade-in duration-300">
-          <div className={`group flex items-center gap-4 pl-2 pr-4 py-3 rounded-xl shadow-[0_8px_30px_rgb(0,0,0,0.12)] backdrop-blur-md border ${
-            toast.type === 'success' 
-              ? 'bg-gradient-to-r from-emerald-500/95 to-teal-500/95 border-white/20 text-white' 
+          <div className={`group flex items-center gap-4 pl-2 pr-4 py-3 rounded-xl shadow-[0_8px_30px_rgb(0,0,0,0.12)] backdrop-blur-md border ${toast.type === 'success'
+              ? 'bg-gradient-to-r from-emerald-500/95 to-teal-500/95 border-white/20 text-white'
               : 'bg-gradient-to-r from-rose-500/95 to-red-500/95 border-white/20 text-white'
-          }`}>
-            {/* Icon with glass effect */}
-            <div className={`flex-shrink-0 w-10 h-10 rounded-lg flex items-center justify-center shadow-lg ${
-              toast.type === 'success' 
-                ? 'bg-white/20 backdrop-blur-sm' 
-                : 'bg-white/20 backdrop-blur-sm'
             }`}>
+            {/* Icon with glass effect */}
+            <div className={`flex-shrink-0 w-10 h-10 rounded-lg flex items-center justify-center shadow-lg ${toast.type === 'success'
+                ? 'bg-white/20 backdrop-blur-sm'
+                : 'bg-white/20 backdrop-blur-sm'
+              }`}>
               {toast.type === 'success' ? (
                 <svg className="w-6 h-6 text-white drop-shadow-sm" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
@@ -5413,19 +5535,18 @@ ${payload.whtType && payload.whtType !== "none"
                 </svg>
               )}
             </div>
-            
+
             {/* Message */}
             <div className="flex-1 min-w-0">
-              <p className={`font-bold text-sm tracking-wide uppercase ${
-                toast.type === 'success' ? 'text-emerald-50' : 'text-rose-50'
-              }`}>
+              <p className={`font-bold text-sm tracking-wide uppercase ${toast.type === 'success' ? 'text-emerald-50' : 'text-rose-50'
+                }`}>
                 {toast.type === 'success' ? 'Success' : 'Error'}
               </p>
               <p className="text-white/95 text-sm font-medium truncate">{toast.message}</p>
             </div>
-            
+
             {/* Close button */}
-            <button 
+            <button
               onClick={() => setToast(prev => ({ ...prev, show: false }))}
               className="text-white/70 hover:text-white transition-colors p-1 hover:bg-white/10 rounded"
             >
@@ -5439,7 +5560,7 @@ ${payload.whtType && payload.whtType !== "none"
 
       {/* ── IMAGE PREVIEW DIALOG ─────────────────────────────────────────────── */}
       {isImageDialogOpen && fullImageUrl && (
-        <div 
+        <div
           className="fixed inset-0 bg-black/80 z-[100] flex items-center justify-center p-4"
           onClick={() => setIsImageDialogOpen(false)}
         >

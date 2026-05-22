@@ -3,7 +3,7 @@
 import React, { useEffect, useState, useCallback, useMemo } from "react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from "@/components/ui/dropdown-menu";
-import { AlertCircleIcon, CheckCircle2Icon, Eye, MoreVertical, FileX, Loader2 } from "lucide-react";
+import { AlertCircleIcon, CheckCircle2Icon, Eye, MoreVertical, FileX, Loader2, LoaderPinwheel } from "lucide-react";
 import { supabase } from "@/utils/supabase";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -40,34 +40,26 @@ interface Completed {
     contact_person: string;
     tsm_approved_status: string;
     quotation_status: string;
-    delivery_fee: string;
-
+    delivery_fee: number;
     quotation_subject: string;
-    quotation_vatable: string;
-    restocking_fee: string;
+    quotation_vatable: boolean;
+    restocking_fee: number;
     item_remarks?: string;
     vat_type: string;
-
-    // Signatories — Agent
     agent_name: string;
     agent_signature: string;
     agent_contact_number: string;
     agent_email_address: string;
-
-    // Signatories — TSM
     tsm_name: string;
     tsm_signature: string;
     tsm_contact_number: string;
     tsm_email_address: string;
     tsm_approval_date: string;
     tsm_remarks: string;
-
-    // Signatories — Manager
     manager_name: string;
 }
 
 interface CompletedProps {
-    referenceid: string;
     target_quota?: string;
     firstname?: string;
     lastname?: string;
@@ -80,9 +72,9 @@ interface CompletedProps {
     setDateCreatedFilterRangeAction: React.Dispatch<React.SetStateAction<any>>;
 }
 
+const ITEMS_PER_PAGE = 10;
+
 export const PendingQuotation: React.FC<CompletedProps> = ({
-    referenceid,
-    target_quota,
     firstname,
     lastname,
     email,
@@ -91,7 +83,6 @@ export const PendingQuotation: React.FC<CompletedProps> = ({
     managername,
     signature,
     dateCreatedFilterRange,
-    setDateCreatedFilterRangeAction,
 }) => {
     const toLocalYMD = (value: Date) => {
         const year = value.getFullYear();
@@ -102,24 +93,32 @@ export const PendingQuotation: React.FC<CompletedProps> = ({
 
     const [activities, setActivities] = useState<Completed[]>([]);
     const [loading, setLoading] = useState(false);
+    const [loadingMore, setLoadingMore] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [searchTerm, setSearchTerm] = useState("");
     const [agents, setAgents] = useState<any[]>([]);
     const [editItem, setEditItem] = useState<Completed | null>(null);
     const [editOpen, setEditOpen] = useState(false);
 
-    // -----------------------------
-    // FETCH ACTIVITIES
-    // FIX: Removed redundant client-side date filtering — the API already
-    //      handles it. When no range is selected, ALL records are returned.
-    // -----------------------------
-    const fetchActivities = useCallback(async () => {
-        if (!referenceid) {
-            setActivities([]);
-            return;
-        }
+    // Pagination state
+    const [currentPage, setCurrentPage] = useState(1);
+    const [totalCount, setTotalCount] = useState(0);
+    const [hasMore, setHasMore] = useState(false);
 
-        setLoading(true);
+    // Search debounce ref
+    const [searchInput, setSearchInput] = useState("");
+
+    // -----------------------------
+    // FETCH ACTIVITIES (paginated)
+    // -----------------------------
+    const fetchActivities = useCallback(async (page: number = 1, loadMore: boolean = false) => {
+
+        if (loadMore) {
+            setLoadingMore(true);
+        } else {
+            setLoading(true);
+            setCurrentPage(1);
+        }
         setError(null);
 
         try {
@@ -131,29 +130,42 @@ export const PendingQuotation: React.FC<CompletedProps> = ({
                 : null;
 
             const url = new URL("/api/activity/admin/quotation/fetch", window.location.origin);
-            url.searchParams.append("referenceid", referenceid);
-            // Date range is optional. If no dates are selected, API should return all records.
+            url.searchParams.append("statusType", "pending");
+            url.searchParams.append("page", String(page));
+            url.searchParams.append("limit", String(ITEMS_PER_PAGE));
+
+            if (searchTerm.trim()) {
+                url.searchParams.append("search", searchTerm.trim());
+            }
             if (from) url.searchParams.append("from", from);
             if (to) url.searchParams.append("to", to);
 
             const res = await fetch(url.toString());
             if (!res.ok) throw new Error("Failed to fetch activities");
             const data = await res.json();
-            setActivities(data.activities || []);
+
+            if (loadMore && page > 1) {
+                setActivities(prev => [...prev, ...(data.activities || [])]);
+            } else {
+                setActivities(data.activities || []);
+            }
+
+            setTotalCount(data.pagination?.totalCount || 0);
+            setHasMore(data.pagination?.hasMore || false);
+            setCurrentPage(data.pagination?.currentPage || page);
         } catch (err: any) {
             setError(err.message ?? "Unknown error");
+            if (!loadMore) setActivities([]);
         } finally {
             setLoading(false);
+            setLoadingMore(false);
         }
-    }, [referenceid, dateCreatedFilterRange]);
+    }, [searchTerm, dateCreatedFilterRange]);
 
     // -----------------------------
     // FETCH AGENTS
-    // FIX: Removed redundant `userDetails` wrapper — use `referenceid` directly.
     // -----------------------------
     useEffect(() => {
-        if (!referenceid) return;
-
         const fetchAgents = async () => {
             try {
                 const res = await fetch(`/api/fetch-all-users-admin`);
@@ -162,72 +174,59 @@ export const PendingQuotation: React.FC<CompletedProps> = ({
                 setAgents(Array.isArray(data) ? data : []);
             } catch (err) {
                 console.error(err);
-                // Do not block quotation list rendering when agent metadata fails.
                 setAgents([]);
             }
         };
-
         fetchAgents();
-    }, [referenceid]);
+    }, []);
 
     // -----------------------------
     // REAL-TIME SUBSCRIPTION
     // -----------------------------
     useEffect(() => {
-        if (!referenceid) return;
-
-        fetchActivities();
+        fetchActivities(1, false);
 
         const channel = supabase
-            .channel(`history-manager-${referenceid}`)
+            .channel(`history-admin-pending-all`)
             .on(
                 "postgres_changes",
                 {
                     event: "*",
                     schema: "public",
                     table: "history",
-                    filter: `manager=eq.${referenceid}`,
+                    filter: `tsm_approved_status=in.("Pending","Endorsed to Sales Head","Endorsed to Saleshead")`,
                 },
-                () => { fetchActivities(); }
+                () => { fetchActivities(1, false); }
             )
             .subscribe();
 
         return () => { supabase.removeChannel(channel); };
-    }, [referenceid, fetchActivities]);
+    }, [fetchActivities]);
 
     // -----------------------------
-    // SORT & FILTER
-    // FIX: Removed hasMeaningfulData — it was incorrectly hiding valid records
-    //      that had empty optional fields.
-    // FIX: Removed duplicate client-side date range filter — API handles this.
+    // SEARCH HANDLER
     // -----------------------------
-    const sortedActivities = useMemo(() => {
-        return [...activities].sort(
-            (a, b) =>
-                new Date(b.date_updated ?? b.date_created).getTime() -
-                new Date(a.date_updated ?? a.date_created).getTime()
-        );
-    }, [activities]);
+    const handleSearch = useCallback(() => {
+        setSearchTerm(searchInput);
+        setCurrentPage(1);
+        fetchActivities(1, false);
+    }, [searchInput, fetchActivities]);
 
-    const filteredActivities = useMemo(() => {
-        const search = searchTerm.toLowerCase().trim();
-        return sortedActivities
-            .filter((item) => {
-                const status = String(item.tsm_approved_status ?? "").trim().toLowerCase();
-                return (
-                    status === "pending" ||
-                    status === "endorsed to sales head" ||
-                    status === "endorsed to saleshead"
-                );
-            })
-            .filter((item) => String(item.type_activity ?? "").trim().toLowerCase() === "quotation preparation")
-            .filter((item) => {
-                if (!search) return true;
-                return Object.values(item).some(
-                    (val) => val !== null && val !== undefined && String(val).toLowerCase().includes(search)
-                );
-            });
-    }, [sortedActivities, searchTerm]);
+    // Trigger search on Enter key
+    const handleKeyDown = (e: React.KeyboardEvent) => {
+        if (e.key === 'Enter') {
+            handleSearch();
+        }
+    };
+
+    // -----------------------------
+    // LOAD MORE HANDLER
+    // -----------------------------
+    const handleLoadMore = useCallback(() => {
+        if (hasMore && !loadingMore) {
+            fetchActivities(currentPage + 1, true);
+        }
+    }, [currentPage, hasMore, loadingMore, fetchActivities]);
 
     // -----------------------------
     // AGENT MAP
@@ -284,43 +283,46 @@ export const PendingQuotation: React.FC<CompletedProps> = ({
 
     return (
         <>
-            {/* Search */}
-            <div className="mb-4 flex items-center gap-4">
+            {/* Search with Button */}
+            <div className="mb-4 flex items-center gap-2">
                 <Input
                     type="text"
-                    placeholder="Search..."
-                    className="input input-bordered input-sm flex-grow max-w-md rounded-none"
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
+                    placeholder="Search quotation number, company name..."
+                    className="input input-bordered input-sm flex-1 rounded-none"
+                    value={searchInput}
+                    onChange={(e) => setSearchInput(e.target.value)}
+                    onKeyDown={handleKeyDown}
                 />
+                <Button
+                    onClick={handleSearch}
+                    disabled={loading}
+                    className="h-9 px-4 rounded-none bg-zinc-900 hover:bg-zinc-800 text-white text-sm font-medium"
+                >
+                    {loading ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                        "Search"
+                    )}
+                </Button>
             </div>
 
             {/* Error */}
             {error && (
-                <Alert variant="destructive" className="flex flex-col space-y-4 p-4 text-xs">
+                <Alert variant="destructive" className="flex flex-col space-y-4 p-4 text-xs mb-4">
                     <div className="flex items-center space-x-3">
-                        <AlertCircleIcon className="h-6 w-6 text-red-600" />
+                        <AlertCircleIcon className="h-6 w-6 text-red-600 flex-shrink-0" />
                         <div>
-                            <AlertTitle>No Data Found or No Network Connection</AlertTitle>
+                            <AlertTitle>Error Loading Data</AlertTitle>
                             <AlertDescription className="text-xs">
-                                Please check your internet connection or try again later.
-                            </AlertDescription>
-                        </div>
-                    </div>
-                    <div className="flex items-center space-x-3">
-                        <CheckCircle2Icon className="h-6 w-6 text-green-600" />
-                        <div>
-                            <AlertTitle className="text-black">Create New Data</AlertTitle>
-                            <AlertDescription className="text-xs">
-                                You can start by adding new entries to populate your database.
+                                {error}
                             </AlertDescription>
                         </div>
                     </div>
                 </Alert>
             )}
 
-            {/* Loading State */}
-            {loading && (
+            {/* Loading State (initial only) */}
+            {loading && activities.length === 0 && (
                 <div className="flex flex-col items-center justify-center py-16 text-gray-400">
                     <Loader2 className="w-8 h-8 animate-spin mb-3 opacity-50" />
                     <p className="text-xs font-semibold uppercase tracking-wide">Loading quotations...</p>
@@ -328,28 +330,30 @@ export const PendingQuotation: React.FC<CompletedProps> = ({
             )}
 
             {/* Empty State */}
-            {!loading && !error && filteredActivities.length === 0 && (
+            {!loading && !error && activities.length === 0 && (
                 <div className="flex flex-col items-center justify-center py-16 text-gray-400 border border-dashed border-gray-200 rounded-sm bg-gray-50">
                     <FileX className="w-12 h-12 mb-3 opacity-25" />
                     <p className="text-sm font-bold uppercase tracking-wide text-gray-400">
-                        No Endorsed Quotations Found
+                        No Quotations Found
                     </p>
                     <p className="text-xs mt-1 text-gray-300">
                         {searchTerm
                             ? "Try adjusting your search term."
-                            : "There are currently no quotations endorsed to Sales Head."}
+                            : "There are currently no pending quotations."}
                     </p>
                 </div>
             )}
 
             {/* Total Records */}
-            {!loading && filteredActivities.length > 0 && (
-                <div className="mb-2 text-xs font-bold">Total Records: {filteredActivities.length}</div>
+            {!loading && activities.length > 0 && (
+                <div className="mb-2 text-xs font-bold">
+                    Showing {activities.length} of {totalCount} records
+                </div>
             )}
 
             {/* Table */}
-            {!loading && filteredActivities.length > 0 && (
-                <div className="overflow-auto space-y-8 custom-scrollbar">
+            {!loading && activities.length > 0 && (
+                <div className="overflow-auto space-y-4 custom-scrollbar">
                     <Table className="text-xs">
                         <TableHeader>
                             <TableRow>
@@ -368,11 +372,11 @@ export const PendingQuotation: React.FC<CompletedProps> = ({
                         </TableHeader>
 
                         <TableBody>
-                            {filteredActivities.map((item) => {
+                            {activities.map((item) => {
                                 const agent = agentMap[item.referenceid?.toLowerCase() ?? ""];
                                 return (
                                     <TableRow key={item.id}>
-                                        <TableCell className="text-center flex space-x-2 justify-center">
+                                        <TableCell className="text-center">
                                             <DropdownMenu>
                                                 <DropdownMenuTrigger asChild>
                                                     <Button className="rounded-none flex items-center gap-1 text-xs cursor-pointer">
@@ -437,7 +441,7 @@ export const PendingQuotation: React.FC<CompletedProps> = ({
                                         </TableCell>
 
                                         <TableCell className="text-left">
-                                        {displayValue(item.quotation_status)}
+                                            {displayValue(item.quotation_status)}
                                         </TableCell>
 
                                         <TableCell>
@@ -449,7 +453,6 @@ export const PendingQuotation: React.FC<CompletedProps> = ({
                                         <TableCell className="whitespace-nowrap font-mono">
                                             {formatDuration(item.start_date, item.end_date)}
                                         </TableCell>
-                                        
 
                                         <TableCell className="font-semibold">
                                             {item.company_name}
@@ -466,7 +469,6 @@ export const PendingQuotation: React.FC<CompletedProps> = ({
                                                     day: "2-digit",
                                                     hour: "2-digit",
                                                     minute: "2-digit",
-                                                    second: "2-digit",
                                                 })
                                                 : "-"}
                                             <br />
@@ -474,22 +476,42 @@ export const PendingQuotation: React.FC<CompletedProps> = ({
                                         </TableCell>
 
                                         <TableCell>{displayValue(item.contact_number)}</TableCell>
-
                                     </TableRow>
                                 );
                             })}
                         </TableBody>
                     </Table>
+
+                    {/* Load More Button */}
+                    {hasMore && (
+                        <div className="flex justify-center py-4 border-t">
+                            <Button
+                                onClick={handleLoadMore}
+                                disabled={loadingMore}
+                                className="h-9 px-6 rounded-none bg-zinc-900 hover:bg-zinc-800 text-white text-sm font-medium"
+                            >
+                                {loadingMore ? (
+                                    <LoaderPinwheel className="w-4 h-4 animate-spin mr-2" />
+                                ) : null}
+                                {loadingMore ? "Loading..." : "Load More"}
+                            </Button>
+                        </div>
+                    )}
                 </div>
             )}
 
             {/* Edit Dialog */}
             {editOpen && editItem && (
                 <TaskListEditDialog
-                    item={editItem}
+                    item={{
+                        ...editItem,
+                        restocking_fee: String(editItem.restocking_fee ?? ""),
+                        quotation_vatable: String(editItem.quotation_vatable ?? ""),
+                        delivery_fee: String(editItem.delivery_fee ?? "")
+                    } as any}
                     onClose={closeEditDialog}
                     onSave={() => {
-                        fetchActivities();
+                        fetchActivities(1, false);
                         closeEditDialog();
                     }}
                     firstname={firstname}
@@ -507,8 +529,8 @@ export const PendingQuotation: React.FC<CompletedProps> = ({
                         contact_person: editItem.contact_person,
                     }}
                     vatType={editItem.vat_type}
-                    restockingFee={editItem.restocking_fee ?? ""}
-                    whtType={editItem.quotation_vatable ?? "none"}
+                    restockingFee={String(editItem.restocking_fee ?? "")}
+                    whtType={String(editItem.quotation_vatable ?? "none")}
                     quotationSubject={editItem.quotation_subject ?? "For Quotation"}
                     agentName={editItem.agent_name}
                     agentSignature={editItem.agent_signature}
@@ -519,7 +541,7 @@ export const PendingQuotation: React.FC<CompletedProps> = ({
                     tsmContactNumber={editItem.tsm_contact_number}
                     tsmEmailAddress={editItem.tsm_email_address}
                     managerName={editItem.manager_name}
-                    deliveryFee={editItem.delivery_fee}
+                    deliveryFee={String(editItem.delivery_fee ?? "")}
                 />
             )}
         </>

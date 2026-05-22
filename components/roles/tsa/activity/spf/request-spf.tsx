@@ -61,6 +61,8 @@ interface SPFRecord {
     item_qty?: string;
     spf_creation_id?: number;
     tin_no?: string;
+    date_updated?: string;
+    created_at?: string;
 }
 
 interface SPFProps {
@@ -254,7 +256,22 @@ const SPF: React.FC<SPFProps> = ({ referenceid, tsm, manager, prepared_by }) => 
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [accountsLoading, setAccountsLoading] = useState(false);
+    // SPF Records search
     const [searchTerm, setSearchTerm] = useState("");
+    const searchTermRef = useRef(searchTerm);
+
+    // Accounts search
+    const [accountsSearchTerm, setAccountsSearchTerm] = useState("");
+    const accountsSearchTermRef = useRef(accountsSearchTerm);
+
+    // Update refs when search terms change
+    useEffect(() => {
+        searchTermRef.current = searchTerm;
+    }, [searchTerm]);
+
+    useEffect(() => {
+        accountsSearchTermRef.current = accountsSearchTerm;
+    }, [accountsSearchTerm]);
 
     // Set search term if highlight is present
     useEffect(() => {
@@ -263,10 +280,21 @@ const SPF: React.FC<SPFProps> = ({ referenceid, tsm, manager, prepared_by }) => 
         }
     }, [highlight]);
 
-    // Pagination
-    const [accountsPage, setAccountsPage] = useState(1);
+    // SPF Records pagination state
     const [recordsPage, setRecordsPage] = useState(1);
-    const ITEMS_PER_PAGE = 20;
+    const [itemsPerPage] = useState(10); // Default to 10 items per page
+    const [totalCount, setTotalCount] = useState(0);
+    const [totalPages, setTotalPages] = useState(0);
+    const [hasMore, setHasMore] = useState(false);
+    const [loadingMore, setLoadingMore] = useState(false);
+
+    // Accounts pagination state
+    const [accountsPage, setAccountsPage] = useState(1);
+    const [accountsPerPage] = useState(20); // Initial 20 accounts
+    const [accountsLoadMoreCount] = useState(10); // Load 10 more each time
+    const [accountsTotalCount, setAccountsTotalCount] = useState(0);
+    const [accountsHasMore, setAccountsHasMore] = useState(false);
+    const [accountsLoadingMore, setAccountsLoadingMore] = useState(false);
 
     // Dialog state
     const [dialogOpen, setDialogOpen] = useState(false);
@@ -284,57 +312,151 @@ const SPF: React.FC<SPFProps> = ({ referenceid, tsm, manager, prepared_by }) => 
 
     const endTimerRef = useRef<number | null>(null);
 
-    // ─── Fetch accounts (all, not paginated on API level) ────────────────────────
+    // ─── Fetch accounts (paginated with search) ────────────────────────
+
+    const fetchAccounts = useCallback(async (page: number = 1, loadMore: boolean = false) => {
+        if (!referenceid) return;
+
+        if (loadMore) {
+            setAccountsLoadingMore(true);
+        } else {
+            setAccountsLoading(true);
+        }
+
+        try {
+            const url = new URL("/api/com-fetch-cluster-account", window.location.origin);
+            url.searchParams.append("referenceid", referenceid);
+            url.searchParams.append("page", String(page));
+            // First page: 20 items, subsequent pages: 10 more
+            const limit = page === 1 ? accountsPerPage : accountsLoadMoreCount;
+            url.searchParams.append("limit", String(limit));
+
+            // Add search term if present
+            if (accountsSearchTermRef.current.trim()) {
+                url.searchParams.append("search", accountsSearchTermRef.current.trim());
+            }
+
+            const res = await fetch(url.toString());
+            if (!res.ok) throw new Error("Failed to fetch accounts");
+            const data = await res.json();
+
+            const active = (data.data || []).filter(
+                (a: any) => a.status?.toLowerCase() === "active"
+            );
+
+            if (loadMore && page > 1) {
+                // Append new data for load more
+                setAllAccounts(prev => [...prev, ...active]);
+            } else {
+                // Replace data for initial load or new search
+                setAllAccounts(active);
+            }
+
+            // Update pagination info
+            setAccountsTotalCount(data.totalCount || 0);
+            setAccountsHasMore(data.hasMore || false);
+            setAccountsPage(page);
+        } catch (err) {
+            console.error("Accounts fetch error:", err);
+            if (!loadMore) setAllAccounts([]);
+        } finally {
+            setAccountsLoading(false);
+            setAccountsLoadingMore(false);
+        }
+    }, [referenceid, accountsPerPage, accountsLoadMoreCount]);
 
     useEffect(() => {
-        if (!referenceid) return;
-        setAccountsLoading(true);
-        fetch(`/api/com-fetch-cluster-account?referenceid=${encodeURIComponent(referenceid)}`)
-            .then((r) => r.json())
-            .then((data) => {
-                const active = (data.data || []).filter(
-                    (a: any) => a.status?.toLowerCase() === "active"
-                );
-                setAllAccounts(active);
-            })
-            .catch(console.error)
-            .finally(() => setAccountsLoading(false));
-    }, [referenceid]);
+        fetchAccounts();
+    }, [referenceid, fetchAccounts]);
 
-    // ─── Fetch SPF records (all) ─────────────────────────────────────────────────
+    // Accounts search handler - only fetches when search button is clicked
+    const handleAccountsSearch = useCallback(() => {
+        setAccountsPage(1);
+        fetchAccounts(1, false);
+    }, [fetchAccounts]);
 
-    const fetchActivities = useCallback(async () => {
+    // Accounts load more handler
+    const handleAccountsLoadMore = useCallback(() => {
+        if (accountsHasMore && !accountsLoadingMore) {
+            const nextPage = accountsPage + 1;
+            fetchAccounts(nextPage, true);
+        }
+    }, [accountsPage, accountsHasMore, accountsLoadingMore, fetchAccounts]);
+
+    // ─── Fetch SPF records (paginated) ─────────────────────────────────────────────
+
+    const fetchActivities = useCallback(async (page: number = 1, loadMore: boolean = false) => {
         if (!referenceid) return;
-        setLoading(true); setError(null);
+
+        // Set appropriate loading state
+        if (loadMore) {
+            setLoadingMore(true);
+        } else {
+            setLoading(true);
+        }
+        setError(null);
+
         try {
-            const res = await fetch(
-                `/api/activity/tsa/spf/fetch?referenceid=${encodeURIComponent(referenceid)}`
-            );
+            const url = new URL("/api/activity/tsa/spf/fetch", window.location.origin);
+            url.searchParams.append("referenceid", referenceid);
+            url.searchParams.append("page", String(page));
+            url.searchParams.append("limit", String(itemsPerPage));
+
+            // Add search term if present
+            if (searchTermRef.current.trim()) {
+                url.searchParams.append("search", searchTermRef.current.trim());
+            }
+
+            const res = await fetch(url.toString());
             if (!res.ok) throw new Error("Failed to fetch SPF records");
             const data = await res.json();
-            setAllActivities(data.activities || []);
+
+            // Sort by date_updated descending (most recent first)
+            const sortedActivities = (data.activities || []).sort((a: SPFRecord, b: SPFRecord) => {
+                const dateA = new Date(a.date_updated || a.created_at || a.id).getTime();
+                const dateB = new Date(b.date_updated || b.created_at || b.id).getTime();
+                return dateB - dateA; // Descending order
+            });
+
+            if (loadMore && page > 1) {
+                // Append new data for load more
+                setAllActivities(prev => [...prev, ...sortedActivities]);
+            } else {
+                // Replace data for initial load or new search
+                setAllActivities(sortedActivities);
+            }
+
+            // Update pagination info
+            setTotalCount(data.totalCount || 0);
+            setTotalPages(data.totalPages || 0);
+            setHasMore(data.hasMore || false);
+            setRecordsPage(page);
         } catch (err: any) {
             setError(err.message);
+            setAllActivities([]);
         } finally {
             setLoading(false);
+            setLoadingMore(false);
         }
-    }, [referenceid]);
+    }, [referenceid, itemsPerPage]);
 
     useEffect(() => {
         fetchActivities();
         const channel = supabase
             .channel(`spf-${referenceid}`)
-            .on("postgres_changes",
-                { event: "*", schema: "public", table: "spf", filter: `referenceid=eq.${referenceid}` },
-                fetchActivities
+            .on(
+                'postgres_changes',
+                { event: '*', schema: 'public', table: 'spf', filter: `referenceid=eq.${referenceid}` },
+                () => fetchActivities(1, false)
             )
-            .on("postgres_changes",
-                { event: "*", schema: "public", table: "spf_creation" },
-                fetchActivities
+            .on(
+                'postgres_changes',
+                { event: '*', schema: 'public', table: 'spf_creation' },
+                () => fetchActivities(1, false)
             )
             .subscribe();
         return () => { supabase.removeChannel(channel); };
-    }, [referenceid, fetchActivities]);
+    }, [referenceid]);
 
     // ─── SPF number generator ────────────────────────────────────────────────────
 
@@ -360,40 +482,28 @@ const SPF: React.FC<SPFProps> = ({ referenceid, tsm, manager, prepared_by }) => 
         }
     }, []);
 
-    // ─── Filter data based on search (searches entire dataset) ────────────────────
+    // Note: Filtering and pagination now handled by API for better performance
+    // allActivities array contains already filtered and paginated data from the server
 
-    const searchLower = searchTerm.toLowerCase();
-    const filteredAccounts = useMemo(() =>
-        allAccounts.filter(
-            (a) =>
-                (a.company_name || "").toLowerCase().includes(searchLower) ||
-                (a.contact_person || "").toLowerCase().includes(searchLower) ||
-                (a.address || "").toLowerCase().includes(searchLower)
-        ),
-        [allAccounts, searchLower]
-    );
+    // Search handler - only fetches when search button is clicked
+    const handleSearch = useCallback(() => {
+        setRecordsPage(1);
+        fetchActivities(1, false);
+    }, [fetchActivities]);
 
-    const filteredActivities = useMemo(() =>
-        allActivities.filter(
-            (a) =>
-                (a.customer_name || "").toLowerCase().includes(searchLower) ||
-                (a.contact_person || "").toLowerCase().includes(searchLower) ||
-                (a.spf_number || "").toLowerCase().includes(searchLower)
-        ),
-        [allActivities, searchLower]
-    );
+    // Load more handler
+    const handleLoadMore = useCallback(() => {
+        if (hasMore && !loadingMore) {
+            const nextPage = recordsPage + 1;
+            fetchActivities(nextPage, true);
+        }
+    }, [recordsPage, hasMore, loadingMore, fetchActivities]);
 
-    // ─── Paginate filtered data ────────────────────────────────────────────────────
-
-    const paginatedAccounts = useMemo(() => {
-        const start = (accountsPage - 1) * ITEMS_PER_PAGE;
-        return filteredAccounts.slice(start, start + ITEMS_PER_PAGE);
-    }, [filteredAccounts, accountsPage]);
-
-    const paginatedActivities = useMemo(() => {
-        const start = (recordsPage - 1) * ITEMS_PER_PAGE;
-        return filteredActivities.slice(start, start + ITEMS_PER_PAGE);
-    }, [filteredActivities, recordsPage]);
+    // Reset page when search term changes
+    useEffect(() => {
+        setRecordsPage(1);
+        // The search will be triggered by the search button click
+    }, [searchTerm]);
 
     // ─── Open edit ───────────────────────────────────────────────────────────────
 
@@ -559,17 +669,6 @@ const SPF: React.FC<SPFProps> = ({ referenceid, tsm, manager, prepared_by }) => 
     return (
         <div className="space-y-4">
 
-            {/* ── Search bar ──────────────────────────────────────────────────── */}
-            <div className="relative max-w-md">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400 pointer-events-none" />
-                <Input
-                    className="pl-9 h-10 text-sm rounded-none border-zinc-200 focus:ring-0 focus:border-zinc-400 transition-all"
-                    placeholder="Search accounts, customers, SPF numbers, contacts…"
-                    value={searchTerm}
-                    onChange={(e) => { setSearchTerm(e.target.value); setAccountsPage(1); setRecordsPage(1); }}
-                />
-            </div>
-
             <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 items-start">
 
                 {/* ── Accounts panel ──────────────────────────────────────────────── */}
@@ -581,8 +680,48 @@ const SPF: React.FC<SPFProps> = ({ referenceid, tsm, manager, prepared_by }) => 
                                 Accounts
                             </h3>
                             <p className="text-[11px] text-zinc-400">
-                                {filteredAccounts.length} of {allAccounts.length}
+                                {allAccounts.filter((acc: Account) => {
+                                    if (!accountsSearchTerm.trim()) return true;
+                                    const search = accountsSearchTerm.toLowerCase();
+                                    return (
+                                        acc.company_name?.toLowerCase().includes(search) ||
+                                        acc.contact_person?.toLowerCase().includes(search) ||
+                                        acc.address?.toLowerCase().includes(search)
+                                    );
+                                }).length} shown / {accountsTotalCount || allAccounts.length} total accounts
+                                {accountsSearchTerm.trim() && " (filtered)"}
                             </p>
+                        </div>
+                    </div>
+
+                    {/* Accounts Search Bar */}
+                    <div className="p-3 border-b border-zinc-100">
+                        <div className="relative flex gap-2">
+                            <div className="relative flex-1">
+                                <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-zinc-400 pointer-events-none" />
+                                <Input
+                                    className="pl-7 h-8 text-xs rounded-none border-zinc-200 focus:ring-0 focus:border-zinc-400 transition-all"
+                                    placeholder="Search company name..."
+                                    value={accountsSearchTerm}
+                                    onChange={(e) => setAccountsSearchTerm(e.target.value)}
+                                    onKeyDown={(e) => {
+                                        if (e.key === 'Enter') {
+                                            handleAccountsSearch();
+                                        }
+                                    }}
+                                />
+                            </div>
+                            <Button
+                                onClick={handleAccountsSearch}
+                                disabled={accountsLoading}
+                                className="h-8 px-3 rounded-none bg-zinc-900 hover:bg-zinc-800 text-white text-xs font-medium"
+                            >
+                                {accountsLoading ? (
+                                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                ) : (
+                                    "Search"
+                                )}
+                            </Button>
                         </div>
                     </div>
 
@@ -591,20 +730,31 @@ const SPF: React.FC<SPFProps> = ({ referenceid, tsm, manager, prepared_by }) => 
                             <div className="flex items-center justify-center py-12 text-zinc-400">
                                 <Loader2 className="w-5 h-5 animate-spin" />
                             </div>
-                        ) : paginatedAccounts.length === 0 ? (
+                        ) : allAccounts.length === 0 ? (
                             <div className="flex flex-col items-center justify-center py-16 text-zinc-400 gap-2 px-4">
                                 <Building2 className="w-10 h-10 opacity-20" />
                                 <p className="text-xs font-semibold text-center">No accounts found</p>
                             </div>
                         ) : (
-                            paginatedAccounts.map((acc, i) => (
+                            allAccounts
+                                .filter((acc: Account) => {
+                                    // If searching, only show matching accounts
+                                    if (!accountsSearchTerm.trim()) return true;
+                                    const search = accountsSearchTerm.toLowerCase();
+                                    return (
+                                        acc.company_name?.toLowerCase().includes(search) ||
+                                        acc.contact_person?.toLowerCase().includes(search) ||
+                                        acc.address?.toLowerCase().includes(search)
+                                    );
+                                })
+                                .map((acc: Account, i: number) => (
                                 <div key={acc.id || i} className="p-3 hover:bg-zinc-50 transition-colors">
                                     <div className="flex items-start justify-between gap-2 mb-2">
                                         <div className="min-w-0 flex-1">
                                             <h4 className="text-xs font-bold text-zinc-800 truncate">
                                                 {acc.company_name}
                                             </h4>
-                                            <p className="text-[11px] text-zinc-500 truncate">
+                                            <p className="text-[11px] text-zinc-500 truncate uppercase">
                                                 {acc.contact_person}
                                             </p>
                                         </div>
@@ -617,7 +767,7 @@ const SPF: React.FC<SPFProps> = ({ referenceid, tsm, manager, prepared_by }) => 
                                             <PlusCircle className="w-3 h-3" /> Create
                                         </Button>
                                     </div>
-                                    <p className="text-[10px] text-zinc-400 truncate">
+                                    <p className="text-[10px] text-zinc-400 truncate uppercase">
                                         {acc.address}
                                     </p>
                                 </div>
@@ -625,13 +775,24 @@ const SPF: React.FC<SPFProps> = ({ referenceid, tsm, manager, prepared_by }) => 
                         )}
                     </div>
 
-                    {filteredAccounts.length > ITEMS_PER_PAGE && (
-                        <Pagination
-                            total={filteredAccounts.length}
-                            current={accountsPage}
-                            perPage={ITEMS_PER_PAGE}
-                            onPageChange={setAccountsPage}
-                        />
+                    {/* Accounts Load More Button */}
+                    {accountsHasMore && (
+                        <div className="px-3 py-3 border-t border-zinc-100 bg-zinc-50/50 flex justify-center">
+                            <Button
+                                onClick={handleAccountsLoadMore}
+                                disabled={accountsLoadingMore}
+                                className="h-8 px-4 rounded-none bg-zinc-900 hover:bg-zinc-800 text-white text-xs font-medium"
+                            >
+                                {accountsLoadingMore ? (
+                                    <>
+                                        <Loader2 className="h-3.5 w-3.5 animate-spin mr-2" />
+                                        Loading...
+                                    </>
+                                ) : (
+                                    "Load More"
+                                )}
+                            </Button>
+                        </div>
                     )}
                 </div>
 
@@ -639,18 +800,51 @@ const SPF: React.FC<SPFProps> = ({ referenceid, tsm, manager, prepared_by }) => 
                 <div className="col-span-3 border border-zinc-200 bg-white rounded-none overflow-hidden shadow-sm flex flex-col">
                     <div className="flex items-center gap-3 px-4 py-3 border-b border-zinc-100 bg-zinc-50/50">
                         <FileText className="w-4 h-4 text-zinc-400" />
-                        <div className="flex-1">
+                        <div className="flex-1 min-w-0">
                             <h3 className="text-xs font-bold uppercase tracking-widest text-zinc-500">
                                 SPF Records
                             </h3>
                             <p className="text-[11px] text-zinc-400">
-                                {filteredActivities.length} of {allActivities.length}
+                                {allActivities.length} records
+                                {totalCount > allActivities.length && (
+                                    <span className="text-[10px] text-zinc-400 ml-2">
+                                        Showing {allActivities.length} of {totalCount} total
+                                    </span>
+                                )}
                             </p>
+                        </div>
+                        {/* SPF Records Search Bar */}
+                        <div className="relative flex gap-2 max-w-xs">
+                            <div className="relative flex-1">
+                                <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-zinc-400 pointer-events-none" />
+                                <Input
+                                    className="pl-7 h-8 text-xs rounded-none border-zinc-200 focus:ring-0 focus:border-zinc-400 transition-all"
+                                    placeholder="Search SPF records..."
+                                    value={searchTerm}
+                                    onChange={(e) => setSearchTerm(e.target.value)}
+                                    onKeyDown={(e) => {
+                                        if (e.key === 'Enter') {
+                                            handleSearch();
+                                        }
+                                    }}
+                                />
+                            </div>
+                            <Button
+                                onClick={handleSearch}
+                                disabled={loading}
+                                className="h-8 px-3 rounded-none bg-zinc-900 hover:bg-zinc-800 text-white text-xs font-medium"
+                            >
+                                {loading ? (
+                                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                ) : (
+                                    "Search"
+                                )}
+                            </Button>
                         </div>
                     </div>
 
                     <div className="flex-1 overflow-x-auto">
-                        {paginatedActivities.length === 0 ? (
+                        {allActivities.length === 0 ? (
                             <div className="flex flex-col items-center justify-center py-20 text-zinc-400 gap-2">
                                 <FileText className="w-12 h-12 opacity-20" />
                                 <p className="text-sm font-semibold uppercase tracking-wide">
@@ -675,7 +869,7 @@ const SPF: React.FC<SPFProps> = ({ referenceid, tsm, manager, prepared_by }) => 
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
-                                    {paginatedActivities.map((item, idx) => {
+                                    {allActivities.map((item: SPFRecord, idx: number) => {
                                         const isHighlighted = highlight === item.spf_number;
                                         return (
                                             <TableRow key={item.id}
@@ -738,14 +932,25 @@ const SPF: React.FC<SPFProps> = ({ referenceid, tsm, manager, prepared_by }) => 
                             </Table>
                         )}
                     </div>
-
-                    {filteredActivities.length > ITEMS_PER_PAGE && (
-                        <Pagination
-                            total={filteredActivities.length}
-                            current={recordsPage}
-                            perPage={ITEMS_PER_PAGE}
-                            onPageChange={setRecordsPage}
-                        />
+                    
+                    {/* Load More Button */}
+                    {hasMore && (
+                        <div className="px-4 py-3 border-t border-zinc-100 bg-zinc-50/50 flex justify-center">
+                            <Button
+                                onClick={handleLoadMore}
+                                disabled={loadingMore}
+                                className="h-9 px-6 rounded-none bg-zinc-900 hover:bg-zinc-800 text-white text-sm font-medium"
+                            >
+                                {loadingMore ? (
+                                    <>
+                                        <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                                        Loading...
+                                    </>
+                                ) : (
+                                    "Load More"
+                                )}
+                            </Button>
+                        </div>
                     )}
                 </div>
             </div>

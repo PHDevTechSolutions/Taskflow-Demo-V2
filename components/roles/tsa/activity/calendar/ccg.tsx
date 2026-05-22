@@ -37,17 +37,20 @@ import {
 
 interface CCGItem {
   id: number;
-  activity_reference_number: string;
+  activity_reference_number?: string;
   referenceid: string;
   tsm: string;
   manager: string;
   type_activity?: string;
   date_updated: string;
+  date_created?: string;
   start_date?: string;
   end_date?: string;
-  status: string;
-  company_name: string;
-  remarks: string;
+  status?: string;
+  company_name?: string;
+  remarks?: string;
+  // source discriminator added by the API (normalized)
+  _source?: "history" | "meetings" | "documentation";
 }
 
 interface Account {
@@ -157,12 +160,11 @@ function calculateDuration(startDate: Date, endDate: Date): string {
 // ─── Event Card ───────────────────────────────────────────────────────────────
 
 const EventCard: React.FC<{ ev: CCGItem }> = ({ ev }) => {
+  const isDocumentation = ev._source === "documentation";
   const isMeeting = ev.type_activity === "Meeting" && ev.start_date && ev.end_date;
   const statusClass =
-    STATUS_STYLES[ev.status] ?? "bg-slate-100 text-slate-600 border-slate-200";
+    STATUS_STYLES[ev.status ?? ""] ?? "bg-slate-100 text-slate-600 border-slate-200";
 
-  // For meetings: show start and end time
-  // For activities: show duration between start_date and end_date if available
   let timeDisplay = null;
 
   if (isMeeting) {
@@ -188,8 +190,7 @@ const EventCard: React.FC<{ ev: CCGItem }> = ({ ev }) => {
       );
     }
   } else {
-    // Regular activity: show end_date time (no date_updated!)
-    const eventDate = parseDate(ev.end_date || ev.start_date);
+    const eventDate = parseDate(ev.end_date || ev.start_date || (isDocumentation ? ev.date_created : undefined));
     if (eventDate) {
       timeDisplay = (
         <span className="flex items-center gap-1 text-[10px] text-slate-400 font-medium">
@@ -201,14 +202,21 @@ const EventCard: React.FC<{ ev: CCGItem }> = ({ ev }) => {
   }
 
   return (
-    <div className="group relative rounded-xl border border-green-400 bg-white px-4 py-3 shadow-sm hover:shadow-md transition-all duration-150">
+    <div className={`group relative rounded-xl border bg-white px-4 py-3 shadow-sm hover:shadow-md transition-all duration-150 ${isDocumentation ? "border-sky-400" : "border-green-400"}`}>
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
-          <p className="text-xs font-bold text-slate-800 truncate">
-            {ev.company_name || "—"}
-          </p>
+          <div className="flex items-center gap-1.5">
+            {isDocumentation && (
+              <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-sm bg-sky-100 text-sky-700 border border-sky-200 shrink-0">
+                Doc
+              </span>
+            )}
+            <p className="text-xs font-bold text-slate-800 truncate">
+              {ev.company_name || "—"}
+            </p>
+          </div>
           <p className="text-[11px] text-slate-500 mt-0.5 truncate">
-            {ev.type_activity ?? ev.activity_reference_number}
+            {ev.type_activity ?? ev.activity_reference_number ?? "—"}
           </p>
           {ev.remarks && (
             <p className="text-[11px] text-slate-400 mt-1 line-clamp-2 capitalize">
@@ -218,16 +226,17 @@ const EventCard: React.FC<{ ev: CCGItem }> = ({ ev }) => {
         </div>
         <div className="flex flex-col items-end gap-1.5 shrink-0">
           {!isMeeting && timeDisplay}
-          <span
-            className={`text-[10px] px-2 py-0.5 rounded-full border font-semibold ${statusClass}`}
-          >
-            {ev.status || "—"}
-          </span>
+          {!isDocumentation && (
+            <span
+              className={`text-[10px] px-2 py-0.5 rounded-full border font-semibold ${statusClass}`}
+            >
+              {ev.status || "—"}
+            </span>
+          )}
         </div>
       </div>
-      {/* Time display for meetings shown below */}
       {isMeeting && timeDisplay && (
-        <div className="mt-2 pt-2 border-t border-green-100">
+        <div className={`mt-2 pt-2 border-t ${isDocumentation ? "border-sky-100" : "border-green-100"}`}>
           {timeDisplay}
         </div>
       )}
@@ -356,9 +365,49 @@ export const CCG: React.FC<{
       )
       .subscribe();
 
+    const documentationChannel = supabase
+      .channel(`public:documentation:referenceid=eq.${referenceid}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "documentation",
+          filter: `referenceid=eq.${referenceid}`,
+        },
+        (payload: any) => {
+          // Normalize documentation records to match CCGItem shape
+          const normalize = (rec: any): CCGItem => ({
+            ...rec,
+            date_updated: rec.date_created,
+            _source: "documentation" as const,
+          });
+          const newRec = payload.new ? normalize(payload.new) : null;
+          const oldRec = payload.old as CCGItem;
+          setActivities((curr) => {
+            switch (payload.eventType) {
+              case "INSERT":
+                return newRec && curr.some((a) => a.id === newRec.id && a._source === "documentation")
+                  ? curr
+                  : newRec ? [...curr, newRec] : curr;
+              case "UPDATE":
+                return newRec
+                  ? curr.map((a) => (a.id === newRec.id && a._source === "documentation" ? newRec : a))
+                  : curr;
+              case "DELETE":
+                return curr.filter((a) => !(a.id === oldRec.id && a._source === "documentation"));
+              default:
+                return curr;
+            }
+          });
+        }
+      )
+      .subscribe();
+
     return () => {
       supabase.removeChannel(historyChannel);
       supabase.removeChannel(meetingsChannel);
+      supabase.removeChannel(documentationChannel);
     };
   }, [referenceid, fetchActivities]);
 
@@ -367,9 +416,14 @@ export const CCG: React.FC<{
   const sortedActivities = useMemo(
     () =>
       [...activities].sort((a, b) => {
-        // Sort by end_date (or date_updated as fallback)
-        const aDate = parseDate(a.end_date || a.date_updated);
-        const bDate = parseDate(b.end_date || b.date_updated);
+        const aDateStr = a._source === "documentation"
+          ? (a.date_created || a.date_updated)
+          : (a.end_date || a.date_updated);
+        const bDateStr = b._source === "documentation"
+          ? (b.date_created || b.date_updated)
+          : (b.end_date || b.date_updated);
+        const aDate = parseDate(aDateStr);
+        const bDate = parseDate(bDateStr);
         if (!aDate || !bDate) return 0;
         return bDate.getTime() - aDate.getTime();
       }),
@@ -379,7 +433,11 @@ export const CCG: React.FC<{
   const statusOptions = useMemo(
     () =>
       Array.from(
-        new Set(sortedActivities.map((a) => a.status).filter(Boolean))
+        new Set(
+          sortedActivities
+            .map((a) => a.status)
+            .filter((s): s is string => typeof s === "string" && s.length > 0)
+        )
       ).sort(),
     [sortedActivities]
   );
@@ -390,7 +448,7 @@ export const CCG: React.FC<{
         new Set(
           sortedActivities
             .map((a) => a.type_activity)
-            .filter(Boolean) as string[]
+            .filter((t): t is string => typeof t === "string" && t.length > 0)
         )
       ).sort(),
     [sortedActivities]
@@ -425,7 +483,11 @@ export const CCG: React.FC<{
     const map: Record<string, number> = {};
     
     for (const item of sortedActivities) {
-      const eventDate = parseDate(item.end_date || item.date_updated);
+      // documentation items use date_created; others use end_date or date_updated
+      const dateStr = item._source === "documentation"
+        ? (item.date_created || item.date_updated)
+        : (item.end_date || item.date_updated);
+      const eventDate = parseDate(dateStr);
       if (!eventDate) continue;
       
       const key = formatDateLocal(eventDate);
@@ -462,7 +524,10 @@ export const CCG: React.FC<{
   const selectedDayEvents = useMemo(() => {
     if (!selectedDateStr) return [];
     return filteredActivities.filter((item) => {
-      const eventDate = parseDate(item.end_date || item.date_updated);
+      const dateStr = item._source === "documentation"
+        ? (item.date_created || item.date_updated)
+        : (item.end_date || item.date_updated);
+      const eventDate = parseDate(dateStr);
       return eventDate ? formatDateLocal(eventDate) === selectedDateStr : false;
     });
   }, [filteredActivities, selectedDateStr]);
@@ -878,7 +943,10 @@ export const CCG: React.FC<{
               {Array.from({ length: 24 }, (_, h) => h).map((hour) => {
                 const isCurrentHour = !!isToday && hour === currentHour;
                 const hourEvents = selectedDayEvents.filter((event) => {
-                  const eventDate = parseDate(event.end_date || event.date_updated);
+                  const dateStr = event._source === "documentation"
+                    ? (event.date_created || event.date_updated)
+                    : (event.end_date || event.date_updated);
+                  const eventDate = parseDate(dateStr);
                   return eventDate ? eventDate.getHours() === hour : false;
                 });
                 const hasEvents = hourEvents.length > 0;

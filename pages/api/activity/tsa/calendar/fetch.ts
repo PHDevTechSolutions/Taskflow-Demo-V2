@@ -103,7 +103,52 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       offset += BATCH_SIZE;
     }
 
-    const combinedData = [...allData, ...allMeetings].sort((a, b) => new Date(b.date_updated).getTime() - new Date(a.date_updated).getTime());
+    // Fetch documentation
+    let allDocumentation: any[] = [];
+    offset = 0;
+
+    while (true) {
+      let query = supabase
+        .from("documentation")
+        .select(`
+          id,
+          referenceid,
+          tsm,
+          manager,
+          type_activity,
+          remarks,
+          start_date,
+          end_date,
+          date_created
+        `)
+        .eq("referenceid", referenceid)
+        .order("date_created", { ascending: false })
+        .order("id", { ascending: false })
+        .range(offset, offset + BATCH_SIZE - 1);
+
+      if (fromDate && toDate) {
+        query = query.gte("date_created", fromDate).lte("date_created", toDate);
+      }
+
+      const { data, error } = await query;
+
+      if (error) {
+        console.error("Supabase error (documentation):", error);
+        return res.status(500).json({ message: error.message });
+      }
+
+      if (!data || data.length === 0) break;
+
+      // Normalize: use date_created as date_updated so sorting works uniformly
+      allDocumentation.push(...data.map((d) => ({ ...d, date_updated: d.date_created })));
+
+      if (data.length < BATCH_SIZE) break;
+      offset += BATCH_SIZE;
+    }
+
+    const combinedData = [...allData, ...allMeetings, ...allDocumentation].sort(
+      (a, b) => new Date(b.date_updated).getTime() - new Date(a.date_updated).getTime()
+    );
 
     return res.status(200).json({
       activities: combinedData,

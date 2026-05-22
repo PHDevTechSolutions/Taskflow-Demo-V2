@@ -4,8 +4,9 @@ import { supabase } from "@/utils/supabase";
 const BATCH_SIZE = 1000;
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  const { from, to } = req.query;
+  const { date, from, to } = req.query;
 
+  const selectedDate = typeof date === "string" ? date : undefined;
   const fromDate = typeof from === "string" ? from : undefined;
   const toDate = typeof to === "string" ? to : undefined;
 
@@ -36,7 +37,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         .order("id", { ascending: false })
         .range(offset, offset + BATCH_SIZE - 1);
 
-      if (fromDate && toDate) {
+      // Handle specific date filtering (new behavior)
+      if (selectedDate) {
+        query = query
+          .gte("date_updated", selectedDate)
+          .lt("date_updated", `${selectedDate}T23:59:59`);
+      }
+      // Handle date range filtering (legacy behavior)
+      else if (fromDate && toDate) {
         query = query.gte("date_updated", fromDate).lte("date_updated", toDate);
       }
 

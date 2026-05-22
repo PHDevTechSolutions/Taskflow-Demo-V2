@@ -113,15 +113,23 @@ export function OutboundCallsTableCard({
     return map;
   }, [history]);
 
-  /* ---- OB target days ---- */
+  /* ---- OB target days (excluding Sundays) ---- */
   const daysCount = useMemo(() => {
     if (dateCreatedFilterRange?.from && dateCreatedFilterRange?.to) {
-      const diff =
-        dateCreatedFilterRange.to.getTime() -
-        dateCreatedFilterRange.from.getTime();
-      return Math.floor(diff / (1000 * 60 * 60 * 24)) + 1;
+      const start = new Date(dateCreatedFilterRange.from);
+      const end = new Date(dateCreatedFilterRange.to);
+      let count = 0;
+      const current = new Date(start);
+      while (current <= end) {
+        // 0 = Sunday, exclude it
+        if (current.getDay() !== 0) {
+          count++;
+        }
+        current.setDate(current.getDate() + 1);
+      }
+      return count || 1; // At least 1 day to avoid division by zero
     }
-    return 26;
+    return 22; // Default working days per month (excluding Sundays)
   }, [dateCreatedFilterRange]);
 
   const obTarget = 20 * daysCount;
@@ -137,7 +145,13 @@ export function OutboundCallsTableCard({
       byAgent[id].push(h);
     });
 
-    return Object.entries(byAgent).map(([agentId, obCalls]) => {
+    return Object.entries(byAgent)
+      .filter(([agentId]) => {
+        // Filter out rows where agentId is "referenceid" or "agentid"
+        const invalidIds = ["referenceid", "agentid"];
+        return !invalidIds.includes(agentId.toLowerCase());
+      })
+      .map(([agentId, obCalls]) => {
       // ── 1. Total successful OB Touchbase calls for this agent
       const totalCalls = obCalls.length;
 
@@ -280,14 +294,14 @@ export function OutboundCallsTableCard({
         { header: "OB Target", key: "target", width: 12 },
         { header: "Successful Calls", key: "calls", width: 15 },
         { header: "Achievement (%)", key: "achievement", width: 15 },
-        { header: "Quotes (Based on OB)", key: "quotes", width: 20 },
+        { header: "Quote Based on OB Successful", key: "quotes", width: 25 },
         { header: "Calls → Quote (%)", key: "callsToQuote", width: 15 },
         { header: "Quote Amount", key: "quoteAmount", width: 18 },
-        { header: "SO (Based on OB)", key: "so", width: 20 },
+        { header: "SO Based on OB Successful", key: "so", width: 25 },
         { header: "SO Amount", key: "soAmount", width: 18 },
         { header: "Quote → SO (%)", key: "quoteToSO", width: 15 },
-        { header: "SI (Based on OB)", key: "si", width: 20 },
-        { header: "Actual Sales", key: "actualSales", width: 18 },
+        { header: "SI Based on OB Successful", key: "si", width: 25 },
+        { header: "SI Amount", key: "actualSales", width: 18 },
         { header: "SO → SI (%)", key: "soToSI", width: 15 },
       ];
 
@@ -442,8 +456,10 @@ export function OutboundCallsTableCard({
               </TableHeader>
 
               <TableBody>
-                {statsByAgent.map((stat) => {
-                  const info = agentMap.get(stat.agentId);
+                {statsByAgent
+                  .filter((stat) => agentMap.has(stat.agentId)) // Only show agents with name info
+                  .map((stat) => {
+                  const info = agentMap.get(stat.agentId)!;
                   return (
                     <TableRow key={stat.agentId} className="text-xs hover:bg-gray-50/50 font-mono">
                       {/* Agent */}
@@ -460,7 +476,7 @@ export function OutboundCallsTableCard({
                               {info?.name?.[0] ?? "?"}
                             </div>
                           )}
-                          <span className="capitalize text-gray-700">{info?.name ?? stat.agentId}</span>
+                          <span className="capitalize text-gray-700">{info?.name}</span>
                         </div>
                       </TableCell>
 
@@ -553,7 +569,7 @@ export function OutboundCallsTableCard({
           <div className="mt-3 p-4 rounded-xl border border-blue-100 bg-blue-50 text-xs text-blue-900 space-y-1.5">
             <p className="font-semibold text-blue-800 mb-1">Computation Details</p>
             <p><strong>Base data:</strong> All records where <code>source = "Outbound - Touchbase"</code> AND <code>call_status = "Successful"</code> (date filter applied here).</p>
-            <p><strong>OB Target:</strong> 20 × number of days in selected range (default: 26 days = 520).</p>
+            <p><strong>OB Target:</strong> 20 × number of days in selected range <em>(Sundays excluded)</em> (default: 22 working days = 440).</p>
             <p><strong>Achievement:</strong> (Successful Calls ÷ OB Target) × 100%</p>
             <p><strong>Calls → Quote %:</strong> Count of unique <code>activity_reference_number</code>s (from OB calls) that have ANY activity with <code>status = "Quote - Done"</code> in the full history ÷ Successful Calls</p>
             <p><strong>Quote → SO %:</strong> Count of unique refs with <code>status = "SO-Done"</code> ÷ Count of Quoted refs</p>

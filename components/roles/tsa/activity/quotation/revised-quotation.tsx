@@ -23,6 +23,7 @@ import {
   Trash2,
   Filter,
   Search,
+  LoaderPinwheel
 } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { supabase } from "@/utils/supabase";
@@ -246,8 +247,11 @@ export const RevisedQuotation: React.FC<CompletedProps> = ({
   const [filterTypeClient, setFilterTypeClient] = useState<string>("all");
   const [filterCallStatus, setFilterCallStatus] = useState<string>("all");
   const [filterQuotationStatus, setFilterQuotationStatus] = useState<string>("all");
-  const [itemsPerPage, setItemsPerPage] = useState<number>(20);
+  const [itemsPerPage, setItemsPerPage] = useState<number>(10); // Default to 10 items per page
   const [currentPage, setCurrentPage] = useState<number>(1);
+  const [totalCount, setTotalCount] = useState<number>(0);
+  const [hasMore, setHasMore] = useState<boolean>(false);
+  const [loadingMore, setLoadingMore] = useState<boolean>(false);
 
   const [editItem, setEditItem] = useState<Completed | null>(null);
   const [editOpen, setEditOpen] = useState(false);
@@ -307,12 +311,18 @@ export const RevisedQuotation: React.FC<CompletedProps> = ({
     }
   }, [referenceid, managerDetailsProp, tsmDetailsProp, fetchHierarchy]);
 
-  const fetchActivities = useCallback(async () => {
+  const fetchActivities = useCallback(async (page: number = 1, loadMore: boolean = false) => {
     if (!referenceid) {
       setActivities([]);
       return;
     }
-    setLoading(true);
+
+    // Set appropriate loading state
+    if (loadMore) {
+      setLoadingMore(true);
+    } else {
+      setLoading(true);
+    }
     setError(null);
 
     const from = dateCreatedFilterRange?.from
@@ -325,6 +335,22 @@ export const RevisedQuotation: React.FC<CompletedProps> = ({
     try {
       const url = new URL("/api/activity/tsa/quotation/fetch", window.location.origin);
       url.searchParams.append("referenceid", referenceid);
+      url.searchParams.append("page", String(page));
+      url.searchParams.append("limit", String(itemsPerPage));
+      
+      // Add search term if present
+      if (searchTerm.trim()) {
+        url.searchParams.append("search", searchTerm.trim());
+      }
+      
+      // Add filters
+      if (filterStatus !== "all") url.searchParams.append("status", filterStatus);
+      if (filterTypeActivity !== "all") url.searchParams.append("type_activity", filterTypeActivity);
+      if (filterSource !== "all") url.searchParams.append("source", filterSource);
+      if (filterTypeClient !== "all") url.searchParams.append("type_client", filterTypeClient);
+      if (filterCallStatus !== "all") url.searchParams.append("call_status", filterCallStatus);
+      if (filterQuotationStatus !== "all") url.searchParams.append("quotation_status", filterQuotationStatus);
+      
       if (from && to) {
         url.searchParams.append("from", from);
         url.searchParams.append("to", to);
@@ -333,17 +359,31 @@ export const RevisedQuotation: React.FC<CompletedProps> = ({
       const res = await fetch(url.toString());
       if (!res.ok) throw new Error("Failed to fetch activities");
       const data = await res.json();
-      setActivities(data.activities || []);
+      
+      if (loadMore && page > 1) {
+        // Append new data for load more
+        setActivities(prev => [...prev, ...(data.activities || [])]);
+      } else {
+        // Replace data for initial load or new search
+        setActivities(data.activities || []);
+      }
+      
+      // Update pagination info
+      setTotalCount(data.totalCount || 0);
+      setHasMore(data.hasMore || false);
+      setCurrentPage(page);
     } catch (err: any) {
       setError(err.message);
+      setActivities([]);
     } finally {
       setLoading(false);
+      setLoadingMore(false);
     }
-  }, [referenceid, dateCreatedFilterRange]);
+  }, [referenceid, dateCreatedFilterRange, itemsPerPage, searchTerm, filterStatus, filterTypeActivity, filterSource, filterTypeClient, filterCallStatus, filterQuotationStatus]);
 
   useEffect(() => {
     if (!referenceid) return;
-    fetchActivities();
+    fetchActivities(1, false); // Initial load without loadMore
     const channel = supabase
       .channel(`history-${referenceid}`)
       .on(
@@ -354,13 +394,33 @@ export const RevisedQuotation: React.FC<CompletedProps> = ({
           table: "history",
           filter: `referenceid=eq.${referenceid}`,
         },
-        () => fetchActivities(),
+        () => fetchActivities(1, false), // Refresh on changes
       )
       .subscribe();
     return () => {
       supabase.removeChannel(channel);
     };
   }, [referenceid, fetchActivities]);
+
+  // Reset page when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+    // The fetchActivities will be called by the search/filters change
+  }, [searchTerm, filterStatus, filterTypeActivity, filterSource, filterTypeClient, filterCallStatus, filterQuotationStatus, dateCreatedFilterRange, itemsPerPage]);
+
+  // Search handler - only fetches when search button is clicked
+  const handleSearch = useCallback(() => {
+    setCurrentPage(1);
+    fetchActivities(1, false);
+  }, [fetchActivities]);
+
+  // Load more handler
+  const handleLoadMore = useCallback(() => {
+    if (hasMore && !loadingMore) {
+      const nextPage = currentPage + 1;
+      fetchActivities(nextPage, true);
+    }
+  }, [currentPage, hasMore, loadingMore, fetchActivities]);
 
   // ── Highlight + scroll ───────────────────────────────────────────────────
   useEffect(() => {
@@ -433,117 +493,56 @@ export const RevisedQuotation: React.FC<CompletedProps> = ({
     }
   };
 
-  const sortedActivities = useMemo(
-    () =>
-      [...activities].sort(
-        (a, b) =>
-          new Date(b.date_updated!).getTime() -
-          new Date(a.date_updated!).getTime(),
-      ),
-    [activities],
-  );
-
-  const filteredActivities = useMemo(() => {
-    const search = searchTerm.toLowerCase();
-    return sortedActivities.filter((item) => {
-      // 1. Meaningful data check
-      const hasData = [
-        "activity_reference_number",
-        "referenceid",
-        "quotation_number",
-        "quotation_amount",
-      ].some((col) => {
-        const val = (item as any)[col];
-        return val !== null && val !== undefined && String(val).trim() !== "";
-      });
-      if (!hasData) return false;
-
-      // 2. Search filter
-      const matchesSearch = !search || Object.values(item).some(
-        (v) => v !== null && v !== undefined && String(v).toLowerCase().includes(search)
-      );
-      if (!matchesSearch) return false;
-
-      // 3. Base filter: Only show Quote-Done activities in this view
-      if (item.status !== "Quote-Done") return false;
-
-      // 4. Additional status sub-filter (if needed for future use)
-      if (filterStatus !== "all" && item.status !== filterStatus) return false;
-
-      // 5. Type Activity filter
-      if (filterTypeActivity !== "all" && item.type_activity !== filterTypeActivity) return false;
-
-      // 6. Source filter
-      if (filterSource !== "all" && item.source !== filterSource) return false;
-
-      // 7. Type Client filter
-      if (filterTypeClient !== "all" && item.type_client !== filterTypeClient) return false;
-
-      // 8. Call Status filter
-      if (filterCallStatus !== "all" && item.call_status !== filterCallStatus) return false;
-
-      // 9. Quotation Status filter
-      if (filterQuotationStatus !== "all" && item.quotation_status !== filterQuotationStatus) return false;
-
-      // 10. Date Range filter
-      if (dateCreatedFilterRange?.from || dateCreatedFilterRange?.to) {
-        const updated = new Date(item.date_updated ?? item.date_created);
-        if (isNaN(updated.getTime())) return false;
-        if (dateCreatedFilterRange.from && updated < new Date(dateCreatedFilterRange.from)) return false;
-        if (dateCreatedFilterRange.to && updated > new Date(dateCreatedFilterRange.to)) return false;
-      }
-
-      return true;
-    });
-  }, [sortedActivities, searchTerm, filterStatus, filterTypeActivity, filterSource, filterTypeClient, filterCallStatus, filterQuotationStatus, dateCreatedFilterRange]);
+  // Note: Filtering and sorting now handled by API for better performance
+  // activities array contains already filtered and sorted data from the server
 
   const statusOptions = useMemo(() => {
     const s = new Set<string>();
-    sortedActivities.forEach((a) => {
+    activities.forEach((a: Completed) => {
       if (a.status) s.add(a.status);
     });
     return Array.from(s).sort();
-  }, [sortedActivities]);
+  }, [activities]);
 
   const typeActivityOptions = useMemo(() => {
     const s = new Set<string>();
-    sortedActivities.forEach((a) => {
+    activities.forEach((a: Completed) => {
       if (a.type_activity) s.add(a.type_activity);
     });
     return Array.from(s).sort();
-  }, [sortedActivities]);
+  }, [activities]);
 
   const sourceOptions = useMemo(() => {
     const s = new Set<string>();
-    sortedActivities.forEach((a) => {
+    activities.forEach((a: Completed) => {
       if (a.source) s.add(a.source);
     });
     return Array.from(s).sort();
-  }, [sortedActivities]);
+  }, [activities]);
 
   const typeClientOptions = useMemo(() => {
     const s = new Set<string>();
-    sortedActivities.forEach((a) => {
+    activities.forEach((a: Completed) => {
       if (a.type_client) s.add(a.type_client);
     });
     return Array.from(s).sort();
-  }, [sortedActivities]);
+  }, [activities]);
 
   const callStatusOptions = useMemo(() => {
     const s = new Set<string>();
-    sortedActivities.forEach((a) => {
+    activities.forEach((a: Completed) => {
       if (a.call_status) s.add(a.call_status);
     });
     return Array.from(s).sort();
-  }, [sortedActivities]);
+  }, [activities]);
 
   const quotationStatusOptions = useMemo(() => {
     const s = new Set<string>();
-    sortedActivities.forEach((a) => {
+    activities.forEach((a: Completed) => {
       if (a.quotation_status) s.add(a.quotation_status);
     });
     return Array.from(s).sort();
-  }, [sortedActivities]);
+  }, [activities]);
 
   const openEditDialog = (item: Completed) => {
     setEditItem(item);
@@ -779,15 +778,33 @@ export const RevisedQuotation: React.FC<CompletedProps> = ({
       `}</style>
 
       <div className="mb-4 flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4">
-        <div className="relative max-w-md w-full">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-400" />
-          <Input
-            type="text"
-            placeholder="Search company, reference ID, or quotation #..."
-            className="pl-9 h-10 rounded-none border-zinc-200 focus:ring-0 focus:border-zinc-400 transition-all text-sm"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-          />
+        <div className="relative max-w-md w-full flex gap-2">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-400" />
+            <Input
+              type="text"
+              placeholder="Search company, reference ID, or quotation #..."
+              className="pl-9 h-10 rounded-none border-zinc-200 focus:ring-0 focus:border-zinc-400 transition-all text-sm"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  handleSearch();
+                }
+              }}
+            />
+          </div>
+          <Button
+            onClick={handleSearch}
+            disabled={loading}
+            className="h-10 px-4 rounded-none bg-zinc-900 hover:bg-zinc-800 text-white text-sm font-medium"
+          >
+            {loading ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              "Search"
+            )}
+          </Button>
         </div>
 
         <div className="flex items-center gap-2">
@@ -858,7 +875,7 @@ export const RevisedQuotation: React.FC<CompletedProps> = ({
         </div>
       )}
 
-      {!loading && filteredActivities.length === 0 && !error && (
+      {!loading && activities.length === 0 && !error && (
         <div className="flex flex-col items-center justify-center py-20 gap-3 bg-zinc-50/50 border border-dashed border-zinc-200">
           <AlertCircleIcon className="h-8 w-8 text-zinc-300" />
           <div className="text-center">
@@ -868,14 +885,19 @@ export const RevisedQuotation: React.FC<CompletedProps> = ({
         </div>
       )}
 
-      {filteredActivities.length > 0 && (
+      {activities.length > 0 && (
         <div className="bg-white border border-zinc-200 shadow-sm overflow-hidden">
           <div className="px-4 py-3 border-b border-zinc-100 bg-zinc-50/50 flex items-center justify-between">
             <div className="flex items-center gap-2">
               <span className="text-xs font-bold uppercase tracking-widest text-zinc-500">Quotation History</span>
               <Badge variant="outline" className="rounded-none bg-white text-[10px] font-mono border-zinc-200">
-                {filteredActivities.length}
+                {activities.length}
               </Badge>
+              {totalCount > activities.length && (
+                <span className="text-[10px] text-zinc-400">
+                  Showing {activities.length} of {totalCount} total
+                </span>
+              )}
             </div>
           </div>
 
@@ -885,10 +907,10 @@ export const RevisedQuotation: React.FC<CompletedProps> = ({
                 <TableRow className="hover:bg-transparent border-b border-zinc-200">
                   <TableHead className="w-10 h-11 text-center">
                     <Checkbox
-                      checked={selectedIds.size === filteredActivities.length && filteredActivities.length > 0}
+                      checked={selectedIds.size === activities.length && activities.length > 0}
                       onCheckedChange={(checked) => {
                         if (checked) {
-                          setSelectedIds(new Set(filteredActivities.map(a => a.id)));
+                          setSelectedIds(new Set(activities.map((a: Completed) => a.id)));
                         } else {
                           setSelectedIds(new Set());
                         }
@@ -911,7 +933,7 @@ export const RevisedQuotation: React.FC<CompletedProps> = ({
               </TableHeader>
 
               <TableBody>
-                {filteredActivities.map((item) => {
+                {activities.map((item: Completed) => {
                   const isSelected = selectedIds.has(item.id);
                   const isHighlighted =
                     highlightedArn === item.activity_reference_number ||
@@ -1081,6 +1103,26 @@ export const RevisedQuotation: React.FC<CompletedProps> = ({
               </TableBody>
             </Table>
           </div>
+          
+          {/* Load More Button */}
+          {hasMore && (
+            <div className="px-4 py-3 border-t border-zinc-100 bg-zinc-50/50 flex justify-center">
+              <Button
+                onClick={handleLoadMore}
+                disabled={loadingMore}
+                variant="outline"
+                className="rounded-none text-xs"
+              >
+                {loadingMore ? (
+                  <>
+                    <LoaderPinwheel className="animate-spin h-3 w-3" /> Loading...
+                  </>
+                ) : (
+                  "Load More"
+                )}
+              </Button>
+            </div>
+          )}
         </div>
       )}
 

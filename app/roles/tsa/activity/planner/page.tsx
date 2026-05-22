@@ -48,8 +48,11 @@ interface Account {
   date_created: string; date_updated: string; contact_person: string;
   contact_number: string; email_address: string; address: string;
   delivery_address: string; region: string; industry: string;
-  status?: string; company_group?: string;
+  status: string; company_group?: string;
   account_reference_number: string;
+  tsm: string;
+  manager: string;
+  next_available_date?: string | null;
 }
 
 interface SupervisorDetails {
@@ -171,7 +174,6 @@ function NotificationDropdown({ referenceid, userId }: { referenceid: string; us
     } catch { localStorage.removeItem(READ_KEY); }
   }, [referenceid]);
 
-  // Track user interaction to enable audio autoplay
   useEffect(() => {
     const markInteracted = () => { hasUserInteracted.current = true; };
     window.addEventListener("click", markInteracted, { once: true });
@@ -184,7 +186,6 @@ function NotificationDropdown({ referenceid, userId }: { referenceid: string; us
     };
   }, []);
 
-  // Initialize audio on mount (but wait for interaction to play)
   useEffect(() => {
     audioRef.current = new Audio("/alert-notification.mp3");
     audioRef.current.volume = 0.6;
@@ -192,7 +193,7 @@ function NotificationDropdown({ referenceid, userId }: { referenceid: string; us
   }, []);
 
   const playSound = useCallback(() => {
-    if (!hasUserInteracted.current) return; // Don't play if user hasn't interacted
+    if (!hasUserInteracted.current) return;
     try {
       const audio = audioRef.current;
       if (!audio) return;
@@ -200,7 +201,6 @@ function NotificationDropdown({ referenceid, userId }: { referenceid: string; us
       const playPromise = audio.play();
       if (playPromise) {
         playPromise.catch((err) => {
-          // Autoplay blocked - this is expected before user interaction
           if (err.name !== "NotAllowedError") {
             console.error("Failed to play notification sound:", err);
           }
@@ -433,8 +433,7 @@ function PlannerCard({
         </CardTitle>
       </CardHeader>
       <CardContent
-        className={`transition-all duration-300 overflow-hidden ${isOpen ? "max-h-[5000px] opacity-100" : "max-h-0 opacity-0 p-0"
-          }`}
+        className={`transition-all duration-300 overflow-hidden ${isOpen ? "max-h-[5000px] opacity-100" : "max-h-0 opacity-0 p-0"}`}
       >
         {children}
       </CardContent>
@@ -480,8 +479,10 @@ function DashboardContent() {
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [loadingNoActivity, setLoadingNoActivity] = useState(false);
   const [noActivitySearch, setNoActivitySearch] = useState("");
-  const NO_ACTIVITY_BATCH_SIZE = 15;
+  const NO_ACTIVITY_BATCH_SIZE = 5;
+  const LAST_TOUCH_BATCH_SIZE = 5;
   const [displayedNoActivityCount, setDisplayedNoActivityCount] = useState(NO_ACTIVITY_BATCH_SIZE);
+  const [displayedLastTouchCount, setDisplayedLastTouchCount] = useState(LAST_TOUCH_BATCH_SIZE);
 
   const queryUserId = searchParams?.get("id") ?? "";
 
@@ -641,7 +642,6 @@ function DashboardContent() {
       );
       if (response.ok) {
         const data = await response.json();
-        // Filter to only active accounts (same logic as new.tsx)
         const excludedStatuses = ["removed", "approved for deletion", "subject for transfer"];
         const allowedTypes = ["top 50", "next 30", "balance 20", "tsa client", "csr client", "new client"];
         const filtered = (data.data || []).filter((acc: Account) => {
@@ -668,12 +668,13 @@ function DashboardContent() {
     }
   }, [userDetails.referenceid, fetchActivitiesForNoActivity, fetchAccountsForNoActivity]);
 
-  // ─── Last activity date per account (last touch) ────────────────────────────
+  // ─── Last activity date per account (last touch) ─────────────────────────
+  // Key is normalized (lowercase + trimmed) company_name for case-insensitive matching
   const lastActivityDateMap = React.useMemo(() => {
     const m: Record<string, string> = {};
     activities.forEach((a) => {
-      if (a.account_reference_number && a.date_created) {
-        const key = a.account_reference_number;
+      if (a.company_name && a.date_created) {
+        const key = a.company_name.toLowerCase().trim().replace(/\./g, "");
         const existing = m[key];
         if (!existing || new Date(a.date_created).getTime() > new Date(existing).getTime()) {
           m[key] = a.date_created;
@@ -683,7 +684,7 @@ function DashboardContent() {
     return m;
   }, [activities]);
 
-  // ─── Calculate aging from any date string ────────────────────────────────────
+  // ─── Calculate aging from any date string ────────────────────────────────
   const calculateAging = (dateStr: string): number => {
     const date = new Date(dateStr);
     const now = new Date();
@@ -691,13 +692,11 @@ function DashboardContent() {
     return Math.floor(diffMs / (1000 * 60 * 60 * 24));
   };
 
-  // ─── All accounts with last touch info, sorted by most neglected ─────────────
-  // No activity = uses account date_created as aging baseline
-  // Has activity = uses last activity date_created as aging baseline
-  // Sorted: most neglected (longest since last touch) at top
+  // ─── All accounts with last touch info, sorted by most neglected ─────────
+  // Lookup uses normalized company_name to match the normalized map key
   const filteredNoActivityAccounts = React.useMemo(() => {
     const enriched = accounts.map((account) => {
-      const lastTouch = lastActivityDateMap[account.account_reference_number] || null;
+      const lastTouch = lastActivityDateMap[account.company_name?.toLowerCase().trim().replace(/\./g, "")] || null;
       const referenceDate = lastTouch || account.date_created;
       const agingDays = calculateAging(referenceDate);
       return {
@@ -710,7 +709,6 @@ function DashboardContent() {
 
     // Sort: no-activity accounts first (by aging desc), then has-activity (by aging desc)
     let sorted = enriched.sort((a, b) => {
-      // No activity always above has activity
       if (!a.hasActivity && b.hasActivity) return -1;
       if (a.hasActivity && !b.hasActivity) return 1;
       return b.agingDays - a.agingDays;
@@ -728,10 +726,17 @@ function DashboardContent() {
   }, [accounts, lastActivityDateMap, noActivitySearch]);
 
   const displayedNoActivityAccounts = React.useMemo(() => {
-    return filteredNoActivityAccounts.slice(0, displayedNoActivityCount);
-  }, [filteredNoActivityAccounts, displayedNoActivityCount]);
+    const noTouch = filteredNoActivityAccounts.filter((a) => !a.hasActivity);
+    const lastTouch = filteredNoActivityAccounts.filter((a) => a.hasActivity);
+    const displayedNoTouch = noTouch.slice(0, displayedNoActivityCount);
+    const displayedLastTouch = lastTouch.slice(0, displayedLastTouchCount);
+    return [...displayedNoTouch, ...displayedLastTouch];
+  }, [filteredNoActivityAccounts, displayedNoActivityCount, displayedLastTouchCount]);
 
-  const hasMoreNoActivity = filteredNoActivityAccounts.length > displayedNoActivityCount;
+  const allNoTouchForCount = filteredNoActivityAccounts.filter((a) => !a.hasActivity);
+  const allLastTouchForCount = filteredNoActivityAccounts.filter((a) => a.hasActivity);
+  const remainingItemsCount = (allNoTouchForCount.length - displayedNoActivityCount) + (allLastTouchForCount.length - displayedLastTouchCount);
+  const hasMoreNoActivity = remainingItemsCount > 0;
 
   // ── Shared props builder ──────────────────────────────────────────────────
   const sharedProps = {
@@ -748,6 +753,7 @@ function DashboardContent() {
     managerDetails: userDetails.managerDetails ?? null,
     tsmDetails: userDetails.tsmDetails ?? null,
     signature: userDetails.signature,
+    accounts: posts,
   };
 
   return (
@@ -771,17 +777,18 @@ function DashboardContent() {
                 </BreadcrumbList>
               </Breadcrumb>
             </div>
+
             <div className="flex items-center gap-2 px-3">
-               {/*<Button
+              {/*<Button
                 variant="outline"
                 size="sm"
                 className="rounded-none text-xs"
                 onClick={() => window.location.href = `/roles/tsa/activity/planner/all?id=${userId}`}
               >
-                <List className="w-4 h-4 mr-2" />
+                <Eye className="w-4 h-4 mr-2" />
                 View All
-             
               </Button>*/}
+
               {userDetails.referenceid && (
                 <NotificationDropdown referenceid={userDetails.referenceid} userId={userId ?? ""} />
               )}
@@ -813,7 +820,7 @@ function DashboardContent() {
                     <p className="text-[10px] text-gray-500 mb-2 italic">
                       (Based on date of last activity)
                     </p>
-                    
+
                     {/* Search bar */}
                     <div className="relative mb-3">
                       <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3 h-3 text-gray-400" />
@@ -825,6 +832,7 @@ function DashboardContent() {
                         onChange={(e) => {
                           setNoActivitySearch(e.target.value);
                           setDisplayedNoActivityCount(NO_ACTIVITY_BATCH_SIZE);
+                          setDisplayedLastTouchCount(LAST_TOUCH_BATCH_SIZE);
                         }}
                       />
                     </div>
@@ -838,13 +846,17 @@ function DashboardContent() {
                       ) : (
                         <>
                           {(() => {
-                            const noTouch = displayedNoActivityAccounts.filter((a) => !a.hasActivity);
-                            const lastTouch = displayedNoActivityAccounts.filter((a) => a.hasActivity);
-                            const showDivider = noTouch.length > 0 && lastTouch.length > 0;
+                            const allNoTouch = filteredNoActivityAccounts.filter((a) => !a.hasActivity);
+                            const allLastTouch = filteredNoActivityAccounts.filter((a) => a.hasActivity);
+
+                            const displayedNoTouch = allNoTouch.slice(0, displayedNoActivityCount);
+                            const displayedLastTouch = allLastTouch.slice(0, displayedLastTouchCount);
+
+                            const showDivider = displayedNoTouch.length > 0 && displayedLastTouch.length > 0;
 
                             return (
                               <>
-                                {noTouch.map((account) => (
+                                {displayedNoTouch.map((account) => (
                                   <div
                                     key={account.id}
                                     className="p-2 bg-red-50 border border-red-200 rounded-none text-xs hover:bg-red-100 transition-colors cursor-pointer"
@@ -882,7 +894,7 @@ function DashboardContent() {
                                   </div>
                                 )}
 
-                                {lastTouch.map((account) => (
+                                {displayedLastTouch.map((account) => (
                                   <div
                                     key={account.id}
                                     className="p-2 bg-amber-50/60 border border-amber-200/70 rounded-none text-xs hover:bg-amber-100 transition-colors cursor-pointer"
@@ -919,9 +931,22 @@ function DashboardContent() {
                           {hasMoreNoActivity && (
                             <button
                               className="w-full py-2 text-[10px] text-amber-700 bg-amber-50 border border-amber-200 rounded-none hover:bg-amber-100 transition-colors"
-                              onClick={() => setDisplayedNoActivityCount(prev => prev + NO_ACTIVITY_BATCH_SIZE)}
+                              onClick={() => {
+                                const allNoTouch = filteredNoActivityAccounts.filter((a) => !a.hasActivity);
+                                const allLastTouch = filteredNoActivityAccounts.filter((a) => a.hasActivity);
+
+                                const remainingNoTouch = allNoTouch.length - displayedNoActivityCount;
+                                const remainingLastTouch = allLastTouch.length - displayedLastTouchCount;
+
+                                if (remainingNoTouch > 0) {
+                                  setDisplayedNoActivityCount(prev => Math.min(prev + Math.min(NO_ACTIVITY_BATCH_SIZE, remainingNoTouch), allNoTouch.length));
+                                }
+                                if (remainingLastTouch > 0) {
+                                  setDisplayedLastTouchCount(prev => Math.min(prev + Math.min(LAST_TOUCH_BATCH_SIZE, remainingLastTouch), allLastTouch.length));
+                                }
+                              }}
                             >
-                              Load more ({filteredNoActivityAccounts.length - displayedNoActivityCount} remaining)
+                              Load more ({remainingItemsCount} remaining)
                             </button>
                           )}
                         </>
@@ -987,7 +1012,7 @@ function DashboardContent() {
                       <Completed {...sharedProps} onCountChange={setCompletedCount} />
                     </PlannerCard>
 
-                    {/* ── Delivered ── 
+                    {/* ── Delivered ──
                     <PlannerCard
                       title="Delivered"
                       icon={<PackageCheck className="w-4 h-4" />}
@@ -998,8 +1023,7 @@ function DashboardContent() {
                       <Delivered {...sharedProps} onCountChange={setDeliveredCount} />
                     </PlannerCard>*/}
 
-
-                    {/* ── Pending Task ── 
+                    {/* ── Pending Task ──
                     <PlannerCard
                       title="Pending Task"
                       icon={<Clock className="w-4 h-4" />}
@@ -1009,7 +1033,6 @@ function DashboardContent() {
                     >
                       <Done {...sharedProps} onCountChange={setDoneCount} />
                     </PlannerCard>*/}
-
 
                     {/* ── Overdue (full width, red border) ── */}
                     <PlannerCard

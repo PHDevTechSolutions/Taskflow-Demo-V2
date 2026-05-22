@@ -1,10 +1,11 @@
 "use client";
 
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback, useRef } from "react";
 import { Accordion, AccordionItem, AccordionTrigger, AccordionContent, } from "@/components/ui/accordion";
-import { CheckCircle2Icon, AlertCircleIcon, Check, LoaderPinwheel, PhoneOutgoing, PackageCheck, ReceiptText, Activity, Lock, } from "lucide-react";
+import { CheckCircle2Icon, AlertCircleIcon, Check, LoaderPinwheel, PhoneOutgoing, PackageCheck, ReceiptText, Activity, Lock, MessageSquare } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { HoverCard, HoverCardContent, HoverCardTrigger, } from "@/components/ui/hover-card";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { supabase } from "@/utils/supabase";
 import { CreateActivityDialog } from "../dialog/create";
 import { type DateRange } from "react-day-picker";
@@ -106,8 +107,21 @@ export const Completed: React.FC<NewTaskProps> = ({
   const [history, setHistory] = useState<HistoryItem[]>([]);
 
   const [searchTerm, setSearchTerm] = useState("");
-  const COMPLETED_BATCH_SIZE = 20;
+  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState("");
+  const [tsmFeedbackOpen, setTsmFeedbackOpen] = useState<string | null>(null);
+  const COMPLETED_BATCH_SIZE = 50; // Show 50 initially, load more +10
   const [displayedCompletedCount, setDisplayedCompletedCount] = useState(COMPLETED_BATCH_SIZE);
+
+  // Debounce search term to avoid excessive API calls
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearchTerm(searchTerm);
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [searchTerm]);
+
+  // Ref to always access latest fetchAllData without re-creating subscriptions
+  const fetchAllDataRef = useRef<() => void>(() => {});
 
   const fetchAllData = useCallback(() => {
     if (!referenceid) {
@@ -127,11 +141,23 @@ export const Completed: React.FC<NewTaskProps> = ({
       ? new Date(dateCreatedFilterRange.to).toISOString().slice(0, 10)
       : null;
 
+    // Use search API when debouncedSearchTerm is present, otherwise use regular fetch
+    const isSearching = debouncedSearchTerm.trim().length > 0;
     const url = new URL(
-      "/api/activity/tsa/planner/fetch",
+      isSearching
+        ? "/api/activity/tsa/planner/search"
+        : "/api/activity/tsa/planner/fetch",
       window.location.origin,
     );
     url.searchParams.append("referenceid", referenceid);
+
+    if (isSearching) {
+      url.searchParams.append("search", debouncedSearchTerm);
+    } else {
+      // Only apply limit for regular fetch (not search)
+      url.searchParams.append("limit", "500");
+    }
+
     if (from && to) {
       url.searchParams.append("from", from);
       url.searchParams.append("to", to);
@@ -151,15 +177,19 @@ export const Completed: React.FC<NewTaskProps> = ({
         setActivitiesLoading(false);
         setHistoryLoading(false);
       });
-  }, [referenceid, dateCreatedFilterRange]);
+  }, [referenceid, dateCreatedFilterRange, debouncedSearchTerm]);
 
+  // Keep ref in sync
+  useEffect(() => {
+    fetchAllDataRef.current = fetchAllData;
+  }, [fetchAllData]);
+
+  // Realtime subscriptions — only depend on referenceid, use ref for callback
   useEffect(() => {
     if (!referenceid) return;
 
-    // Initial fetch
-    fetchAllData();
+    fetchAllDataRef.current();
 
-    // Subscribe realtime for activities
     const activityChannel = supabase
       .channel(`activity-${referenceid}`)
       .on(
@@ -170,14 +200,10 @@ export const Completed: React.FC<NewTaskProps> = ({
           table: "activity",
           filter: `referenceid=eq.${referenceid}`,
         },
-        (payload) => {
-          console.log("Activity realtime update:", payload);
-          fetchAllData();
-        },
+        () => fetchAllDataRef.current(),
       )
       .subscribe();
 
-    // Subscribe realtime for history
     const historyChannel = supabase
       .channel(`history-${referenceid}`)
       .on(
@@ -188,10 +214,7 @@ export const Completed: React.FC<NewTaskProps> = ({
           table: "history",
           filter: `referenceid=eq.${referenceid}`,
         },
-        (payload) => {
-          console.log("History realtime update:", payload);
-          fetchAllData();
-        },
+        () => fetchAllDataRef.current(),
       )
       .subscribe();
 
@@ -202,7 +225,14 @@ export const Completed: React.FC<NewTaskProps> = ({
       historyChannel.unsubscribe();
       supabase.removeChannel(historyChannel);
     };
-  }, [referenceid, fetchAllData]);
+  }, [referenceid]);
+
+  // Trigger fetch when debounced search term changes
+  useEffect(() => {
+    if (referenceid) {
+      fetchAllData();
+    }
+  }, [debouncedSearchTerm, referenceid, fetchAllData]);
 
   const isDateInRange = (
     dateStr: string,
@@ -239,17 +269,8 @@ export const Completed: React.FC<NewTaskProps> = ({
     );
 
   const filteredData = mergedData.filter((item) => {
-    const lowerSearch = searchTerm.toLowerCase();
-    return (
-      (item.company_name?.toLowerCase() ?? "").includes(lowerSearch) ||
-      (item.ticket_reference_number?.toLowerCase().includes(lowerSearch) ??
-        false) ||
-      item.relatedHistoryItems.some(
-        (h) =>
-          (h.quotation_number?.toLowerCase().includes(lowerSearch) ?? false) ||
-          (h.so_number?.toLowerCase().includes(lowerSearch) ?? false),
-      )
-    );
+    // Search is now server-side, no client-side filtering needed
+    return true;
   });
 
   // Paginated data for lazy loading
@@ -263,7 +284,7 @@ export const Completed: React.FC<NewTaskProps> = ({
   // Reset pagination when search changes
   useEffect(() => {
     setDisplayedCompletedCount(COMPLETED_BATCH_SIZE);
-  }, [searchTerm]);
+  }, [debouncedSearchTerm]);
 
   if (error) {
     return (
@@ -363,6 +384,65 @@ export const Completed: React.FC<NewTaskProps> = ({
                         tsmDetails={tsmDetails ?? null}
                         signature={signature}
                       />
+
+                      {item.relatedHistoryItems.some(
+                        (h) =>
+                          h.tsm_approved_status &&
+                          h.tsm_approved_status !== "-",
+                      ) && (() => {
+                        const feedbackItems = item.relatedHistoryItems.filter(
+                          (h) => h.tsm_approved_status && h.tsm_approved_status !== "-"
+                        );
+
+                        return (
+                          <Popover open={tsmFeedbackOpen === item.id} onOpenChange={(open) => setTsmFeedbackOpen(open ? item.id : null)}>
+                            <PopoverTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-7 w-7 p-0 text-blue-600 hover:text-blue-700 hover:bg-blue-50 relative"
+                                title="TSM Feedback"
+                              >
+                                <MessageSquare className="h-3 w-3" />
+                                <Badge
+                                  variant="destructive"
+                                  className="absolute -top-1 -right-1 h-4 w-4 flex items-center justify-center p-0 text-[10px]"
+                                >
+                                  {feedbackItems.length}
+                                </Badge>
+                              </Button>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-80 rounded-none">
+                              <div className="space-y-2">
+                                <p className="text-xs font-bold uppercase text-gray-700">TSM Feedback</p>
+                                <div className="text-xs space-y-2 max-h-60 overflow-y-auto">
+                                  {feedbackItems.map((h, idx) => (
+                                    <div key={idx} className="border-b pb-2 last:border-0">
+                                      <div className="font-semibold text-blue-600 uppercase py-1">
+                                        {h.tsm_approved_status}
+                                      </div>
+                                      <div className="space-y-1 text-gray-600">
+                                        {h.type_activity && h.type_activity !== "-" && (
+                                          <div><span className="font-medium">Type:</span> {h.type_activity}</div>
+                                        )}
+                                        {h.quotation_number && h.quotation_number !== "-" && (
+                                          <div><span className="font-medium">Quotation #:</span> {h.quotation_number}</div>
+                                        )}
+                                        {h.so_number && h.so_number !== "-" && (
+                                          <div><span className="font-medium">SO #:</span> {h.so_number}</div>
+                                        )}
+                                        {h.call_type && h.call_type !== "-" && (
+                                          <div><span className="font-medium">Call Type:</span> {h.call_type}</div>
+                                        )}
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            </PopoverContent>
+                          </Popover>
+                        );
+                      })()}
 
                     </div>
                   </div>
@@ -642,7 +722,7 @@ export const Completed: React.FC<NewTaskProps> = ({
             <Button
               variant="outline"
               className="rounded-none text-xs"
-              onClick={() => setDisplayedCompletedCount(prev => prev + COMPLETED_BATCH_SIZE)}
+              onClick={() => setDisplayedCompletedCount(prev => prev + 10)}
             >
               Load More ({filteredData.length - displayedCompletedCount} remaining)
             </Button>

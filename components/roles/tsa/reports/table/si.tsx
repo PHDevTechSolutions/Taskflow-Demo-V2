@@ -16,7 +16,6 @@ interface SI {
   actual_sales?: number;
   dr_number?: string;
   remarks?: string;
-  date_created: string;
   company_name?: string;
   contact_number?: string;
   contact_person?: string;
@@ -132,8 +131,7 @@ export const SITable: React.FC<SIProps> = ({ referenceid, dateCreatedFilterRange
       .filter((i) => !s || [i.company_name, i.dr_number, i.remarks].some((v) => v?.toLowerCase().includes(s)))
       .filter((i) => filterStatus === "all" || i.status === filterStatus)
       .filter((i) => inDateRange(i.delivery_date, dateCreatedFilterRange))
-      .filter((i) => inDateRange(i.date_created, dateCreatedFilterRange))
-      .sort((a, b) => new Date(b.date_created).getTime() - new Date(a.date_created).getTime());
+      .sort((a, b) => new Date(b.delivery_date || 0).getTime() - new Date(a.delivery_date || 0).getTime());
   }, [activities, searchTerm, filterStatus, dateCreatedFilterRange]);
 
   const totalSales  = useMemo(() => filteredActivities.reduce((a, i) => a + (i.actual_sales ?? 0), 0), [filteredActivities]);
@@ -321,8 +319,8 @@ export const SITable: React.FC<SIProps> = ({ referenceid, dateCreatedFilterRange
               <TableHeader>
                 <TableRow className="bg-zinc-50/50 hover:bg-zinc-50/50">
                   {[
-                    "Date Created", "Delivery Date", "SI Date", "SI Amount", "SO Number", 
-                    "DR Number", "Company", "Contact Person", "Contact No.", 
+                    "Delivery Date", "SI Date", "SI Amount", "SO Number",
+                    "DR Number", "Company", "Contact Person", "Contact No.",
                     "Remarks", "Payment Terms"
                   ].map((h) => (
                     <TableHead key={h} className="text-[10px] font-bold uppercase tracking-wider text-zinc-500 px-3 py-2.5">
@@ -334,7 +332,6 @@ export const SITable: React.FC<SIProps> = ({ referenceid, dateCreatedFilterRange
               <TableBody>
                 {paginated.map((item) => (
                   <TableRow key={item.id} className="text-xs hover:bg-zinc-50/50 transition-colors border-b border-zinc-100 last:border-0">
-                    <TableCell className="text-zinc-500 whitespace-nowrap px-3 font-mono text-[11px]">{fmtDate(item.date_created)}</TableCell>
                     <TableCell className="text-zinc-500 whitespace-nowrap px-3 font-mono text-[11px]">{fmtDate(item.delivery_date)}</TableCell>
                     <TableCell className="text-zinc-500 whitespace-nowrap px-3 font-mono text-[11px]">{fmtDate(item.si_date)}</TableCell>
                     <TableCell className="text-left text-zinc-900 px-3 font-bold">{item.actual_sales != null ? fmt(item.actual_sales) : "—"}</TableCell>
@@ -354,7 +351,7 @@ export const SITable: React.FC<SIProps> = ({ referenceid, dateCreatedFilterRange
                 <TableRow className="bg-zinc-50/50 font-bold text-[11px] border-t border-zinc-200">
                   <TableCell colSpan={2} className="text-zinc-500 px-3 uppercase tracking-wider">Total ({filteredActivities.length})</TableCell>
                   <TableCell className="text-left text-zinc-900 px-3">{fmt(totalSales)}</TableCell>
-                  <TableCell colSpan={6} />
+                  <TableCell colSpan={5} />
                 </TableRow>
               </tfoot>
             </Table>

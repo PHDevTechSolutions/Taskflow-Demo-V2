@@ -150,7 +150,7 @@ function AgentItem({
               <ItemTitle className={`text-xs capitalize leading-tight ${isSelected ? "text-green-800 font-bold" : ""}`}>
                 {agent.Firstname} {agent.Lastname}
               </ItemTitle>
-              <ItemDescription className="flex flex-col gap-1 text-xs">
+              <div className="flex flex-col gap-1 text-xs">
                 <div className="flex items-center gap-2">
                   <span
                     className={`inline-block w-3 h-3 rounded-full ${
@@ -165,7 +165,7 @@ function AgentItem({
                 </div>
                 <span>Latest login: {activity.latestLogin ?? "—"}</span>
                 <span>Latest logout: {activity.latestLogout ?? "—"}</span>
-              </ItemDescription>
+              </div>
             </div>
           </div>
         </ItemContent>

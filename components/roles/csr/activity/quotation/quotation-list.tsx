@@ -261,6 +261,7 @@ export const Quotation: React.FC<QuotationProps> = ({
                 url.searchParams.append("to", to);
             }
             url.searchParams.append("page", String(currentPage));
+            url.searchParams.append("limit", "10");
             if (searchTerm) url.searchParams.append("search", searchTerm);
 
             const res = await fetch(url.toString());
@@ -478,12 +479,6 @@ export const Quotation: React.FC<QuotationProps> = ({
                             </span>
                         </div>
                     </div>
-
-                    <PaginationControls
-                        currentPage={currentPage}
-                        totalPages={totalPages}
-                        goToPage={(p) => setCurrentPage(p)}
-                    />
                 </div>
             )}
 

@@ -62,6 +62,7 @@ interface Account {
     transfer_to: string;
     date_transferred: string;
     date_removed: string;
+    remarks: string;
 }
 
 interface SPFRequest {
@@ -87,6 +88,9 @@ interface HistoryItem {
     status: string;
     date_created: string;
     referenceid: string;
+    remarks: string;
+    tsm_approved_status: string;
+    tsm_approved_remarks: string;
 }
 
 function DashboardContent() {
@@ -753,7 +757,9 @@ function DashboardContent() {
                                     />
                                 </CardContent>
                             </Card>
+                        </div>
 
+                        <div className="grid grid-cols-1 sm:grid-cols-1 lg:grid-cols-1 gap-4">
                             {/* Card 5 - Approval for TSM Outbound Calls */}
                             <Card className="rounded-none border">
                                 <CardHeader className="flex flex-col space-y-1">

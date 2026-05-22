@@ -673,6 +673,38 @@ function DashboardContent() {
   const withActivityCount = scopedAccounts.filter((a) => scopedAccountsWithActivity.has(a.account_reference_number)).length;
   const withoutActivityCount = scopedAccounts.length - withActivityCount;
 
+  // ─── TSM-level: Cross-agent account search (for searching from agents view) ───
+  const tsmLevelSearchedAccounts = useMemo(() => {
+    if (!search || drillLevel !== "agents") return [];
+    const q = search.toLowerCase();
+    return allActiveAccounts.filter((a) =>
+      a.company_name.toLowerCase().includes(q) ||
+      a.contact_person.toLowerCase().includes(q) ||
+      a.email_address.toLowerCase().includes(q)
+    );
+  }, [allActiveAccounts, search, drillLevel]);
+
+  // TSM-level activity lookups for searched accounts display
+  const tsmLevelActivityCountMap = useMemo(() => {
+    const m: Record<string, number> = {};
+    filteredActivitiesByDate.forEach((a) => {
+      if (a.account_reference_number)
+        m[a.account_reference_number] = (m[a.account_reference_number] ?? 0) + 1;
+    });
+    return m;
+  }, [filteredActivitiesByDate]);
+
+  const tsmLevelLastActivityMap = useMemo(() => {
+    const m: Record<string, string> = {};
+    filteredActivitiesByDate.forEach((a) => {
+      if (a.account_reference_number && a.date_created) {
+        const key = a.account_reference_number;
+        if (!m[key] || new Date(a.date_created) > new Date(m[key])) m[key] = a.date_created;
+      }
+    });
+    return m;
+  }, [filteredActivitiesByDate]);
+
   const totalPages = Math.max(1, Math.ceil(filteredAccounts.length / ITEMS_PER_PAGE));
   const paginatedAccounts = filteredAccounts.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
 
@@ -891,21 +923,99 @@ function DashboardContent() {
                   </div>
                 )}
 
+                {/* Search - visible at all drill levels */}
+                <div className="flex items-center gap-2 bg-slate-50 rounded-xl px-3 py-2 border border-slate-200">
+                  <Search size={13} className="text-slate-400" />
+                  <input type="text" placeholder="Search company, contact, email..."
+                    value={search} onChange={(e) => setSearch(e.target.value)}
+                    className="text-xs bg-transparent outline-none flex-1 text-slate-700 placeholder-slate-400" />
+                  {search && <button onClick={() => setSearch("")} className="text-slate-400 hover:text-slate-600"><X size={12} /></button>}
+                </div>
+
                 {/* Agents List or Accounts Table */}
                 {drillLevel === "agents" ? (
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between">
-                      <p className="text-xs text-gray-500">Click on an agent to view their accounts</p>
-                      <span className="text-xs text-gray-400">{agentStats.length} agents</span>
-                    </div>
-                    {agentStats.length === 0 ? (
-                      <div className="flex flex-col items-center justify-center py-16 gap-3 text-slate-300">
-                        <User size={32} strokeWidth={1} />
-                        <p className="text-sm font-medium">No agents found</p>
+                  search ? (
+                    // Cross-agent search results table
+                    <div className="bg-white rounded-xl border shadow-sm overflow-hidden">
+                      <div className="px-4 py-3 border-b bg-gray-50 flex items-center justify-between">
+                        <p className="text-xs text-gray-600">
+                          Found <strong>{tsmLevelSearchedAccounts.length}</strong> matching account{tsmLevelSearchedAccounts.length !== 1 ? 's' : ''} across all agents
+                        </p>
+                        <button onClick={() => setSearch("")} className="text-[11px] text-indigo-600 hover:text-indigo-800 font-medium">Clear search</button>
                       </div>
-                    ) : (
-                      <div className="grid grid-cols-1 gap-3">
-                        {agentStats.map((agent) => (
+                      <div className="overflow-auto">
+                        <Table>
+                          <TableHeader>
+                            <TableRow className="bg-gray-50 border-b border-gray-100">
+                              {["Actions", "Activities", "Last Touch", "Company", "Type", "Assigned To"].map((h) => (
+                                <TableHead key={h} className="text-[10px] font-bold uppercase tracking-wider text-gray-400 py-3">{h}</TableHead>
+                              ))}
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {tsmLevelSearchedAccounts.length === 0 ? (
+                              <TableRow>
+                                <TableCell colSpan={6} className="text-center py-14 text-sm text-gray-400">
+                                  No accounts match your search
+                                </TableCell>
+                              </TableRow>
+                            ) : tsmLevelSearchedAccounts.map((account) => {
+                              const actCount = tsmLevelActivityCountMap[account.account_reference_number] ?? 0;
+                              const hasAct = actCount > 0;
+                              const typeStyle = getTypeClientStyle(account.type_client);
+                              const assignedAgent = agents.find(a => a.ReferenceID?.toLowerCase() === account.referenceid?.toLowerCase());
+                              const agentName = assignedAgent ? `${assignedAgent.FirstName || ""} ${assignedAgent.LastName || ""}`.trim() : account.referenceid;
+                              const lastActDate = tsmLevelLastActivityMap[account.account_reference_number];
+                              return (
+                                <TableRow key={account.id} className="hover:bg-indigo-50/20 transition-colors">
+                                  <TableCell>
+                                    <button onClick={() => openHistory(account)} className="flex items-center gap-1 text-[11px] font-mono font-semibold text-indigo-500 hover:text-indigo-700">
+                                      <History size={11} /> history
+                                    </button>
+                                  </TableCell>
+                                  <TableCell>
+                                    <button onClick={() => openHistory(account)}
+                                      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold border cursor-pointer hover:opacity-80 transition-opacity ${hasAct ? "bg-emerald-50 text-emerald-600 border-emerald-200" : "bg-slate-100 text-slate-400"}`}>
+                                      <FileText size={9} /> {actCount}
+                                    </button>
+                                  </TableCell>
+                                  <TableCell>
+                                    <span className={`text-[10px] font-mono ${hasAct ? "text-gray-500" : "text-amber-600"}`}>
+                                      {fmtDate(lastActDate ?? account.date_created) ?? "—"}
+                                      {!hasAct && account.date_created && <span className="text-[9px] text-amber-500 ml-1">(created)</span>}
+                                    </span>
+                                  </TableCell>
+                                  <TableCell className="font-semibold text-gray-800 text-sm">{account.company_name}</TableCell>
+                                  <TableCell>
+                                    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold border ${typeStyle.pill}`}>
+                                      <span className={`w-1.5 h-1.5 rounded-full ${typeStyle.dot}`} /> {account.type_client?.toUpperCase()}
+                                    </span>
+                                  </TableCell>
+                                  <TableCell>
+                                    <span className="text-[11px] text-gray-600 capitalize">{agentName || "—"}</span>
+                                  </TableCell>
+                                </TableRow>
+                              );
+                            })}
+                          </TableBody>
+                        </Table>
+                      </div>
+                    </div>
+                  ) : (
+                    // Agent cards view (no search)
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between">
+                        <p className="text-xs text-gray-500">Click on an agent to view their accounts</p>
+                        <span className="text-xs text-gray-400">{agentStats.length} agents</span>
+                      </div>
+                      {agentStats.length === 0 ? (
+                        <div className="flex flex-col items-center justify-center py-16 gap-3 text-slate-300">
+                          <User size={32} strokeWidth={1} />
+                          <p className="text-sm font-medium">No agents found</p>
+                        </div>
+                      ) : (
+                        <div className="grid grid-cols-1 gap-3">
+                          {agentStats.map((agent) => (
                           <AgentCard
                             key={agent.ReferenceID}
                             agent={agent}
@@ -915,24 +1025,16 @@ function DashboardContent() {
                             )}
                           />
                         ))}
-                      </div>
-                    )}
-                  </div>
+                        </div>
+                      )}
+                    </div>
+                  )
                 ) : loadingAgentData ? (
                   <div className="flex justify-center items-center py-16">
                     <Spinner className="size-8" />
                   </div>
                 ) : (
                   <>
-                    {/* Search */}
-                    <div className="flex items-center gap-2 bg-slate-50 rounded-xl px-3 py-2 border border-slate-200">
-                      <Search size={13} className="text-slate-400" />
-                      <input type="text" placeholder="Search company, contact, email..."
-                        value={search} onChange={(e) => setSearch(e.target.value)}
-                        className="text-xs bg-transparent outline-none flex-1 text-slate-700 placeholder-slate-400" />
-                      {search && <button onClick={() => setSearch("")} className="text-slate-400 hover:text-slate-600"><X size={12} /></button>}
-                    </div>
-
                     {/* Table */}
                     <div className="bg-white rounded-xl border shadow-sm overflow-hidden">
                       <div className="overflow-auto">

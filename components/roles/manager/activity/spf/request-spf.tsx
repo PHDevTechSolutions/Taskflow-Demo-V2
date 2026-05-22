@@ -1,12 +1,12 @@
 "use client";
 
-import React, { useEffect, useState, useCallback, useRef, useMemo } from "react";
+import React, { useEffect, useState, useCallback, useMemo } from "react";
 import { useSearchParams } from "next/navigation";
 import { Spinner } from "@/components/ui/spinner";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import {
     AlertCircleIcon, PenIcon,
-    Search, FileText, Loader2, ChevronLeft, ChevronRight,
+    Search, FileText, Loader2,
 } from "lucide-react";
 import { supabase } from "@/utils/supabase";
 import {
@@ -66,8 +66,8 @@ const StatusBadge = ({ status }: { status?: string }) => {
             "approved by procurement":  "Ready for Quotation",
             "for revision":             "Revised by Sales",
             "processed by pd":          "Pending for Procurement",
-            "approved by tsm":                 "Pending on PD",
-            "approved by sales head":           "Pending on PD",
+            "approved by tsm":          "Pending on PD",
+            "approved by sales head":   "Pending on PD",
             "declined":                 "Declined",
             "endorsed to sales head":   "Endorsed to Sales Head",
         };
@@ -94,50 +94,20 @@ const StatusBadge = ({ status }: { status?: string }) => {
     );
 };
 
-// ─── Pagination ───────────────────────────────────────────────────────────────
+// ─── Load More Component ─────────────────────────────────────────────────────
 
-interface PaginationProps {
-    total: number;
-    current: number;
-    perPage: number;
-    onPageChange: (page: number) => void;
-}
-
-const Pagination: React.FC<PaginationProps> = ({ total, current, perPage, onPageChange }) => {
-    const totalPages = Math.ceil(total / perPage);
-    return (
-        <div className="flex items-center justify-between px-4 py-3 border-t border-gray-200 bg-gray-50">
-            <div className="text-xs text-gray-600">
-                Showing {total === 0 ? 0 : (current - 1) * perPage + 1}–{Math.min(current * perPage, total)} of {total}
-            </div>
-            <div className="flex items-center gap-1">
-                <Button variant="outline" size="sm" onClick={() => onPageChange(current - 1)} disabled={current === 1} className="rounded-lg h-8 w-8 p-0 border-gray-300">
-                    <ChevronLeft className="w-4 h-4" />
-                </Button>
-                <div className="flex items-center gap-1">
-                    {Array.from({ length: totalPages }, (_, i) => i + 1)
-                        .filter((p) => Math.abs(p - current) <= 1 || p === 1 || p === totalPages)
-                        .map((p, i, arr) => (
-                            <React.Fragment key={p}>
-                                {i > 0 && arr[i - 1] !== p - 1 && <span className="text-xs text-gray-400">…</span>}
-                                <Button
-                                    variant={p === current ? "default" : "outline"}
-                                    size="sm"
-                                    onClick={() => onPageChange(p)}
-                                    className="rounded-lg h-8 w-8 p-0 text-xs font-bold"
-                                >
-                                    {p}
-                                </Button>
-                            </React.Fragment>
-                        ))}
-                </div>
-                <Button variant="outline" size="sm" onClick={() => onPageChange(current + 1)} disabled={current === totalPages} className="rounded-lg h-8 w-8 p-0 border-gray-300">
-                    <ChevronRight className="w-4 h-4" />
-                </Button>
-            </div>
-        </div>
-    );
-};
+const LoadMoreButton: React.FC<{ onClick: () => void; disabled: boolean; loading: boolean }> = ({ onClick, disabled, loading }) => (
+    <div className="flex justify-center p-4 border-t">
+        <Button
+            onClick={onClick}
+            disabled={disabled}
+            className="h-9 px-6 rounded-none bg-zinc-900 hover:bg-zinc-800 text-white text-sm font-medium"
+        >
+            {loading ? <Loader2 className="animate-spin mr-2 h-4 w-4" /> : null}
+            {loading ? "Loading..." : "Load More"}
+        </Button>
+    </div>
+);
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 
@@ -147,10 +117,13 @@ const SPF: React.FC<SPFProps> = ({ referenceid, tsm, manager, prepared_by, first
 
     const [allActivities, setAllActivities] = useState<SPFRecord[]>([]);
     const [loading, setLoading]             = useState(false);
+    const [loadingMore, setLoadingMore]     = useState(false);
     const [error, setError]                 = useState<string | null>(null);
     const [searchTerm, setSearchTerm]       = useState("");
-    const [recordsPage, setRecordsPage]     = useState(1);
-    const ITEMS_PER_PAGE = 20;
+    const [currentPage, setCurrentPage]     = useState(1);
+    const [totalCount, setTotalCount]       = useState(0);
+    const [hasMore, setHasMore]             = useState(false);
+    const ITEMS_PER_PAGE = 10;
 
     const [dialogOpen, setDialogOpen]   = useState(false);
     const [isEditMode, setIsEditMode]   = useState(false);
@@ -161,33 +134,68 @@ const SPF: React.FC<SPFProps> = ({ referenceid, tsm, manager, prepared_by, first
         if (highlight) setSearchTerm(highlight);
     }, [highlight]);
 
-    // ── Fetch SPF records ──
-    const fetchActivities = useCallback(async () => {
+    // ── Fetch SPF records with pagination ──
+    const fetchActivities = useCallback(async (page: number = 1, loadMore: boolean = false) => {
         if (!referenceid) return;
-        setLoading(true); setError(null);
+        
+        if (!loadMore) {
+            setLoading(true);
+            setError(null);
+        } else {
+            setLoadingMore(true);
+        }
+        
         try {
-            const res = await fetch(`/api/activity/manager/spf/fetch?referenceid=${encodeURIComponent(referenceid)}`);
+            const searchParam = searchTerm ? `&search=${encodeURIComponent(searchTerm)}` : "";
+            const res = await fetch(`/api/activity/manager/spf/fetch?referenceid=${encodeURIComponent(referenceid)}&page=${page}&limit=${ITEMS_PER_PAGE}${searchParam}`);
             if (!res.ok) throw new Error("Failed to fetch SPF records");
             const data = await res.json();
-            setAllActivities(data.activities || []);
+            
+            if (loadMore) {
+                setAllActivities(prev => [...prev, ...(data.activities || [])]);
+            } else {
+                setAllActivities(data.activities || []);
+            }
+            
+            setTotalCount(data.pagination?.totalCount || 0);
+            setHasMore(data.pagination?.hasMore || false);
+            setCurrentPage(data.pagination?.currentPage || 1);
         } catch (err: any) {
             setError(err.message);
         } finally {
-            setLoading(false);
+            if (!loadMore) {
+                setLoading(false);
+            } else {
+                setLoadingMore(false);
+            }
         }
-    }, [referenceid]);
+    }, [referenceid, searchTerm]);
 
     useEffect(() => {
-        fetchActivities();
+        if (!referenceid) return;
+        fetchActivities(1, false);
         const channel = supabase
             .channel(`spf-${referenceid}`)
-            .on("postgres_changes", { event: "*", schema: "public", table: "spf_request", filter: `tsm=eq.${tsm}` }, fetchActivities)
-            .on("postgres_changes", { event: "*", schema: "public", table: "spf_creation" }, fetchActivities)
+            .on("postgres_changes", { event: "*", schema: "public", table: "spf_request", filter: `tsm=eq.${tsm}` }, () => fetchActivities(1, false))
+            .on("postgres_changes", { event: "*", schema: "public", table: "spf_creation" }, () => fetchActivities(1, false))
             .subscribe();
         return () => { supabase.removeChannel(channel); };
-    }, [referenceid, fetchActivities]);
+    }, [referenceid, tsm, fetchActivities]);
 
-    // ── Filter ──
+    // ── Search handler ──
+    const handleSearch = useCallback(() => {
+        setCurrentPage(1);
+        fetchActivities(1, false);
+    }, [fetchActivities]);
+
+    // ── Load More handler ──
+    const handleLoadMore = useCallback(() => {
+        if (hasMore && !loadingMore) {
+            fetchActivities(currentPage + 1, true);
+        }
+    }, [currentPage, hasMore, loadingMore, fetchActivities]);
+
+    // ── Client-side filter for instant search on loaded items ──
     const searchLower = searchTerm.toLowerCase();
     const filteredActivities = useMemo(() =>
         allActivities.filter((a) =>
@@ -197,12 +205,6 @@ const SPF: React.FC<SPFProps> = ({ referenceid, tsm, manager, prepared_by, first
         ),
         [allActivities, searchLower]
     );
-
-    // ── Paginate ──
-    const paginatedActivities = useMemo(() => {
-        const start = (recordsPage - 1) * ITEMS_PER_PAGE;
-        return filteredActivities.slice(start, start + ITEMS_PER_PAGE);
-    }, [filteredActivities, recordsPage]);
 
     // ── Dialog helpers ──
     const openEditDialog = (spf: SPFRecord) => {
@@ -225,7 +227,7 @@ const SPF: React.FC<SPFProps> = ({ referenceid, tsm, manager, prepared_by, first
                 body: JSON.stringify({ ...data, sales_person: data.prepared_by, start_date: data.start_date || now, end_date: data.end_date || now, referenceid, tsm, manager }),
             });
             if (!res.ok) throw new Error("Failed to create SPF");
-            closeDialog(); fetchActivities();
+            closeDialog(); fetchActivities(1, false);
         } catch (err: any) { alert(err.message || "Failed to create SPF"); }
     };
 
@@ -239,12 +241,12 @@ const SPF: React.FC<SPFProps> = ({ referenceid, tsm, manager, prepared_by, first
                 body: JSON.stringify({ ...data, referenceid, tsm, manager }),
             });
             if (!res.ok) throw new Error("Failed to update SPF");
-            closeDialog(); fetchActivities();
+            closeDialog(); fetchActivities(1, false);
         } catch (err: any) { alert(err.message || "Failed to update SPF"); }
     };
 
     // ── Render ──
-    if (loading) return <div className="flex justify-center items-center h-40"><Spinner className="size-8" /></div>;
+    if (loading && allActivities.length === 0) return <div className="flex justify-center items-center h-40"><Spinner className="size-8" /></div>;
 
     if (error) return (
         <Alert variant="destructive" className="flex items-start space-x-3 p-4">
@@ -258,15 +260,33 @@ const SPF: React.FC<SPFProps> = ({ referenceid, tsm, manager, prepared_by, first
 
     return (
         <div className="space-y-4">
-            {/* ── Search ── */}
-            <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
-                <Input
-                    className="pl-9 h-10 text-sm rounded-lg border-gray-300 shadow-sm"
-                    placeholder="Search customers, SPF numbers, contacts…"
-                    value={searchTerm}
-                    onChange={(e) => { setSearchTerm(e.target.value); setRecordsPage(1); }}
-                />
+            {/* ── Search with button ── */}
+            <div className="flex gap-2">
+                <div className="relative flex-1">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+                    <Input
+                        className="pl-9 h-10 text-sm rounded-lg border-gray-300 shadow-sm"
+                        placeholder="Search customers, SPF numbers, contacts…"
+                        value={searchTerm}
+                        onChange={(e) => { setSearchTerm(e.target.value); setCurrentPage(1); }}
+                        onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                                handleSearch();
+                            }
+                        }}
+                    />
+                </div>
+                <Button
+                    onClick={handleSearch}
+                    disabled={loading}
+                    className="h-10 px-4 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-white text-sm font-medium"
+                >
+                    {loading ? (
+                        <div className="w-4 h-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                    ) : (
+                        "Search"
+                    )}
+                </Button>
             </div>
 
             {/* ── Table ── */}
@@ -275,15 +295,19 @@ const SPF: React.FC<SPFProps> = ({ referenceid, tsm, manager, prepared_by, first
                     <FileText className="w-4 h-4 text-gray-600" />
                     <div className="flex-1">
                         <h3 className="text-xs font-bold uppercase tracking-wider text-gray-700">SPF Records</h3>
-                        <p className="text-[11px] text-gray-500">{filteredActivities.length} of {allActivities.length}</p>
+                        <p className="text-[11px] text-gray-500">
+                            {filteredActivities.length} shown · {allActivities.length} loaded of {totalCount} total
+                        </p>
                     </div>
                 </div>
 
                 <div className="flex-1 overflow-x-auto">
-                    {paginatedActivities.length === 0 ? (
+                    {filteredActivities.length === 0 ? (
                         <div className="flex flex-col items-center justify-center py-20 text-gray-400 gap-2">
                             <FileText className="w-12 h-12 opacity-20" />
-                            <p className="text-sm font-semibold uppercase tracking-wide">No SPF records</p>
+                            <p className="text-sm font-semibold uppercase tracking-wide">
+                                {allActivities.length > 0 ? "No matching records" : "No SPF records"}
+                            </p>
                         </div>
                     ) : (
                         <Table>
@@ -295,7 +319,7 @@ const SPF: React.FC<SPFProps> = ({ referenceid, tsm, manager, prepared_by, first
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
-                                {paginatedActivities.map((item, idx) => {
+                                {filteredActivities.map((item, idx) => {
                                     const isHighlighted = highlight === item.spf_number;
                                     return (
                                         <TableRow
@@ -311,17 +335,16 @@ const SPF: React.FC<SPFProps> = ({ referenceid, tsm, manager, prepared_by, first
                                                     >
                                                         <PenIcon className="w-3.5 h-3.5" />
                                                     </button>
-                                                    {/*<CollaborationHubRowTrigger
-                                                            requestId={String(item.id)}
-                                                            spfNumber={item.spf_number}
-                                                            chatDocId={item.spf_creation_id}
-                                                            status={item.status || "PENDING"}
-                                                            collectionName="spf_creations"
-                                                            title={item.spf_number}
-                                                            variant="icon"
-                                                            className="p-1.5 border border-gray-200 rounded-lg text-gray-500 hover:text-[#be2d2d] hover:border-[#be2d2d]/30 hover:bg-[#be2d2d]/10 transition-all"
-                                                        />*/}
-                                                        
+                                                    <CollaborationHubRowTrigger
+                                                        requestId={String(item.id)}
+                                                        spfNumber={item.spf_number}
+                                                        chatDocId={item.spf_creation_id ?? undefined}
+                                                        status={item.status || "PENDING"}
+                                                        collectionName="spf_creations"
+                                                        title={item.spf_number}
+                                                        variant="icon"
+                                                        className="p-1.5 border border-gray-200 rounded-lg text-gray-500 hover:text-[#be2d2d] hover:border-[#be2d2d]/30 hover:bg-[#be2d2d]/10 transition-all"
+                                                    />
                                                 </div>
                                             </TableCell>
                                             <TableCell className="px-3 py-2 whitespace-nowrap"><StatusBadge status={item.status} /></TableCell>
@@ -346,8 +369,13 @@ const SPF: React.FC<SPFProps> = ({ referenceid, tsm, manager, prepared_by, first
                     )}
                 </div>
 
-                {filteredActivities.length > ITEMS_PER_PAGE && (
-                    <Pagination total={filteredActivities.length} current={recordsPage} perPage={ITEMS_PER_PAGE} onPageChange={setRecordsPage} />
+                {/* ── Load More Button ── */}
+                {hasMore && (
+                    <LoadMoreButton 
+                        onClick={handleLoadMore}
+                        disabled={loadingMore}
+                        loading={loadingMore}
+                    />
                 )}
             </div>
 

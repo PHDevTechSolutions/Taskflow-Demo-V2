@@ -119,7 +119,7 @@ interface MergedRow extends HistoryRow {
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-const PAGE_SIZE = 20;
+const PAGE_SIZE = 10;
 
 function toDateStr(d: Date): string {
   return d.toISOString().slice(0, 10);
@@ -145,15 +145,16 @@ export default async function handler(
     return res.status(405).json({ message: "Method not allowed" });
   }
 
-  const { from, to, page = "1", search = "" } = req.query;
+  const { from, to, page = "1", search = "", limit = "10" } = req.query;
 
   const fromDate =
     typeof from === "string" && from ? toDateStr(new Date(from)) : undefined;
   const toDate =
     typeof to === "string" && to ? toDateStr(new Date(to)) : undefined;
   const pageNum = Math.max(1, parseInt(String(page), 10));
+  const pageSize = Math.max(1, Math.min(100, parseInt(String(limit), 10)));
   const searchTerm = typeof search === "string" ? search.trim() : "";
-  const offset = (pageNum - 1) * PAGE_SIZE;
+  const offset = (pageNum - 1) * pageSize;
 
   try {
     // ── 1. COUNT ────────────────────────────────────────────────────────────
@@ -174,7 +175,7 @@ export default async function handler(
     }
 
     const total = count ?? 0;
-    const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+    const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
     if (total === 0) {
       return res
@@ -188,7 +189,7 @@ export default async function handler(
       .select(HISTORY_COLUMNS.join(", "))
       .eq("type_activity", "Quotation Preparation")
       .order("date_created", { ascending: false })
-      .range(offset, offset + PAGE_SIZE - 1);
+      .range(offset, offset + pageSize - 1);
 
     if (fromDate) dataQuery = dataQuery.gte("date_created", fromDate);
     if (toDate)   dataQuery = dataQuery.lte("date_created", toDate);

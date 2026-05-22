@@ -3,7 +3,7 @@
 import React, { useEffect, useState, useCallback, useMemo } from "react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from "@/components/ui/dropdown-menu";
-import { AlertCircleIcon, CheckCircle2Icon, Eye, MoreVertical, FileX, Loader2, Clock, CheckCircle, XCircle, Users, TrendingUp, Filter } from "lucide-react";
+import { AlertCircleIcon, CheckCircle2Icon, Eye, MoreVertical, FileX, Loader2, Clock, CheckCircle, XCircle, Users, TrendingUp, Filter, LoaderPinwheel } from "lucide-react";
 import { supabase } from "@/utils/supabase";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -114,6 +114,21 @@ export const ApprovalQuotation: React.FC<CompletedProps> = ({
     const [selectedTSM, setSelectedTSM] = useState<string>("all");
     const [selectedAgent, setSelectedAgent] = useState<string>("all");
 
+    // Pagination state
+    const [itemsPerPage] = useState(10);
+    const [totalCount, setTotalCount] = useState(0);
+    const [totalPages, setTotalPages] = useState(0);
+    const [hasMore, setHasMore] = useState(false);
+    const [loadingMore, setLoadingMore] = useState(false);
+    const [currentPage, setCurrentPage] = useState(1);
+
+    // Statistics state
+    const [tsmStats, setTsmStats] = useState<any[]>([]);
+    const [agentStats, setAgentStats] = useState<any[]>([]);
+    const [tsmOptions, setTsmOptions] = useState<any[]>([]);
+    const [agentOptions, setAgentOptions] = useState<any[]>([]);
+    const [statsLoading, setStatsLoading] = useState(false);
+
     const toLocalYMD = (value: Date) => {
         const year = value.getFullYear();
         const month = String(value.getMonth() + 1).padStart(2, "0");
@@ -122,13 +137,18 @@ export const ApprovalQuotation: React.FC<CompletedProps> = ({
     };
 
     // -----------------------------
-    const fetchActivities = useCallback(async () => {
+    const fetchActivities = useCallback(async (page: number = 1, loadMore: boolean = false) => {
         if (!referenceid) {
             setActivities([]);
             return;
         }
 
-        setLoading(true);
+        // Set appropriate loading state
+        if (loadMore) {
+            setLoadingMore(true);
+        } else {
+            setLoading(true);
+        }
         setError(null);
 
         try {
@@ -139,141 +159,127 @@ export const ApprovalQuotation: React.FC<CompletedProps> = ({
                 ? toLocalYMD(new Date(dateCreatedFilterRange.to))
                 : null;
 
-            const url = new URL("/api/activity/manager/quotation/fetch", window.location.origin);
+            const url = new URL("/api/activity/manager/quotation/approval/fetch", window.location.origin);
             url.searchParams.append("referenceid", referenceid);
-            url.searchParams.append("statusType", "approved");
+            url.searchParams.append("page", String(page));
+            url.searchParams.append("limit", String(itemsPerPage));
+
+            // Add search term if present
+            if (searchTerm.trim()) {
+                url.searchParams.append("search", searchTerm.trim());
+            }
+
+            // Add TSM filter
+            if (selectedTSM !== "all") {
+                url.searchParams.append("tsm", selectedTSM);
+            }
+
+            // Add Agent filter
+            if (selectedAgent !== "all") {
+                url.searchParams.append("agent", selectedAgent);
+            }
+
             if (from) url.searchParams.append("from", from);
             if (to) url.searchParams.append("to", to);
 
             const res = await fetch(url.toString());
             if (!res.ok) throw new Error("Failed to fetch activities");
             const data = await res.json();
-            setActivities(data.activities || []);
+
+            if (loadMore && page > 1) {
+                // Append new data for load more
+                setActivities(prev => [...prev, ...(data.activities || [])]);
+            } else {
+                // Replace data for initial load or new search
+                setActivities(data.activities || []);
+            }
+
+            // Update pagination info
+            setTotalCount(data.totalCount || 0);
+            setTotalPages(data.totalPages || 0);
+            setHasMore(data.hasMore || false);
+            setCurrentPage(page);
         } catch (err: any) {
             setError(err.message ?? "Unknown error");
+            setActivities([]);
         } finally {
             setLoading(false);
+            setLoadingMore(false);
+        }
+    }, [referenceid, itemsPerPage, searchTerm, selectedTSM, selectedAgent, dateCreatedFilterRange]);
+
+    // Search handler - only fetches when search button is clicked
+    const handleSearch = useCallback(() => {
+        setCurrentPage(1);
+        fetchActivities(1, false);
+    }, [fetchActivities]);
+
+    // Load more handler
+    const handleLoadMore = useCallback(() => {
+        if (hasMore && !loadingMore) {
+            const nextPage = currentPage + 1;
+            fetchActivities(nextPage, true);
+        }
+    }, [currentPage, hasMore, loadingMore, fetchActivities]);
+
+    // Reset page when search or filter changes
+    useEffect(() => {
+        setCurrentPage(1);
+    }, [searchTerm, selectedTSM, selectedAgent]);
+
+    // Fetch statistics from separate API
+    const fetchStatistics = useCallback(async () => {
+        if (!referenceid) return;
+
+        setStatsLoading(true);
+        try {
+            const from = dateCreatedFilterRange?.from
+                ? toLocalYMD(new Date(dateCreatedFilterRange.from))
+                : null;
+            const to = dateCreatedFilterRange?.to
+                ? toLocalYMD(new Date(dateCreatedFilterRange.to))
+                : null;
+
+            const url = new URL("/api/activity/manager/quotation/approval/stats", window.location.origin);
+            url.searchParams.append("referenceid", referenceid);
+            if (from) url.searchParams.append("from", from);
+            if (to) url.searchParams.append("to", to);
+
+            const res = await fetch(url.toString());
+            if (!res.ok) throw new Error("Failed to fetch statistics");
+            const data = await res.json();
+
+            setTsmStats(data.tsmStats || []);
+            setAgentStats(data.agentStats || []);
+            setTsmOptions(data.tsmOptions || []);
+            setAgentOptions(data.agentOptions || []);
+        } catch (err: any) {
+            console.error("Failed to fetch statistics:", err);
+        } finally {
+            setStatsLoading(false);
         }
     }, [referenceid, dateCreatedFilterRange]);
 
     useEffect(() => {
-        fetchActivities();
-    }, [fetchActivities]);
+        fetchActivities(1, false);
+        fetchStatistics();
+    }, [fetchActivities, fetchStatistics]);
 
-    // Sort activities by date_created
-    const sortedActivities = useMemo(() => {
-        return [...activities].sort((a, b) => {
-            return new Date(b.date_created).getTime() - new Date(a.date_created).getTime();
-        });
-    }, [activities]);
+    // Client-side sorting and filtering removed - now handled server-side
+    // Activities are already sorted by date_created DESC from the API
 
-    // Base filtered activities - MODIFIED FOR APPROVED STATUS
-    const baseFilteredActivities = useMemo(() => {
-        return sortedActivities.filter((item) => {
-            const status = String(item.tsm_approved_status ?? "").trim().toLowerCase();
-            return (
-                status === "approved by sales head" ||
-                status === "approved"
-            );
-        }).filter((item) => String(item.type_activity ?? "").trim().toLowerCase() === "quotation preparation");
-    }, [sortedActivities]);
-
-    // TSM Statistics - MODIFIED FOR APPROVED STATUS
-    const tsmStats = useMemo(() => {
-        const statsMap = new Map<string, TSMStat>();
-
-        baseFilteredActivities.forEach((item) => {
-            const tsmId = item.tsm || "unknown";
-            const tsmName = item.tsm_name || "Unknown TSM";
-            const status = String(item.tsm_approved_status ?? "").trim().toLowerCase();
-
-            if (!statsMap.has(tsmId)) {
-                statsMap.set(tsmId, {
-                    tsmId,
-                    tsmName,
-                    approved: 0,
-                    total: 0,
-                });
-            }
-
-            const stat = statsMap.get(tsmId)!;
-            stat.total += 1;
-
-            if (status === "approved by sales head" || status === "approved") {
-                stat.approved += 1;
-            }
-        });
-
-        return Array.from(statsMap.values()).sort((a, b) => b.total - a.total);
-    }, [baseFilteredActivities]);
-
-    // Agent Statistics
-    const agentStats = useMemo(() => {
-        const statsMap = new Map<string, AgentStat>();
-
-        baseFilteredActivities.forEach((item) => {
-            const agentId = item.referenceid || "unknown";
-            const agentName = item.agent_name || "Unknown Agent";
-
-            if (!statsMap.has(agentId)) {
-                statsMap.set(agentId, { agentId, agentName, total: 0 });
-            }
-
-            const stat = statsMap.get(agentId)!;
-            stat.total += 1;
-        });
-
-        return Array.from(statsMap.values()).sort((a, b) => b.total - a.total);
-    }, [baseFilteredActivities]);
-
-    // Overall statistics - MODIFIED FOR APPROVED STATUS
+    // Overall statistics (from total count)
     const stats = useMemo(() => {
-        const approved = baseFilteredActivities.filter(
+        const approved = activities.filter(
             (item) => String(item.tsm_approved_status ?? "").trim().toLowerCase() === "approved by sales head" ||
                      String(item.tsm_approved_status ?? "").trim().toLowerCase() === "approved"
         ).length;
 
         return {
             approved,
-            total: baseFilteredActivities.length,
+            total: totalCount,
         };
-    }, [baseFilteredActivities]);
-
-    // Final filtered activities with search, TSM, and Agent filters
-    const filteredActivities = useMemo(() => {
-        const search = searchTerm.toLowerCase().trim();
-
-        return baseFilteredActivities
-            .filter((item) => {
-                if (selectedTSM === "all") return true;
-                return item.tsm === selectedTSM;
-            })
-            .filter((item) => {
-                if (selectedAgent === "all") return true;
-                return item.referenceid === selectedAgent;
-            })
-            .filter((item) => {
-                if (!search) return true;
-                return Object.values(item).some(
-                    (val) => val !== null && val !== undefined && String(val).toLowerCase().includes(search)
-                );
-            });
-    }, [baseFilteredActivities, searchTerm, selectedTSM, selectedAgent]);
-
-    // TSM filter options
-    const tsmOptions = useMemo(() => {
-        const tsms = new Set<string>();
-        baseFilteredActivities.forEach((item) => {
-            if (item.tsm) tsms.add(item.tsm);
-        });
-        return Array.from(tsms).map((tsmId) => {
-            const tsm = baseFilteredActivities.find((item) => item.tsm === tsmId);
-            return {
-                value: tsmId,
-                label: tsm?.tsm_name || tsmId,
-            };
-        });
-    }, [baseFilteredActivities]);
+    }, [activities, totalCount]);
 
     const displayValue = (value: any) => {
         if (value === null || value === undefined) return "-";
@@ -313,249 +319,275 @@ export const ApprovalQuotation: React.FC<CompletedProps> = ({
         <>
             <div className="mb-6">
                 <div className="flex flex-col sm:flex-row gap-4 mb-4">
-                    {/* Search Input */}
-                    <div className="flex-1">
+                    {/* Search Input with Button */}
+                    <div className="flex-1 flex items-center gap-2">
                         <Input
                             placeholder="Search quotations..."
                             value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value)}
+                            onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                    handleSearch();
+                                }
+                            }}
                             className="max-w-md"
                         />
+                        <Button
+                            onClick={handleSearch}
+                            disabled={loading}
+                            className="h-9 px-4 rounded-none bg-zinc-900 hover:bg-zinc-800 text-white text-sm font-medium"
+                        >
+                            {loading ? (
+                                <div className="w-4 h-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                            ) : (
+                                "Search"
+                            )}
+                        </Button>
                     </div>
 
                     {/* Status Filter */}
-                    <div className="flex gap-2">
-                        <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                                <Button variant="outline" size="sm" className="flex items-center gap-2">
-                                    <Filter className="w-4 h-4" />
-                                    {statusFilter === "all" ? "All Status" : statusFilter}
-                                </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                                <DropdownMenuItem onClick={() => setStatusFilter("all")}>
-                                    All Status
+                    <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                            <Button variant="outline" size="sm" className="flex items-center gap-2">
+                                <Filter className="w-4 h-4" />
+                                {statusFilter === "all" ? "All Status" : statusFilter}
+                            </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                            <DropdownMenuItem onClick={() => {
+                                setStatusFilter("all");
+                                fetchActivities(1, false);
+                            }}>
+                                All Status
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => {
+                                setStatusFilter("approved");
+                                fetchActivities(1, false);
+                            }}>
+                                Approved
+                            </DropdownMenuItem>
+                        </DropdownMenuContent>
+                    </DropdownMenu>
+
+                    {/* TSM Filter */}
+                    <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                            <Button variant="outline" size="sm" className="flex items-center gap-2">
+                                <Users className="w-4 h-4" />
+                                {selectedTSM === "all" ? "All TSM" : tsmOptions.find(opt => opt.value === selectedTSM)?.label || selectedTSM}
+                            </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                            <DropdownMenuItem onClick={() => {
+                                setSelectedTSM("all");
+                                fetchActivities(1, false);
+                            }}>
+                                All TSM
+                            </DropdownMenuItem>
+                            {tsmOptions.map((tsm) => (
+                                <DropdownMenuItem key={tsm.value} onClick={() => {
+                                    setSelectedTSM(tsm.value);
+                                    fetchActivities(1, false);
+                                }}>
+                                    {tsm.label}
                                 </DropdownMenuItem>
-                                <DropdownMenuItem onClick={() => setStatusFilter("approved")}>
-                                    Approved
-                                </DropdownMenuItem>
-                            </DropdownMenuContent>
-                        </DropdownMenu>
-
-                        {/* TSM Filter */}
-                        <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                                <Button variant="outline" size="sm" className="flex items-center gap-2">
-                                    <Users className="w-4 h-4" />
-                                    {tsmFilter === "all" ? "All TSM" : tsmOptions.find(opt => opt.value === tsmFilter)?.label || tsmFilter}
-                                </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                                <DropdownMenuItem onClick={() => setTsmFilter("all")}>
-                                    All TSM
-                                </DropdownMenuItem>
-                                {tsmOptions.map((tsm) => (
-                                    <DropdownMenuItem key={tsm.value} onClick={() => setTsmFilter(tsm.value)}>
-                                        {tsm.label}
-                                    </DropdownMenuItem>
-                                ))}
-                            </DropdownMenuContent>
-                        </DropdownMenu>
-                    </div>
-                </div>
-
-                {/* Statistics Cards */}
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
-                    <div className="rounded-lg border bg-card p-4 shadow-sm">
-                        <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-3">
-                                <div className="p-2 rounded-full bg-blue-100">
-                                    <CheckCircle className="w-5 h-5 text-blue-600" />
-                                </div>
-                                <div>
-                                    <p className="text-sm font-medium text-muted-foreground">Approved Quotations</p>
-                                    <p className="text-2xl font-bold">{stats.approved}</p>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div className="rounded-lg border bg-card p-4 shadow-sm">
-                        <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-3">
-                                <div className="p-2 rounded-full bg-green-100">
-                                    <TrendingUp className="w-5 h-5 text-green-600" />
-                                </div>
-                                <div>
-                                    <p className="text-sm font-medium text-muted-foreground">Total Quotations</p>
-                                    <p className="text-2xl font-bold">{stats.total}</p>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div className="rounded-lg border bg-card p-4 shadow-sm">
-                        <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-3">
-                                <div className="p-2 rounded-full bg-orange-100">
-                                    <Users className="w-5 h-5 text-orange-600" />
-                                </div>
-                                <div>
-                                    <p className="text-sm font-medium text-muted-foreground">Active TSM</p>
-                                    <p className="text-2xl font-bold">{tsmStats.length}</p>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                {/* Breakdown Toggles */}
-                <div className="mb-4 flex flex-wrap gap-2">
-                    <Button
-                        onClick={() => {
-                            setShowTSMStats(!showTSMStats);
-                            setShowAgentStats(false);
-                        }}
-                        className={`rounded-none text-xs px-4 py-2 ${showTSMStats ? "bg-purple-700" : "bg-purple-600"} hover:bg-purple-700 text-white w-full sm:w-auto`}
-                    >
-                        <Users className="w-4 h-4 mr-2" />
-                        {showTSMStats ? "Hide" : "Show"} TSM Breakdown ({tsmStats.length} TSMs)
-                    </Button>
-                    <Button
-                        onClick={() => {
-                            setShowAgentStats(!showAgentStats);
-                            setShowTSMStats(false);
-                        }}
-                        className={`rounded-none text-xs px-4 py-2 ${showAgentStats ? "bg-blue-700" : "bg-blue-600"} hover:bg-blue-700 text-white w-full sm:w-auto`}
-                    >
-                        <Users className="w-4 h-4 mr-2" />
-                        {showAgentStats ? "Hide" : "Show"} Agent Breakdown ({agentStats.length} Agents)
-                    </Button>
-                </div>
-
-                {/* TSM Statistics Grid */}
-                {showTSMStats && tsmStats.length > 0 && (
-                    <div className="mb-6 bg-purple-50 border border-purple-200 rounded-sm p-4">
-                        <h3 className="text-sm font-bold text-purple-900 mb-3 flex items-center">
-                            <TrendingUp className="w-4 h-4 mr-2" />
-                            TSM Performance Summary
-                        </h3>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
-                            {tsmStats.map((stat) => (
-                                <div
-                                    key={stat.tsmId}
-                                    className={`bg-white border rounded-sm p-3 cursor-pointer transition-all hover:shadow-md ${
-                                        selectedTSM === stat.tsmId ? "border-purple-600 ring-2 ring-purple-200" : "border-gray-200"
-                                    }`}
-                                    onClick={() => setSelectedTSM(selectedTSM === stat.tsmId ? "all" : stat.tsmId)}
-                                >
-                                    <div className="flex items-start justify-between mb-2">
-                                        <p className="text-xs font-bold text-gray-900 truncate flex-1 mr-2">
-                                            {stat.tsmName}
-                                        </p>
-                                        {selectedTSM === stat.tsmId && (
-                                            <CheckCircle className="w-4 h-4 text-purple-600 flex-shrink-0" />
-                                        )}
-                                    </div>
-                                    <div className="flex justify-between items-center text-[10px]">
-                                        <span className="text-gray-500">Approved:</span>
-                                        <span className="font-bold text-green-600">{stat.approved}</span>
-                                    </div>
-                                    <div className="flex justify-between items-center text-[10px]">
-                                        <span className="text-gray-500">Total:</span>
-                                        <span className="font-bold text-gray-900">{stat.total}</span>
-                                    </div>
-                                </div>
                             ))}
-                        </div>
-                        {selectedTSM !== "all" && (
-                            <div className="mt-3 text-center">
-                                <Button
-                                    onClick={() => setSelectedTSM("all")}
-                                    variant="outline"
-                                    className="rounded-none text-xs px-4 py-2"
-                                >
-                                    Clear TSM Filter
-                                </Button>
-                            </div>
-                        )}
-                    </div>
-                )}
-
-                {/* Agent Statistics Grid */}
-                {showAgentStats && agentStats.length > 0 && (
-                    <div className="mb-6 bg-blue-50 border border-blue-200 rounded-sm p-4">
-                        <h3 className="text-sm font-bold text-blue-900 mb-3 flex items-center">
-                            <TrendingUp className="w-4 h-4 mr-2" />
-                            Agent Performance Summary
-                        </h3>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
-                            {agentStats.map((agent) => (
-                                <div
-                                    key={agent.agentId}
-                                    className={`bg-white border rounded-sm p-3 cursor-pointer transition-all hover:shadow-md ${
-                                        selectedAgent === agent.agentId ? "border-blue-600 ring-2 ring-blue-200" : "border-gray-200"
-                                    }`}
-                                    onClick={() => setSelectedAgent(selectedAgent === agent.agentId ? "all" : agent.agentId)}
-                                >
-                                    <div className="flex items-start justify-between mb-2">
-                                        <p className="text-xs font-bold text-gray-900 truncate flex-1 mr-2">
-                                            {agent.agentName}
-                                        </p>
-                                        {selectedAgent === agent.agentId && (
-                                            <CheckCircle className="w-4 h-4 text-blue-600 flex-shrink-0" />
-                                        )}
-                                    </div>
-                                    <div className="flex justify-between items-center text-[10px]">
-                                        <span className="text-gray-500">Approved:</span>
-                                        <span className="font-bold text-gray-900">{agent.total}</span>
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-                        {selectedAgent !== "all" && (
-                            <div className="mt-3 text-center">
-                                <Button
-                                    onClick={() => setSelectedAgent("all")}
-                                    variant="outline"
-                                    className="rounded-none text-xs px-4 py-2"
-                                >
-                                    Clear Agent Filter
-                                </Button>
-                            </div>
-                        )}
-                    </div>
-                )}
-                {(selectedTSM !== "all" || selectedAgent !== "all") && (
-                    <div className="flex flex-wrap items-center gap-2 text-xs mb-4">
-                        <span className="text-gray-500 font-semibold">Active Filters:</span>
-                        {selectedTSM !== "all" && (
-                            <span className="bg-purple-100 text-purple-800 px-2 py-1 rounded-sm font-semibold flex items-center gap-1">
-                                TSM: {tsmStats.find(t => t.tsmId === selectedTSM)?.tsmName}
-                                <Button
-                                    variant="ghost"
-                                    className="h-auto p-0 ml-1 text-purple-800 hover:text-purple-900"
-                                    onClick={() => setSelectedTSM("all")}
-                                >
-                                    <XCircle className="w-3 h-3" />
-                                </Button>
-                            </span>
-                        )}
-                        {selectedAgent !== "all" && (
-                            <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded-sm font-semibold flex items-center gap-1">
-                                Agent: {agentStats.find(a => a.agentId === selectedAgent)?.agentName}
-                                <Button
-                                    variant="ghost"
-                                    className="h-auto p-0 ml-1 text-blue-800 hover:text-blue-900"
-                                    onClick={() => setSelectedAgent("all")}
-                                >
-                                    <XCircle className="w-3 h-3" />
-                                </Button>
-                            </span>
-                        )}
-                    </div>
-                )}
+                        </DropdownMenuContent>
+                    </DropdownMenu>
+                </div>
             </div>
+
+            {/* Statistics Cards */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
+                <div className="rounded-lg border bg-card p-4 shadow-sm">
+                    <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                            <div className="p-2 rounded-full bg-blue-100">
+                                <CheckCircle className="w-5 h-5 text-blue-600" />
+                            </div>
+                            <div>
+                                <p className="text-sm font-medium text-muted-foreground">Approved Quotations</p>
+                                <p className="text-2xl font-bold">{stats.approved}</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div className="rounded-lg border bg-card p-4 shadow-sm">
+                    <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                            <div className="p-2 rounded-full bg-green-100">
+                                <TrendingUp className="w-5 h-5 text-green-600" />
+                            </div>
+                            <div>
+                                <p className="text-sm font-medium text-muted-foreground">Total Quotations</p>
+                                <p className="text-2xl font-bold">{stats.total}</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div className="rounded-lg border bg-card p-4 shadow-sm">
+                    <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                            <div className="p-2 rounded-full bg-orange-100">
+                                <Users className="w-5 h-5 text-orange-600" />
+                            </div>
+                            <div>
+                                <p className="text-sm font-medium text-muted-foreground">Active TSM</p>
+                                <p className="text-2xl font-bold">{tsmStats.length}</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            {/* Breakdown Toggles */}
+            <div className="mb-4 flex flex-wrap gap-2">
+                <Button
+                    onClick={() => {
+                        setShowTSMStats(!showTSMStats);
+                        setShowAgentStats(false);
+                    }}
+                    className={`rounded-none text-xs px-4 py-2 ${showTSMStats ? "bg-purple-700" : "bg-purple-600"} hover:bg-purple-700 text-white w-full sm:w-auto`}
+                >
+                    <Users className="w-4 h-4 mr-2" />
+                    {showTSMStats ? "Hide" : "Show"} TSM Breakdown ({tsmStats.length} TSMs)
+                </Button>
+                <Button
+                    onClick={() => {
+                        setShowAgentStats(!showAgentStats);
+                        setShowTSMStats(false);
+                    }}
+                    className={`rounded-none text-xs px-4 py-2 ${showAgentStats ? "bg-blue-700" : "bg-blue-600"} hover:bg-blue-700 text-white w-full sm:w-auto`}
+                >
+                    <Users className="w-4 h-4 mr-2" />
+                    {showAgentStats ? "Hide" : "Show"} Agent Breakdown ({agentStats.length} Agents)
+                </Button>
+            </div>
+
+            {/* TSM Statistics Grid */}
+            {showTSMStats && tsmStats.length > 0 && (
+                <div className="mb-6 bg-purple-50 border border-purple-200 rounded-sm p-4">
+                    <h3 className="text-sm font-bold text-purple-900 mb-3 flex items-center">
+                        <TrendingUp className="w-4 h-4 mr-2" />
+                        TSM Performance Summary
+                    </h3>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+                        {tsmStats.map((stat) => (
+                            <div
+                                key={stat.tsmId}
+                                className={`bg-white border rounded-sm p-3 cursor-pointer transition-all hover:shadow-md ${
+                                    selectedTSM === stat.tsmId ? "border-purple-600 ring-2 ring-purple-200" : "border-gray-200"
+                                }`}
+                                onClick={() => setSelectedTSM(selectedTSM === stat.tsmId ? "all" : stat.tsmId)}
+                            >
+                                <div className="flex items-start justify-between mb-2">
+                                    <p className="text-xs font-bold text-gray-900 truncate flex-1 mr-2 uppercase">
+                                        {stat.tsmName}
+                                    </p>
+                                    {selectedTSM === stat.tsmId && (
+                                        <CheckCircle className="w-4 h-4 text-purple-600 flex-shrink-0" />
+                                    )}
+                                </div>
+                                <div className="flex justify-between items-center text-[10px]">
+                                    <span className="text-gray-500">Approved:</span>
+                                    <span className="font-bold text-green-600">{stat.approved}</span>
+                                </div>
+                                <div className="flex justify-between items-center text-[10px]">
+                                    <span className="text-gray-500">Total:</span>
+                                    <span className="font-bold text-gray-900">{stat.total}</span>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                    {selectedTSM !== "all" && (
+                        <div className="mt-3 text-center">
+                            <Button
+                                onClick={() => setSelectedTSM("all")}
+                                variant="outline"
+                                className="rounded-none text-xs px-4 py-2"
+                            >
+                                Clear TSM Filter
+                            </Button>
+                        </div>
+                    )}
+                </div>
+            )}
+
+            {/* Agent Statistics Grid */}
+            {showAgentStats && agentStats.length > 0 && (
+                <div className="mb-6 bg-blue-50 border border-blue-200 rounded-sm p-4">
+                    <h3 className="text-sm font-bold text-blue-900 mb-3 flex items-center">
+                        <TrendingUp className="w-4 h-4 mr-2" />
+                        Agent Performance Summary
+                    </h3>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+                        {agentStats.map((agent) => (
+                            <div
+                                key={agent.agentId}
+                                className={`bg-white border rounded-sm p-3 cursor-pointer transition-all hover:shadow-md ${
+                                    selectedAgent === agent.agentId ? "border-blue-600 ring-2 ring-blue-200" : "border-gray-200"
+                                }`}
+                                onClick={() => setSelectedAgent(selectedAgent === agent.agentId ? "all" : agent.agentId)}
+                            >
+                                <div className="flex items-start justify-between mb-2">
+                                    <p className="text-xs font-bold text-gray-900 truncate flex-1 mr-2 uppercase">
+                                        {agent.agentName}
+                                    </p>
+                                    {selectedAgent === agent.agentId && (
+                                        <CheckCircle className="w-4 h-4 text-blue-600 flex-shrink-0" />
+                                    )}
+                                </div>
+                                <div className="flex justify-between items-center text-[10px]">
+                                    <span className="text-gray-500">Approved:</span>
+                                    <span className="font-bold text-gray-900">{agent.total}</span>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                    {selectedAgent !== "all" && (
+                        <div className="mt-3 text-center">
+                            <Button
+                                onClick={() => setSelectedAgent("all")}
+                                variant="outline"
+                                className="rounded-none text-xs px-4 py-2"
+                            >
+                                Clear Agent Filter
+                            </Button>
+                        </div>
+                    )}
+                </div>
+            )}
+            {(selectedTSM !== "all" || selectedAgent !== "all") && (
+                <div className="flex flex-wrap items-center gap-2 text-xs mb-4">
+                    <span className="text-gray-500 font-semibold">Active Filters:</span>
+                    {selectedTSM !== "all" && (
+                        <span className="bg-purple-100 text-purple-800 px-2 py-1 rounded-sm font-semibold flex items-center gap-1">
+                            TSM: {tsmStats.find(t => t.tsmId === selectedTSM)?.tsmName}
+                            <Button
+                                variant="ghost"
+                                className="h-auto p-0 ml-1 text-purple-800 hover:text-purple-900"
+                                onClick={() => setSelectedTSM("all")}
+                            >
+                                <XCircle className="w-3 h-3" />
+                            </Button>
+                        </span>
+                    )}
+                    {selectedAgent !== "all" && (
+                        <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded-sm font-semibold flex items-center gap-1">
+                            Agent: {agentStats.find(a => a.agentId === selectedAgent)?.agentName}
+                            <Button
+                                variant="ghost"
+                                className="h-auto p-0 ml-1 text-blue-800 hover:text-blue-900"
+                                onClick={() => setSelectedAgent("all")}
+                            >
+                                <XCircle className="w-3 h-3" />
+                            </Button>
+                        </span>
+                    )}
+                </div>
+            )}
 
             {/* Main Quotations Table */}
             <div className="rounded-lg border bg-card shadow-sm">
@@ -566,33 +598,40 @@ export const ApprovalQuotation: React.FC<CompletedProps> = ({
                     </h3>
                 </div>
 
-                {filteredActivities.length === 0 ? (
+                {activities.length === 0 ? (
                     <div className="p-8 text-center">
                         <CheckCircle2Icon className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
                         <p className="text-muted-foreground">
-                            {baseFilteredActivities.length === 0
-                                ? "No approved quotations found."
-                                : "No quotations match your search criteria."}
+                            No approved quotations found.
                         </p>
                     </div>
                 ) : (
+                    <>
+                    <div className="p-4 border-b text-xs font-bold">
+                        Showing {activities.length} records
+                        {totalCount > activities.length && (
+                            <span className="text-gray-500 ml-2">
+                                of {totalCount} total
+                            </span>
+                        )}
+                    </div>
                     <div className="overflow-x-auto">
                         <Table>
                             <TableHeader>
                                 <TableRow>
                                     <TableHead>Actions</TableHead>
                                     <TableHead>Agent</TableHead>
-                                    <TableHead>Company</TableHead>
-                                    <TableHead>Contact Person</TableHead>
                                     <TableHead>Quotation #</TableHead>
-                                    <TableHead>Amount</TableHead>
+                                    <TableHead>Quotation Amount</TableHead>
+                                    <TableHead>Company</TableHead>
+                                    <TableHead>Contact Person</TableHead>                                    
                                     <TableHead>Status</TableHead>
-                                    <TableHead>Quotation Status</TableHead>
+                                    <TableHead>Quotation Remarks</TableHead>                                    
                                     <TableHead>Date Created</TableHead>
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
-                                {filteredActivities.map((item) => (
+                                {activities.map((item: Completed) => (
                                     <TableRow key={item.id}>
                                         <TableCell>
                                             <DropdownMenu>
@@ -616,8 +655,14 @@ export const ApprovalQuotation: React.FC<CompletedProps> = ({
                                                 </DropdownMenuContent>
                                             </DropdownMenu>
                                         </TableCell>
-                                        <TableCell>
+                                        <TableCell className="uppercase">
                                             {displayValue(item.agent_name)}
+                                        </TableCell>
+                                        <TableCell>
+                                            {displayValue(item.quotation_number)}
+                                        </TableCell>
+                                        <TableCell className="font-semibold">
+                                            {formatCurrency(item.quotation_amount)}
                                         </TableCell>
                                         <TableCell>
                                             <div className="max-w-[150px] truncate" title={displayValue(item.company_name)}>
@@ -629,13 +674,8 @@ export const ApprovalQuotation: React.FC<CompletedProps> = ({
                                                 {displayValue(item.contact_person)}
                                             </div>
                                         </TableCell>
-                                        <TableCell>
-                                            {displayValue(item.quotation_number)}
-                                        </TableCell>
-                                        <TableCell className="font-semibold">
-                                            {formatCurrency(item.quotation_amount)}
-                                        </TableCell>
-                                        <TableCell className="p-2 font-semibold text-center">
+                                        
+                                        <TableCell className="p-2 font-semibold">
                                             <span
                                                 className={`inline-flex items-center rounded-xs shadow-sm px-2 py-1 text-[9px] sm:text-xs font-semibold whitespace-nowrap
                                                     ${item.tsm_approved_status === "Approved By Sales Head"
@@ -651,7 +691,7 @@ export const ApprovalQuotation: React.FC<CompletedProps> = ({
                                             </span>
                                         </TableCell>
                                         <TableCell className="text-left">
-                                            <div className="max-w-[150px] truncate" title={displayValue(item.quotation_status)}>
+                                            <div className="max-w-[150px]" title={displayValue(item.quotation_status)}>
                                                 {displayValue(item.quotation_status)}
                                             </div>
                                         </TableCell>
@@ -663,6 +703,24 @@ export const ApprovalQuotation: React.FC<CompletedProps> = ({
                             </TableBody>
                         </Table>
                     </div>
+
+                    {/* Load More Button */}
+                    {hasMore && (
+                        <div className="flex justify-center p-4 border-t">
+                            <Button
+                                onClick={handleLoadMore}
+                                disabled={loadingMore}
+                                className="h-9 px-6 rounded-none bg-zinc-900 hover:bg-zinc-800 text-white text-sm font-medium"
+                            >
+                                {loadingMore ? <LoaderPinwheel className="animate-spin" /> : null} {loadingMore ? (
+                                    "Loading..."
+                                ) : (
+                                    "Load More"
+                                )}
+                            </Button>
+                        </div>
+                    )}
+                    </>
                 )}
             </div>
 
@@ -675,7 +733,7 @@ export const ApprovalQuotation: React.FC<CompletedProps> = ({
                         setEditItem(null);
                     }}
                     onSave={() => {
-                        fetchActivities();
+                        fetchActivities(1, false);
                         setEditDialogOpen(false);
                         setEditItem(null);
                     }}

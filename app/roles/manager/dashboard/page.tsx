@@ -203,6 +203,11 @@ function DashboardContent() {
   const [spfPendingProcurement, setSpfPendingProcurement] = useState(0);
   const [spfPendingPD, setSpfPendingPD] = useState(0);
 
+  const [orderCompleteCount, setOrderCompleteCount] = useState(0);
+  const [convertToSOCount, setConvertToSOCount] = useState(0);
+  const [declinedCount, setDeclinedCount] = useState(0);
+  const [cancelledCount, setCancelledCount] = useState(0);
+
   const [avgResponseTime, setAvgResponseTime] = useState(0);
   const [avgNonQuotationHT, setAvgNonQuotationHT] = useState(0);
   const [avgQuotationHT, setAvgQuotationHT] = useState(0);
@@ -878,6 +883,18 @@ function DashboardContent() {
       setSpfPendingPD(
         activities.filter((a) => a.call_type === "Quotation with SPF Preparation" && a.quotation_status === "Pending PD").length
       );
+      setOrderCompleteCount(
+        activities.filter((a) => a.quotation_status === "Order Complete").length
+      );
+      setConvertToSOCount(
+        activities.filter((a) => a.quotation_status === "Convert to SO").length
+      );
+      setDeclinedCount(
+        activities.filter((a) => a.quotation_status === "Declined").length
+      );
+      setCancelledCount(
+        activities.filter((a) => a.quotation_status === "Cancelled").length
+      );
     } finally {
       setLoadingTime(false);
     }
@@ -898,10 +915,10 @@ function DashboardContent() {
 
     // Pick the correct date range based on which tab is active
     const currentFromDate = activeTab === "manager" ? fromDate : activeTab === "tsm" ? tsmFromDate : agentFromDate;
-    const currentToDate   = activeTab === "manager" ? toDate   : activeTab === "tsm" ? tsmToDate   : agentToDate;
+    const currentToDate = activeTab === "manager" ? toDate : activeTab === "tsm" ? tsmToDate : agentToDate;
 
     const rangeStart = new Date(currentFromDate); rangeStart.setHours(0, 0, 0, 0);
-    const rangeEnd   = new Date(currentToDate);   rangeEnd.setHours(23, 59, 59, 999);
+    const rangeEnd = new Date(currentToDate); rangeEnd.setHours(23, 59, 59, 999);
 
     const activityKeySet = new Set<string>();
     const byActivityRef: Record<string, any> = {};
@@ -930,7 +947,7 @@ function DashboardContent() {
       return `name:${(acc.company_name ?? "").toLowerCase()}`;
     };
 
-    const covered   = clusterAccounts.filter((acc) =>  activityKeySet.has(getAccountKey(acc)));
+    const covered = clusterAccounts.filter((acc) => activityKeySet.has(getAccountKey(acc)));
     const uncovered = clusterAccounts.filter((acc) => !activityKeySet.has(getAccountKey(acc)));
 
     setCoveredAccounts(covered);
@@ -939,8 +956,8 @@ function DashboardContent() {
     const seg = { top50: 0, next30: 0, balance20: 0, csrClient: 0, newClient: 0, tsaClient: 0 };
     covered.forEach((acc) => {
       const type = acc.type_client ?? "";
-      if      (type === "top50")     seg.top50++;
-      else if (type === "next30")    seg.next30++;
+      if (type === "top50") seg.top50++;
+      else if (type === "next30") seg.next30++;
       else if (type === "balance20") seg.balance20++;
       else if (type === "csrclient") seg.csrClient++;
       else if (type === "newclient") seg.newClient++;
@@ -1072,31 +1089,28 @@ function DashboardContent() {
               <div className="flex items-center gap-1 rounded-lg border border-gray-200 overflow-hidden ml-4">
                 <button
                   onClick={() => setActiveTab("manager")}
-                  className={`px-3 py-1.5 text-[10px] font-bold uppercase transition-colors ${
-                    activeTab === "manager"
+                  className={`px-3 py-1.5 text-[10px] font-bold uppercase transition-colors ${activeTab === "manager"
                       ? "bg-gray-900 text-white"
                       : "bg-white text-gray-500 hover:bg-gray-50"
-                  }`}
+                    }`}
                 >
                   Manager Reports
                 </button>
                 <button
                   onClick={() => setActiveTab("tsm")}
-                  className={`px-3 py-1.5 text-[10px] font-bold uppercase transition-colors ${
-                    activeTab === "tsm"
+                  className={`px-3 py-1.5 text-[10px] font-bold uppercase transition-colors ${activeTab === "tsm"
                       ? "bg-gray-900 text-white"
                       : "bg-white text-gray-500 hover:bg-gray-50"
-                  }`}
+                    }`}
                 >
                   TSM Reports
                 </button>
                 <button
                   onClick={() => setActiveTab("agent")}
-                  className={`px-3 py-1.5 text-[10px] font-bold uppercase transition-colors ${
-                    activeTab === "agent"
+                  className={`px-3 py-1.5 text-[10px] font-bold uppercase transition-colors ${activeTab === "agent"
                       ? "bg-gray-900 text-white"
                       : "bg-white text-gray-500 hover:bg-gray-50"
-                  }`}
+                    }`}
                 >
                   Agent Reports
                 </button>
@@ -1197,8 +1211,8 @@ function DashboardContent() {
                                 key={agent.ReferenceID}
                                 onClick={() => setSelectedRefId(agent.ReferenceID)}
                                 className={`text-[9px] font-bold uppercase px-2 py-1 border transition-colors ${isActive
-                                    ? "bg-gray-900 text-white border-gray-900"
-                                    : "bg-white text-gray-600 border-gray-200 hover:border-gray-400 hover:text-gray-900"
+                                  ? "bg-gray-900 text-white border-gray-900"
+                                  : "bg-white text-gray-600 border-gray-200 hover:border-gray-400 hover:text-gray-900"
                                   }`}
                               >
                                 {agent.Lastname}, {agent.Firstname}
@@ -1288,8 +1302,8 @@ function DashboardContent() {
                                 key={agent.ReferenceID}
                                 onClick={() => setSelectedAgentRefId(agent.ReferenceID)}
                                 className={`text-[9px] font-bold uppercase px-2 py-1 border transition-colors ${isActive
-                                    ? "bg-gray-900 text-white border-gray-900"
-                                    : "bg-white text-gray-600 border-gray-200 hover:border-gray-400 hover:text-gray-900"
+                                  ? "bg-gray-900 text-white border-gray-900"
+                                  : "bg-white text-gray-600 border-gray-200 hover:border-gray-400 hover:text-gray-900"
                                   }`}
                               >
                                 {agent.Lastname}, {agent.Firstname}
@@ -1375,37 +1389,14 @@ function DashboardContent() {
                 <ul className="list-none space-y-3">
 
                   {/* Outbound Performance */}
-                  <SectionCard
-                    title="Outbound Touchbase"
-                    badge={
-                      <span className={`text-[9px] font-black px-2 py-0.5 ${dailyPct >= 100 ? "bg-emerald-100 text-emerald-700" :
-                        dailyPct >= 50 ? "bg-amber-100 text-amber-700" :
-                          "bg-red-100 text-red-600"}`}>
-                        {dailyPct}% Daily
-                      </span>
-                    }
-                  >
-                    <div className="mb-3">
-                      <div className="h-1 bg-gray-100 w-full overflow-hidden">
-                        <div
-                          className={`h-full transition-all duration-500 ${dailyPct >= 100 ? "bg-emerald-500" :
-                            dailyPct >= 50 ? "bg-amber-500" : "bg-red-500"}`}
-                          style={{ width: `${dailyPct}%` }}
-                        />
-                      </div>
+                  <SectionCard title="Outbound Performance">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] text-gray-500 uppercase font-medium">Daily Count</span>
+                      <span className="text-[20px] font-black text-gray-800">{outboundDaily}</span>
                     </div>
-                    <div className="grid grid-cols-3 gap-1 text-center">
-                      {[
-                        { label: "Daily", value: outboundDaily },
-                        { label: "Weekly", value: outboundWeekly },
-                        { label: "Monthly", value: outboundMonthly },
-                      ].map(({ label, value }, i) => (
-                        <div key={label} className={i < 2 ? "border-r border-gray-100" : ""}>
-                          <p className="text-[9px] text-gray-400 uppercase font-semibold mb-0.5">{label}</p>
-                          <p className="font-black text-[12px] text-gray-800">{value}</p>
-                        </div>
-                      ))}
-                    </div>
+                    <p className="text-[8px] text-gray-400 uppercase font-medium mt-2 tracking-wide">
+                      Source: Outbound - Touchbase
+                    </p>
                   </SectionCard>
 
                   {/* Database Coverage */}
@@ -1445,12 +1436,12 @@ function DashboardContent() {
 
                       <div className="grid grid-cols-3 gap-1 mt-2">
                         {[
-                          { label: "Top 50",  key: "top50",     covered: clientSegments.top50,      total: denominators.top50     },
-                          { label: "Next 30", key: "next30",    covered: clientSegments.next30,     total: denominators.next30    },
-                          { label: "Bal 20",  key: "balance20", covered: clientSegments.balance20,  total: denominators.bal20     },
-                          { label: "CSR",     key: "csrclient", covered: clientSegments.csrClient,  total: denominators.csrClient },
-                          { label: "New",     key: "newclient", covered: clientSegments.newClient,  total: denominators.newClient },
-                          { label: "TSA",     key: "tsaclient", covered: clientSegments.tsaClient,  total: denominators.tsaClient },
+                          { label: "Top 50", key: "top50", covered: clientSegments.top50, total: denominators.top50 },
+                          { label: "Next 30", key: "next30", covered: clientSegments.next30, total: denominators.next30 },
+                          { label: "Bal 20", key: "balance20", covered: clientSegments.balance20, total: denominators.bal20 },
+                          { label: "CSR", key: "csrclient", covered: clientSegments.csrClient, total: denominators.csrClient },
+                          { label: "New", key: "newclient", covered: clientSegments.newClient, total: denominators.newClient },
+                          { label: "TSA", key: "tsaclient", covered: clientSegments.tsaClient, total: denominators.tsaClient },
                         ].map(({ label, key, covered, total }) => (
                           <button
                             key={label}
@@ -1579,10 +1570,10 @@ function DashboardContent() {
                       </div>
                     ) : (
                       <div className="space-y-1">
-                        <StatRow label="TSA Response Time"    value={formatHoursToHMS(avgResponseTime)}    />
-                        <StatRow label="Non-Quotation HT"     value={formatHoursToHMS(avgNonQuotationHT)} />
-                        <StatRow label="Quotation HT"         value={formatHoursToHMS(avgQuotationHT)}    />
-                        <StatRow label="SPF Handling Duration" value={formatHoursToHMS(avgSpfHT)}         />
+                        <StatRow label="TSA Response Time" value={formatHoursToHMS(avgResponseTime)} />
+                        <StatRow label="Non-Quotation HT" value={formatHoursToHMS(avgNonQuotationHT)} />
+                        <StatRow label="Quotation HT" value={formatHoursToHMS(avgQuotationHT)} />
+                        <StatRow label="SPF Handling Duration" value={formatHoursToHMS(avgSpfHT)} />
                       </div>
                     )}
                   </SectionCard>
@@ -1591,10 +1582,11 @@ function DashboardContent() {
                   <SectionCard title="Closing of Quotation" accent="border-l-red-500">
                     <div className="space-y-1">
                       {[
-                        { label: "Pending Client Approval",    value: pendingClientApprovalCount  },
-                        { label: "SPF — Pending Client",       value: spfPendingClientApproval    },
-                        { label: "SPF — Pending Procurement",  value: spfPendingProcurement       },
-                        { label: "SPF — Pending PD",           value: spfPendingPD                },
+                        { label: "Pending Client Approval", value: pendingClientApprovalCount },
+                        { label: "Order Complete", value: orderCompleteCount },
+                        { label: "Convert to SO", value: convertToSOCount },
+                        { label: "Declined", value: declinedCount },
+                        { label: "Cancelled", value: cancelledCount },
                       ].map(({ label, value }) => (
                         <div key={label} className="flex justify-between items-center px-2 py-1.5 border-b border-gray-50 last:border-b-0">
                           <span className="text-[10px] text-red-500 font-medium">{label}</span>
@@ -1608,10 +1600,10 @@ function DashboardContent() {
 
               {/* ── COVERAGE DIALOG ─────────────────────────────────────────────── */}
               {(() => {
-                const isCovered   = coverageDialogSource === "covered";
+                const isCovered = coverageDialogSource === "covered";
                 const isUncovered = coverageDialogSource === "uncovered";
-                const dialogOpen  = isCovered || isUncovered;
-                const list        = isCovered ? coveredAccounts : uncoveredAccounts;
+                const dialogOpen = isCovered || isUncovered;
+                const list = isCovered ? coveredAccounts : uncoveredAccounts;
 
                 const typeLabel = (normalized: string): string => {
                   const map: Record<string, string> = {
@@ -1622,8 +1614,8 @@ function DashboardContent() {
                 };
 
                 const typeColors: Record<string, string> = {
-                  top50:     "bg-amber-100 text-amber-700 border-amber-200",
-                  next30:    "bg-blue-100 text-blue-700 border-blue-200",
+                  top50: "bg-amber-100 text-amber-700 border-amber-200",
+                  next30: "bg-blue-100 text-blue-700 border-blue-200",
                   balance20: "bg-violet-100 text-violet-700 border-violet-200",
                   newclient: "bg-emerald-100 text-emerald-700 border-emerald-200",
                   tsaclient: "bg-rose-100 text-rose-700 border-rose-200",

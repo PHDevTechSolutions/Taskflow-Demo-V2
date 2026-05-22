@@ -117,8 +117,8 @@ export default function TSMReports() {
   const queryUserId = searchParams?.get("id") ?? "";
 
   const today = new Date().toISOString().split("T")[0];
-  const [fromDate, setFromDate] = useState<string>(today);
-  const [toDate, setToDate] = useState<string>(today);
+  const [startDate, setStartDate] = useState<string>(today);
+  const [endDate, setEndDate] = useState<string>(today);
 
   const [userDetails, setUserDetails] = useState({
     referenceid: "", firstname: "", lastname: "", role: "",
@@ -162,6 +162,12 @@ export default function TSMReports() {
   const [spfPendingProcurement, setSpfPendingProcurement] = useState(0);
   const [spfPendingPD, setSpfPendingPD] = useState(0);
 
+  // Additional closing quotation counts
+  const [orderCompleteCount, setOrderCompleteCount] = useState(0);
+  const [convertToSOCount, setConvertToSOCount] = useState(0);
+  const [declinedCount, setDeclinedCount] = useState(0);
+  const [cancelledCount, setCancelledCount] = useState(0);
+
   const [avgResponseTime, setAvgResponseTime] = useState(0);
   const [avgNonQuotationHT, setAvgNonQuotationHT] = useState(0);
   const [avgQuotationHT, setAvgQuotationHT] = useState(0);
@@ -175,6 +181,11 @@ export default function TSMReports() {
   const [uncoveredAccounts, setUncoveredAccounts] = useState<Activity[]>([]);
   const [newClientByCompany, setNewClientByCompany] = useState<Record<string, number>>({});
   const [showAllNewClients, setShowAllNewClients] = useState(false);
+
+  // Segment dialog for clickable client types
+  const [segmentDialogOpen, setSegmentDialogOpen] = useState(false);
+  const [selectedSegment, setSelectedSegment] = useState<string | null>(null);
+  const [segmentFilter, setSegmentFilter] = useState<"with" | "without">("with");
 
   const [totalAgents, setTotalAgents] = useState<number>(() => {
     if (typeof window === "undefined") return 0;
@@ -291,7 +302,7 @@ export default function TSMReports() {
     }
   }, []);
 
-  const fetchCsrMetrics = useCallback(async (refId: string, from: string, to: string) => {
+  const fetchCsrMetrics = useCallback(async (refId: string, start: string, end: string) => {
     if (!refId) return;
     setLoadingCsrMetrics(true);
     try {
@@ -306,9 +317,9 @@ export default function TSMReports() {
         "Threats/Extortion/Intimidation", "Prank Call",
       ];
 
-      const fromTs = new Date(from).getTime();
-      const toDateObj = new Date(to); toDateObj.setHours(23, 59, 59, 999);
-      const toTs = toDateObj.getTime();
+      const startTs = new Date(start).getTime();
+      const endDateObj = new Date(end); endDateObj.setHours(23, 59, 59, 999);
+      const endTs = endDateObj.getTime();
 
       let rtTotal = 0, rtCount = 0;
       let nqTotal = 0, nqCount = 0;
@@ -318,7 +329,7 @@ export default function TSMReports() {
       data.forEach((row) => {
         if (row.status !== "Closed" && row.status !== "Converted into Sales") return;
         const created = new Date(row.date_created).getTime();
-        if (isNaN(created) || created < fromTs || created > toTs) return;
+        if (isNaN(created) || created < startTs || created > endTs) return;
         if (excluded.includes(row.wrap_up)) return;
 
         const tsaAck = new Date(row.tsa_acknowledge_date).getTime();
@@ -369,8 +380,8 @@ export default function TSMReports() {
     fetchClusterData(refId);
     fetchActivities(refId);
     fetchOverdue(refId);
-    fetchCsrMetrics(refId, fromDate, toDate);
-  }, [userDetails.referenceid, fromDate, toDate, fetchClusterData, fetchActivities, fetchOverdue, fetchCsrMetrics]);
+    fetchCsrMetrics(refId, startDate, endDate);
+  }, [userDetails.referenceid, startDate, endDate, fetchClusterData, fetchActivities, fetchOverdue, fetchCsrMetrics]);
 
   // ── Compute outbound + time metrics ───────────────────────────────────────
 
@@ -384,33 +395,35 @@ export default function TSMReports() {
 
     setLoadingTime(true);
     try {
-      const targetDate = new Date(fromDate);
-      const startOfDay = new Date(targetDate); startOfDay.setHours(0, 0, 0, 0);
-      const endOfDay = new Date(targetDate); endOfDay.setHours(23, 59, 59, 999);
+      const startRange = new Date(startDate);
+      startRange.setHours(0, 0, 0, 0);
+      const endRange = new Date(endDate);
+      endRange.setHours(23, 59, 59, 999);
 
-      const dailyActivities = activities.filter((act) => {
+      // Filter activities within the selected date range
+      const rangeActivities = activities.filter((act) => {
         const t = new Date(act.date_created).getTime();
-        return t >= startOfDay.getTime() && t <= endOfDay.getTime();
+        return t >= startRange.getTime() && t <= endRange.getTime();
       });
 
-      const grouped = computeTimeByActivity(dailyActivities);
+      const grouped = computeTimeByActivity(rangeActivities);
       setTimeByActivity(grouped);
       setTimeConsumedMs(Object.values(grouped).reduce((s, ms) => s + ms, 0));
 
       let sales = 0;
-      dailyActivities.forEach((act) => {
+      rangeActivities.forEach((act) => {
         if (act.status === "Delivered") sales += Number(act.actual_sales) || 0;
       });
       setTotalSales(sales);
 
-      // Outbound count based ONLY on source === "Outbound - Touchbase"
-      const dailyCount = dailyActivities.filter(isOutboundTouchbase).length;
+      // Outbound count based ONLY on source === "Outbound - Touchbase" within date range
+      const dailyCount = rangeActivities.filter(isOutboundTouchbase).length;
 
-      // Weekly (Mon–Sun)
-      const dayOfWeek = targetDate.getDay();
+      // Weekly: Calculate based on the date range (from startDate to endDate)
+      const weekStart = new Date(startRange);
+      const dayOfWeek = weekStart.getDay();
       const diffToMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
-      const weekStart = new Date(targetDate);
-      weekStart.setDate(targetDate.getDate() - diffToMonday);
+      weekStart.setDate(weekStart.getDate() - diffToMonday);
       weekStart.setHours(0, 0, 0, 0);
       const weekEnd = new Date(weekStart);
       weekEnd.setDate(weekStart.getDate() + 6);
@@ -421,13 +434,13 @@ export default function TSMReports() {
         return t >= weekStart.getTime() && t <= weekEnd.getTime() && isOutboundTouchbase(act);
       }).length;
 
+      // Monthly: Fixed to the full month of startDate
+      const monthStart = new Date(startRange.getFullYear(), startRange.getMonth(), 1, 0, 0, 0, 0);
+      const monthEnd = new Date(startRange.getFullYear(), startRange.getMonth() + 1, 0, 23, 59, 59, 999);
+
       const monthlyCount = activities.filter((act) => {
-        const d = new Date(act.date_created);
-        return (
-          d.getMonth() === targetDate.getMonth() &&
-          d.getFullYear() === targetDate.getFullYear() &&
-          isOutboundTouchbase(act)
-        );
+        const t = new Date(act.date_created).getTime();
+        return t >= monthStart.getTime() && t <= monthEnd.getTime() && isOutboundTouchbase(act);
       }).length;
 
       const agentCount = totalAgents > 0 ? totalAgents : 1;
@@ -457,14 +470,28 @@ export default function TSMReports() {
       setSpfPendingPD(
         activities.filter((a) => a.call_type === "Quotation with SPF Preparation" && a.quotation_status === "Pending PD").length
       );
+
+      // Additional closing quotation counts
+      setOrderCompleteCount(
+        activities.filter((a) => a.quotation_status === "Order Complete").length
+      );
+      setConvertToSOCount(
+        activities.filter((a) => a.quotation_status === "Convert to SO").length
+      );
+      setDeclinedCount(
+        activities.filter((a) => a.quotation_status === "Declined").length
+      );
+      setCancelledCount(
+        activities.filter((a) => a.quotation_status === "Cancelled").length
+      );
     } finally {
       setLoadingTime(false);
     }
-  }, [activities, fromDate, userDetails.referenceid, totalAgents, workingDays]);
+  }, [activities, startDate, endDate, userDetails.referenceid, totalAgents, workingDays]);
 
   // ── Territory coverage ────────────────────────────────────────────────────
   //
-  // Scope: the FULL calendar month of fromDate (month start → month end).
+  // Scope: the FULL calendar month of startDate (month start → month end).
   // - "Covered"     = cluster accounts whose account_reference_number appears in ANY
   //                   activity within that month range
   // - "Not Reached" = the rest
@@ -482,9 +509,9 @@ export default function TSMReports() {
       return;
     }
 
-    const fromDateObj = new Date(fromDate);
-    const monthStart = new Date(fromDateObj.getFullYear(), fromDateObj.getMonth(), 1, 0, 0, 0, 0).getTime();
-    const monthEnd = new Date(fromDateObj.getFullYear(), fromDateObj.getMonth() + 1, 0, 23, 59, 59, 999).getTime();
+    const startDateObj = new Date(startDate);
+    const monthStart = new Date(startDateObj.getFullYear(), startDateObj.getMonth(), 1, 0, 0, 0, 0).getTime();
+    const monthEnd = new Date(startDateObj.getFullYear(), startDateObj.getMonth() + 1, 0, 23, 59, 59, 999).getTime();
 
     // Step 1 — account_reference_numbers with ANY activity within the calendar month
     const touchedAccountRefs = new Set<string>();
@@ -529,18 +556,19 @@ export default function TSMReports() {
 
     setUniqueClientReach(covered.length);
     setClientSegments({ ...seg, outbound: covered.length });
-  }, [activities, clusterAccounts, fromDate]);
+  }, [activities, clusterAccounts, startDate]);
 
   // ── New clients ───────────────────────────────────────────────────────────
 
   useEffect(() => {
-    if (!activities.length || !fromDate) {
+    if (!activities.length || !startDate) {
       setNewClientByCompany({}); setNewClientCount(0); return;
     }
 
-    const targetDate = new Date(fromDate);
-    const startOfDay = new Date(targetDate); startOfDay.setHours(0, 0, 0, 0);
-    const endOfDay = new Date(targetDate); endOfDay.setHours(23, 59, 59, 999);
+    const startRange = new Date(startDate);
+    startRange.setHours(0, 0, 0, 0);
+    const endRange = new Date(endDate);
+    endRange.setHours(23, 59, 59, 999);
     const allowed = ["Assisted", "Quote-Done", "SO-Done", "Delivered"];
 
     const grouped: Record<string, number> = {};
@@ -551,7 +579,7 @@ export default function TSMReports() {
       if (
         allowed.includes(act.status) &&
         act.type_client === "New Client" &&
-        t >= startOfDay.getTime() && t <= endOfDay.getTime()
+        t >= startRange.getTime() && t <= endRange.getTime()
       ) {
         const company = act.company_name || "Unknown";
         grouped[company] = (grouped[company] || 0) + 1;
@@ -561,7 +589,7 @@ export default function TSMReports() {
 
     setNewClientByCompany(grouped);
     setNewClientCount(total);
-  }, [activities, fromDate]);
+  }, [activities, startDate, endDate]);
 
   // ── Derived ───────────────────────────────────────────────────────────────
 
@@ -579,7 +607,7 @@ export default function TSMReports() {
     fetchClusterData(refId);
     fetchActivities(refId);
     fetchOverdue(refId);
-    fetchCsrMetrics(refId, fromDate, toDate);
+    fetchCsrMetrics(refId, startDate, endDate);
     sileo.success({
       title: "Syncing",
       description: `Refreshing data for ${userDetails.lastname}, ${userDetails.firstname}`,
@@ -616,7 +644,7 @@ export default function TSMReports() {
               placeholder="Reference ID"
             />
           </div>
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-4 gap-3">
 
             {/* Total Agents */}
             <div>
@@ -633,19 +661,29 @@ export default function TSMReports() {
               />
             </div>
 
-            {/* From Date */}
+            {/* Start Date */}
             <div>
               <label className="text-[9px] font-semibold uppercase text-gray-400 block mb-1">
-                Date
+                Start Date
               </label>
               <Input
                 type="date"
                 className="h-7 text-[11px] rounded-none bg-white border-gray-200"
-                value={fromDate}
-                onChange={(e) => {
-                  setFromDate(e.target.value);
-                  setToDate(e.target.value);
-                }}
+                value={startDate}
+                onChange={(e) => setStartDate(e.target.value)}
+              />
+            </div>
+
+            {/* End Date */}
+            <div>
+              <label className="text-[9px] font-semibold uppercase text-gray-400 block mb-1">
+                End Date
+              </label>
+              <Input
+                type="date"
+                className="h-7 text-[11px] rounded-none bg-white border-gray-200"
+                value={endDate}
+                onChange={(e) => setEndDate(e.target.value)}
               />
             </div>
 
@@ -663,9 +701,6 @@ export default function TSMReports() {
                 <option value={22}>22d</option>
               </select>
             </div>
-
-            {/* (Optional empty slot or future field) */}
-            <div />
           </div>
         </div>
         <Button
@@ -687,39 +722,14 @@ export default function TSMReports() {
         <ul className="list-none space-y-3">
 
           {/* Outbound Performance */}
-          <SectionCard
-            title="Outbound Touchbase"
-            badge={
-              <span className={`text-[9px] font-black px-2 py-0.5 ${dailyPct >= 100 ? "bg-emerald-100 text-emerald-700" :
-                dailyPct >= 50 ? "bg-amber-100 text-amber-700" :
-                  "bg-red-100 text-red-600"}`}>
-                {dailyPct}% Today
-              </span>
-            }
-          >
-            <div className="mb-3">
-              <div className="h-1 bg-gray-100 w-full overflow-hidden">
-                <div
-                  className={`h-full transition-all duration-500 ${dailyPct >= 100 ? "bg-emerald-500" :
-                    dailyPct >= 50 ? "bg-amber-500" : "bg-red-500"}`}
-                  style={{ width: `${dailyPct}%` }}
-                />
-              </div>
+          <SectionCard title="Outbound Performance">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] text-gray-500 uppercase font-medium">Daily Count</span>
+              <span className="text-[20px] font-black text-gray-800">{outboundDaily}</span>
             </div>
-            <div className="grid grid-cols-3 gap-1 text-center">
-              {[
-                { label: "Daily", value: outboundDaily },
-                { label: "Weekly", value: outboundWeekly },
-                { label: "Monthly", value: outboundMonthly },
-              ].map(({ label, value }, i) => (
-                <div key={label} className={i < 2 ? "border-r border-gray-100" : ""}>
-                  <p className="text-[9px] text-gray-400 uppercase font-semibold mb-0.5">{label}</p>
-                  <p className="font-black text-[12px] text-gray-800">
-                    {value}
-                  </p>
-                </div>
-              ))}
-            </div>
+            <p className="text-[8px] text-gray-400 uppercase font-medium mt-2 tracking-wide">
+              Source: Outbound - Touchbase
+            </p>
           </SectionCard>
 
           {/* Database Coverage */}
@@ -905,9 +915,10 @@ export default function TSMReports() {
             <div className="space-y-1">
               {[
                 { label: "Pending Client Approval", value: pendingClientApprovalCount },
-                { label: "SPF — Pending Client", value: spfPendingClientApproval },
-                { label: "SPF — Pending Procurement", value: spfPendingProcurement },
-                { label: "SPF — Pending PD", value: spfPendingPD },
+                { label: "Order Complete", value: orderCompleteCount },
+                { label: "Convert to SO", value: convertToSOCount },
+                { label: "Declined", value: declinedCount },
+                { label: "Cancelled", value: cancelledCount },
               ].map(({ label, value }) => (
                 <div key={label} className="flex justify-between items-center px-2 py-1.5 border-b border-gray-50 last:border-b-0">
                   <span className="text-[10px] text-red-500 font-medium">{label}</span>

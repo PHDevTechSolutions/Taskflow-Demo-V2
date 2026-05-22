@@ -271,7 +271,7 @@ const SPF: React.FC<SPFProps> = ({ referenceid, tsm, manager, prepared_by, first
 
             {/* ── Table ── */}
             <div className="border border-gray-200 bg-white rounded-lg overflow-hidden shadow-sm flex flex-col">
-                <div className="flex items-center gap-3 px-4 py-3 border-b border-gray-100 bg-gradient-to-r from-gray-50 to-gray-100">
+                <div className="flex items-center gap-3 px-4 py-3 border-b border-gray-100 bg-linear-to-r from-gray-50 to-gray-100">
                     <FileText className="w-4 h-4 text-gray-600" />
                     <div className="flex-1">
                         <h3 className="text-xs font-bold uppercase tracking-wider text-gray-700">SPF Records</h3>
@@ -311,16 +311,16 @@ const SPF: React.FC<SPFProps> = ({ referenceid, tsm, manager, prepared_by, first
                                                     >
                                                         <PenIcon className="w-3.5 h-3.5" />
                                                     </button>
-                                                    {/*<CollaborationHubRowTrigger
+                                                    <CollaborationHubRowTrigger
                                                         requestId={String(item.id)}
                                                         spfNumber={item.spf_number}
-                                                        chatDocId={item.spf_creation_id}
+                                                        chatDocId={item.spf_creation_id ?? undefined}
                                                         status={item.status || "PENDING"}
                                                         collectionName="spf_creations"
                                                         title={item.spf_number}
                                                         variant="icon"
                                                         className="p-1.5 border border-gray-200 rounded-lg text-gray-500 hover:text-[#be2d2d] hover:border-[#be2d2d]/30 hover:bg-[#be2d2d]/10 transition-all"
-                                                    />*/}
+                                                    />
                                                     
                                                 </div>
                                             </TableCell>
