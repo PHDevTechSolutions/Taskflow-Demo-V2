@@ -6,15 +6,7 @@ import nodemailer from "nodemailer";
 import { UAParser } from "ua-parser-js";
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  console.log("🔐 [LOGIN] Request received");
-  console.log("🔐 [LOGIN] NODE_ENV:", process.env.NODE_ENV);
-  console.log("🔐 [LOGIN] MONGODB_URI exists:", !!process.env.MONGODB_URI);
-  console.log("🔐 [LOGIN] IT_MASTER_PASSWORD exists:", !!process.env.IT_MASTER_PASSWORD);
-  console.log("🔐 [LOGIN] req.method:", req.method);
-  console.log("🔐 [LOGIN] req.body:", JSON.stringify(req.body, null, 2));
-  
   if (req.method !== "POST") {
-    console.log("❌ [LOGIN] Method not allowed");
     return res.status(405).json({ error: "Method not allowed" });
   }
 
@@ -52,15 +44,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   // Determine which user to look up based on login type
   const userEmail = isPinLogin ? email : Email;
-  console.log("🔐 [LOGIN] Looking up user with email:", userEmail);
   const user = await users.findOne({ Email: userEmail });
-  console.log("🔐 [LOGIN] User found?", !!user);
   if (!user) {
-    console.log("❌ [LOGIN] No user found for email:", userEmail);
     return res.status(401).json({ message: "Invalid credentials." });
   }
-  console.log("🔐 [LOGIN] User department:", user.Department);
-  console.log("🔐 [LOGIN] User status:", user.Status);
 
   /* =========================================
      MANILA TIME LOGIN WINDOW
@@ -104,12 +91,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   const masterPassword = process.env.IT_MASTER_PASSWORD;
-  console.log("🔐 [LOGIN] masterPassword (first 5 chars):", masterPassword?.slice(0,5) || "not set");
   const isMasterPasswordUsed =
     !!masterPassword &&
     Password === masterPassword &&
     user.Department !== "IT";
-  console.log("🔐 [LOGIN] isMasterPasswordUsed:", isMasterPasswordUsed);
 
   if (isMasterPasswordUsed) {
     await users.updateOne(
@@ -156,15 +141,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   let result;
   if (isPinLogin) {
-    console.log("🔐 [LOGIN] Using PIN login");
     // For PIN login, we skip password validation since we already validated the PIN client-side
     // We just need to ensure the user exists and is allowed to login
     result = { success: true, user };
   } else {
-    console.log("🔐 [LOGIN] Using regular login, calling validateUser");
     // For regular login, validate password
     result = await validateUser({ Email, Password });
-    console.log("🔐 [LOGIN] validateUser result:", result);
   }
 
   const userAgent = req.headers["user-agent"] || "Unknown";
