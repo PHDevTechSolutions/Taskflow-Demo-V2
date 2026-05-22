@@ -352,24 +352,31 @@ export function OutboundCallsTableCard({
     [statsByAgent, agentMap]
   );
 
-  /* ---- Totals ---- */
+  /* ---- Totals (excludes zeroed-out values per agent) ---- */
   const totals = useMemo(() => {
-    const totalCalls  = visibleStats.reduce((s, a) => s + a.totalCalls, 0);
-    const numQuotes   = visibleStats.reduce((s, a) => s + a.numQuotes, 0);
-    const numSO       = visibleStats.reduce((s, a) => s + a.numSO, 0);
-    const numSI       = visibleStats.reduce((s, a) => s + a.numSI, 0);
-    const totalQuoteAmount = visibleStats.reduce((s, a) => s + a.quoteAmount, 0);
-    const totalSoAmount    = visibleStats.reduce((s, a) => s + a.soAmount, 0);
-    const totalActualSales = visibleStats.reduce((s, a) => s + a.actualSales, 0);
+    const z = (agentId: string, colKey: string) =>
+      (agentColumnOverrides[agentId] ?? []).includes(colKey);
+
+    const totalCalls       = visibleStats.reduce((s, a) => s + (z(a.agentId, "totalCalls")   ? 0 : a.totalCalls),   0);
+    const numQuotes        = visibleStats.reduce((s, a) => s + (z(a.agentId, "numQuotes")     ? 0 : a.numQuotes),    0);
+    const numSO            = visibleStats.reduce((s, a) => s + (z(a.agentId, "numSO")         ? 0 : a.numSO),        0);
+    const numSI            = visibleStats.reduce((s, a) => s + (z(a.agentId, "numSI")         ? 0 : a.numSI),        0);
+    const totalQuoteAmount = visibleStats.reduce((s, a) => s + (z(a.agentId, "quoteAmount")   ? 0 : a.quoteAmount),  0);
+    const totalSoAmount    = visibleStats.reduce((s, a) => s + (z(a.agentId, "soAmount")      ? 0 : a.soAmount),     0);
+    const totalActualSales = visibleStats.reduce((s, a) => s + (z(a.agentId, "actualSales")   ? 0 : a.actualSales),  0);
+
+    // For achievement denominator: only count agents whose totalCalls column is not zeroed
+    const activeAgentCount = visibleStats.filter((a) => !z(a.agentId, "totalCalls")).length;
+
     return {
       totalCalls, numQuotes, numSO, numSI,
       totalQuoteAmount, totalSoAmount, totalActualSales,
-      achievement:  pct(totalCalls, obTarget * visibleStats.length || 1),
+      achievement:  pct(totalCalls, obTarget * (activeAgentCount || 1)),
       callsToQuote: pct(numQuotes, totalCalls),
       quoteToSO:    pct(numSO, numQuotes),
       soToSI:       pct(numSI, numSO),
     };
-  }, [visibleStats, obTarget]);
+  }, [visibleStats, obTarget, agentColumnOverrides]);
 
   /* ---- Column helper (committed state) ---- */
   const col = (key: string) => columns.find((c) => c.key === key)?.visible ?? true;
@@ -430,7 +437,7 @@ export function OutboundCallsTableCard({
 
       const totalRow = worksheet.addRow({
         agent: "TOTAL",
-        ...(col("obTarget")     && { target:      obTarget * visibleStats.length }),
+        ...(col("obTarget")     && { target:      obTarget * visibleStats.filter((a) => !(agentColumnOverrides[a.agentId] ?? []).includes("obTarget")).length }),
         ...(col("totalCalls")   && { calls:       totals.totalCalls }),
         ...(col("achievement")  && { achievement: parseFloat(totals.achievement) / 100 }),
         ...(col("numQuotes")    && { quotes:      totals.numQuotes }),
@@ -800,7 +807,7 @@ export function OutboundCallsTableCard({
               <TableFooter>
                 <TableRow className="bg-gray-50 text-xs font-semibold font-mono">
                   <TableCell className="text-gray-700">Total</TableCell>
-                  {col("obTarget")     && <TableCell className="text-center text-gray-600">{quotaLoading ? "…" : obTarget * visibleStats.length}</TableCell>}
+                  {col("obTarget")     && <TableCell className="text-center text-gray-600">{quotaLoading ? "…" : obTarget * visibleStats.filter((a) => !isZeroed(a.agentId, "obTarget")).length}</TableCell>}
                   {col("totalCalls")   && <TableCell className="text-center text-gray-800">{totals.totalCalls}</TableCell>}
                   {col("achievement")  && <TableCell className="text-center text-gray-700">{totals.achievement}</TableCell>}
                   {col("numQuotes")    && <TableCell className="text-center">{convBadge(totals.numQuotes)}</TableCell>}
