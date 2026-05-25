@@ -9,15 +9,14 @@ import { SidebarLeft } from "@/components/sidebar-left";
 import { SidebarRight } from "@/components/sidebar-right";
 
 import { Breadcrumb, BreadcrumbItem, BreadcrumbList, BreadcrumbPage, } from "@/components/ui/breadcrumb";
-import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { sileo } from "sileo";
-import { ApprovedQuotation } from "@/components/roles/tsm/activity/quotation/approved/approved-quotation";
-import { type DateRange } from "react-day-picker";
 
+import SPF from "@/components/roles/accounting/activity/spf/request-spf";
+
+import { type DateRange } from "react-day-picker";
 import ProtectedPageWrapper from "@/components/protected-page-wrapper";
-import { UnifiedNotificationBellLazy } from "@/components/unified-notification-bell-lazy";
 
 interface UserDetails {
     referenceid: string;
@@ -55,7 +54,9 @@ function DashboardContent() {
 
     const [loadingUser, setLoadingUser] = useState(true);
     const [error, setError] = useState<string | null>(null);
-    const [dateCreatedFilterRange, setDateCreatedFilterRangeAction] = React.useState<DateRange | undefined>(undefined);
+    const [dateCreatedFilterRange, setDateCreatedFilterRangeAction] = React.useState<
+        DateRange | undefined
+    >(undefined);
 
     const queryUserId = searchParams?.get("id") ?? "";
 
@@ -150,29 +151,20 @@ function DashboardContent() {
                             <Breadcrumb>
                                 <BreadcrumbList>
                                     <BreadcrumbItem>
-                                        <BreadcrumbPage className="line-clamp-1">Approved Quotations</BreadcrumbPage>
+                                        <BreadcrumbPage className="text-xs font-semibold uppercase tracking-wide">SPF Records</BreadcrumbPage>
                                     </BreadcrumbItem>
                                 </BreadcrumbList>
                             </Breadcrumb>
                         </div>
-                        <div className="flex items-center px-3">
-                            <UnifiedNotificationBellLazy />
-                        </div>
                     </header>
 
                     <main className="flex flex-1 flex-col gap-4 p-4 overflow-auto">
-                        <Card className="rounded-none">
-                            <CardContent>
-                                <ApprovedQuotation
-                                    referenceid={userDetails.referenceid}
-                                    email={userDetails.email}
-                                    contact={userDetails.contact}
-                                    signature={userDetails.signature}
-                                    dateCreatedFilterRange={dateCreatedFilterRange}
-                                    setDateCreatedFilterRangeAction={setDateCreatedFilterRangeAction}
-                                />
-                            </CardContent>
-                        </Card>
+                        <div>
+                            <SPF 
+                                dateCreatedFilterRange={dateCreatedFilterRange}
+                                setDateCreatedFilterRangeAction={setDateCreatedFilterRangeAction}
+                            />
+                        </div>
                     </main>
                 </SidebarInset>
 
