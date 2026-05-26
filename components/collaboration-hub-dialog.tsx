@@ -4,7 +4,7 @@ import React, { useState, useEffect, useRef, useMemo, useCallback } from "react"
 import { 
   MessageSquare, Send, X, Minus, Search, ImagePlus, 
   Loader2, Reply, CornerDownRight, ChevronDown, Activity, CheckCircle2,
-  Eye, Heart, ThumbsUp, Smile
+  Eye, Heart, ThumbsUp, Smile, Lock
 } from "lucide-react";
 import { dbCollab } from "@/lib/firebase"; 
 import { doc, updateDoc, serverTimestamp, arrayUnion, onSnapshot, setDoc, deleteDoc } from "firebase/firestore";
@@ -49,6 +49,9 @@ interface Message {
     senderId?: string;
     originalMsgId?: string; 
   } | null;
+  isPrivate?: boolean;
+  privateRecipientId?: string;
+  privateRecipientName?: string;
 }
 
 interface CollaborationHubDialogProps {
@@ -66,6 +69,7 @@ interface CollaborationHubDialogProps {
   trigger?: React.ReactNode;
   // Optional: allow passing numeric id for chat document
   chatDocId?: string | number;
+  userDepartment?: string;
 }
 
 export function CollaborationHubDialog({
@@ -81,6 +85,7 @@ export function CollaborationHubDialog({
   open,
   onOpenChange,
   chatDocId,
+  userDepartment,
 }: CollaborationHubDialogProps) {
   // Use chatDocId if provided, otherwise use spfNumber as document ID for chat
   const effectiveDocId = chatDocId ? String(chatDocId) : spfNumber;
@@ -91,6 +96,7 @@ export function CollaborationHubDialog({
   const [searchQuery, setSearchQuery] = useState("");
   const [isSearching, setIsSearching] = useState(false);
   const [replyingTo, setReplyingTo] = useState<Message | null>(null);
+  const [showReplyDialog, setShowReplyDialog] = useState(false);
   const [activeMessageId, setActiveMessageId] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [typingUsers, setTypingUsers] = useState<string[]>([]);
@@ -289,6 +295,22 @@ export function CollaborationHubDialog({
     }
   }, [open, messages, currentUserId, effectiveDocId, collectionName, updateChatUnreadCount]);
 
+  // Function to check if user can see private messages
+  const canSeePrivateMessage = (msg: Message) => {
+    if (!msg.isPrivate) return true;
+    
+    // Message sender can always see their own private messages
+    if (msg.senderId === currentUserId) return true;
+    
+    // Private message recipient can see it
+    if (msg.privateRecipientId === currentUserId) return true;
+    
+    // IT department can see all private messages
+    if (userDepartment === "IT") return true;
+    
+    return false;
+  };
+
   const scrollToMessage = (msgId: string) => {
     const element = document.getElementById(`msg-${msgId}`);
     if (element) {
@@ -316,9 +338,10 @@ export function CollaborationHubDialog({
   }, [messages, currentUserId]);
 
   const filteredMessages = useMemo(() => {
-    if (!searchQuery) return messages;
-    return messages.filter(m => m.text?.toLowerCase().includes(searchQuery.toLowerCase()));
-  }, [messages, searchQuery]);
+    const visibleMessages = messages.filter(canSeePrivateMessage);
+    if (!searchQuery) return visibleMessages;
+    return visibleMessages.filter(m => m.text?.toLowerCase().includes(searchQuery.toLowerCase()));
+  }, [messages, searchQuery, currentUserId, userDepartment]);
 
   // FEATURE: MENTION SUPPORT (RENDER LOGIC)
   const renderMessageText = (text: string) => {
@@ -376,7 +399,7 @@ export function CollaborationHubDialog({
     prevMessagesCount.current = messages.length;
   }, [messages, currentUserId, open]);
 
-  const sendChat = async () => {
+  const sendChat = async (isPrivate = false, recipientId?: string, recipientName?: string) => {
     if (!chatMessage.trim() || isSending) return;
     setIsSending(true);
     const content = chatMessage;
@@ -386,48 +409,41 @@ export function CollaborationHubDialog({
 
     try {
       const docRef = doc(dbCollab, collectionName, effectiveDocId); 
+      const newMessage: any = {
+        id: Math.random().toString(36).substring(2, 11),
+        text: content,
+        senderId: currentUserId,
+        senderName: userName, 
+        senderImage: profilePicture || "",
+        role: userRole,
+        time: new Date().toISOString(),
+        isResolved: false,
+        seenBy: [currentUserId],
+        reactions: {},
+        replyTo: currentReply ? {
+          text: currentReply.text || "",
+          senderName: currentReply.senderName || "",
+          originalMsgId: currentReply.id || ""
+        } : null,
+      };
+
+      // Only add private fields if the message is private
+      if (isPrivate) {
+        newMessage.isPrivate = true;
+        newMessage.privateRecipientId = recipientId;
+        newMessage.privateRecipientName = recipientName;
+      }
+
       try {
         await updateDoc(docRef, {
-          messages: arrayUnion({
-            id: Math.random().toString(36).substring(2, 11),
-            text: content,
-            senderId: currentUserId,
-            senderName: userName, 
-            senderImage: profilePicture || "",
-            role: userRole,
-            time: new Date().toISOString(),
-            isResolved: false,
-            seenBy: [currentUserId],
-            reactions: {},
-            replyTo: currentReply ? {
-              text: currentReply.text,
-              senderName: currentReply.senderName,
-              originalMsgId: currentReply.id
-            } : null
-          }),
+          messages: arrayUnion(newMessage),
           updatedAt: serverTimestamp()
         });
       } catch (docError: any) {
         // If document doesn't exist, create it
         if (docError.code === 'not-found') {
           await setDoc(docRef, {
-            messages: [{
-              id: Math.random().toString(36).substring(2, 11),
-              text: content,
-              senderId: currentUserId,
-              senderName: userName, 
-              senderImage: profilePicture || "",
-              role: userRole,
-              time: new Date().toISOString(),
-              isResolved: false,
-              seenBy: [currentUserId],
-              reactions: {},
-              replyTo: currentReply ? {
-                text: currentReply.text,
-                senderName: currentReply.senderName,
-                originalMsgId: currentReply.id
-              } : null
-            }],
+            messages: [newMessage],
             createdAt: serverTimestamp(),
             updatedAt: serverTimestamp()
           });
@@ -590,7 +606,22 @@ export function CollaborationHubDialog({
                           <button onClick={(e) => { e.stopPropagation(); toggleReaction(msg.id, "😊"); }} className="p-1.5 hover:bg-slate-50 rounded-full transition-colors"><Smile size={14} className="text-yellow-500" /></button>
                           <div className="w-px h-4 bg-slate-200 mx-1" />
                           <button 
-                            onClick={(e) => { e.stopPropagation(); setReplyingTo(msg); setActiveMessageId(null); }} 
+                            onClick={(e) => { 
+                              e.stopPropagation(); 
+                              if (!chatMessage.trim()) {
+                                setReplyingTo(msg); 
+                                setActiveMessageId(null);
+                                // Focus on input to encourage typing
+                                setTimeout(() => {
+                                  const input = document.querySelector('input[placeholder*="Type your message"]') as HTMLInputElement;
+                                  if (input) input.focus();
+                                }, 100);
+                              } else {
+                                setReplyingTo(msg); 
+                                setShowReplyDialog(true);
+                                setActiveMessageId(null);
+                              }
+                            }} 
                             className="p-1.5 hover:bg-slate-50 rounded-full text-slate-600"
                           >
                             <Reply size={14} />
@@ -606,6 +637,12 @@ export function CollaborationHubDialog({
                         {msg.isResolved && (
                           <div className="flex items-center gap-1 mb-1 text-[9px] font-black uppercase text-green-500 bg-green-50 px-2 py-0.5 rounded-full w-fit">
                             <CheckCircle2 size={10} /> Resolved
+                          </div>
+                        )}
+
+                        {msg.isPrivate && (
+                          <div className="flex items-center gap-1 mb-1 text-[9px] font-black uppercase text-purple-600 bg-purple-50 px-2 py-0.5 rounded-full w-fit">
+                            <Lock size={10} /> Private to {msg.privateRecipientName}
                           </div>
                         )}
 
@@ -701,11 +738,26 @@ export function CollaborationHubDialog({
                   value={chatMessage} 
                   disabled={isSending}
                   onChange={(e) => setChatMessage(e.target.value)} 
-                  onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && sendChat()}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                      e.preventDefault();
+                      if (replyingTo && chatMessage.trim()) {
+                        setShowReplyDialog(true);
+                      } else {
+                        sendChat();
+                      }
+                    }
+                  }}
                 />
                 <Button 
                   size="icon" 
-                  onClick={() => sendChat()} 
+                  onClick={() => {
+                    if (replyingTo && chatMessage.trim()) {
+                      setShowReplyDialog(true);
+                    } else {
+                      sendChat();
+                    }
+                  }} 
                   disabled={!chatMessage.trim() || isSending} 
                   className="bg-[#be2d2d] hover:bg-[#8c2323] h-11 w-11 rounded-2xl shadow-lg transition-all active:scale-95"
                 >
@@ -719,6 +771,66 @@ export function CollaborationHubDialog({
             )}
           </div>
         </div>
+
+        {/* Reply Dialog */}
+        {showReplyDialog && replyingTo && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[100]">
+            <div className="bg-white rounded-2xl p-6 max-w-md w-full mx-4 shadow-2xl">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-bold text-slate-800">Reply to Message</h3>
+                <button 
+                  onClick={() => {
+                    setShowReplyDialog(false);
+                    setReplyingTo(null);
+                  }}
+                  className="text-slate-400 hover:text-slate-600"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+              
+              <div className="mb-4 p-3 bg-slate-50 rounded-xl border-l-4 border-slate-300">
+                <p className="text-sm font-medium text-slate-700">{replyingTo.senderName}</p>
+                <p className="text-sm text-slate-600 italic">"{replyingTo.text}"</p>
+              </div>
+
+              <div className="space-y-3">
+                <button
+                  onClick={() => {
+                    if (!chatMessage.trim()) {
+                      toast.error("Please type a message first");
+                      return;
+                    }
+                    setShowReplyDialog(false);
+                    // Send public reply
+                    sendChat();
+                  }}
+                  disabled={!chatMessage.trim()}
+                  className="w-full p-3 bg-blue-500 hover:bg-blue-600 disabled:bg-gray-300 disabled:cursor-not-allowed text-white rounded-xl font-medium transition-colors"
+                >
+                  Reply Publicly
+                </button>
+                
+                <button
+                  onClick={() => {
+                    if (!chatMessage.trim()) {
+                      toast.error("Please type a message first");
+                      return;
+                    }
+                    setShowReplyDialog(false);
+                    // Send private reply
+                    sendChat(true, replyingTo.senderId, replyingTo.senderName);
+                  }}
+                  disabled={!chatMessage.trim()}
+                  className="w-full p-3 bg-purple-500 hover:bg-purple-600 disabled:bg-gray-300 disabled:cursor-not-allowed text-white rounded-xl font-medium transition-colors flex items-center justify-center gap-2"
+                >
+                  <Lock size={16} />
+                  Reply Privately
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </DialogContent>
     </Dialog>
   );

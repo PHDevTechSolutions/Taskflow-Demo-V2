@@ -43,6 +43,9 @@ interface Message {
     senderId?: string;
     originalMsgId?: string; 
   } | null;
+  isPrivate?: boolean;
+  privateTo?: string;
+  senderDepartment?: string;
 }
 
 interface CollaborationHubProps {
@@ -55,6 +58,7 @@ interface CollaborationHubProps {
   userRole: string;
   status: string;
   title?: string;
+  userDepartment?: string;
 }
 
 export function CollaborationHub({
