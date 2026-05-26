@@ -17,6 +17,7 @@ interface SeenByUser {
   lastName: string;
   userName: string;
   profilePicture?: string;
+  department?: string;
 }
 
 interface SeenByDialogProps {
@@ -68,11 +69,11 @@ export function SeenByDialog({ seenByIds, userNamesMap, isMe, currentUserId }: S
                   </Avatar>
                   <div className="flex-1 min-w-0">
                     <p className="font-bold text-sm text-blue-700 truncate">
-                      You
+                      You {user ? `(${user.firstName} ${user.lastName})` : ''}
                     </p>
-                    {user?.userName && (
+                    {user?.department && (
                       <p className="text-xs text-blue-600 truncate">
-                        @{user.userName}
+                        @{user.department}
                       </p>
                     )}
                   </div>
@@ -101,9 +102,11 @@ export function SeenByDialog({ seenByIds, userNamesMap, isMe, currentUserId }: S
                   <p className="font-semibold text-sm text-slate-900 truncate">
                     {user.firstName} {user.lastName}
                   </p>
-                  <p className="text-xs text-slate-500 truncate">
-                    @{user.userName}
-                  </p>
+                  {user.department && (
+                    <p className="text-xs text-slate-500 truncate">
+                      @{user.department}
+                    </p>
+                  )}
                 </div>
               </div>
             );

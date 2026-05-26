@@ -94,7 +94,7 @@ export function CollaborationHubDialog({
   const [activeMessageId, setActiveMessageId] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [typingUsers, setTypingUsers] = useState<string[]>([]);
-  const [userNamesMap, setUserNamesMap] = useState<Record<string, { firstName: string; lastName: string; userName: string; profilePicture?: string }>>({});
+  const [userNamesMap, setUserNamesMap] = useState<Record<string, { firstName: string; lastName: string; userName: string; profilePicture?: string; department?: string }>>({});
   
   const { updateChatUnreadCount, markChatAsRead } = useNotifications();
 

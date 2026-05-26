@@ -80,7 +80,7 @@ export function CollaborationHub({
   
   // New States for Features
   const [typingUsers, setTypingUsers] = useState<string[]>([]);
-  const [userNamesMap, setUserNamesMap] = useState<Record<string, { firstName: string; lastName: string; userName: string; profilePicture?: string }>>({});
+  const [userNamesMap, setUserNamesMap] = useState<Record<string, { firstName: string; lastName: string; userName: string; profilePicture?: string; department?: string }>>({});
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const unreadRef = useRef<HTMLDivElement>(null);

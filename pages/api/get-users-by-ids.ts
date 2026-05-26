@@ -30,19 +30,21 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         Firstname: 1, 
         Lastname: 1,
         userName: 1,
-        profilePicture: 1 
+        profilePicture: 1,
+        Department: 1
       })
       .toArray();
 
     // Create a map of userId -> user data
-    const userMap: Record<string, { firstName: string; lastName: string; userName: string; profilePicture?: string }> = {};
+    const userMap: Record<string, { firstName: string; lastName: string; userName: string; profilePicture?: string; department?: string }> = {};
     
     users.forEach(user => {
       userMap[user._id.toString()] = {
         firstName: user.Firstname || "",
         lastName: user.Lastname || "",
         userName: user.userName || "",
-        profilePicture: user.profilePicture || ""
+        profilePicture: user.profilePicture || "",
+        department: user.Department || ""
       };
     });
 
