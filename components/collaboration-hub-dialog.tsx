@@ -268,13 +268,17 @@ export function CollaborationHubDialog({
     if (open && messages.length > 0) {
       const markAsSeen = async () => {
         const needsUpdate = messages.some(
-          msg => msg.senderId !== currentUserId && !msg.seenBy?.includes(currentUserId)
+          msg => msg.senderId !== currentUserId && 
+                 !msg.seenBy?.includes(currentUserId) &&
+                 canSeePrivateMessage(msg)
         );
 
         if (needsUpdate) {
           try {
             const updatedMessages = messages.map(msg => {
-              if (msg.senderId !== currentUserId && !msg.seenBy?.includes(currentUserId)) {
+              if (msg.senderId !== currentUserId && 
+                  !msg.seenBy?.includes(currentUserId) &&
+                  canSeePrivateMessage(msg)) {
                 return { ...msg, seenBy: [...(msg.seenBy || []), currentUserId] };
               }
               return msg;
@@ -293,7 +297,7 @@ export function CollaborationHubDialog({
       };
       markAsSeen();
     }
-  }, [open, messages, currentUserId, effectiveDocId, collectionName, updateChatUnreadCount]);
+  }, [open, messages, currentUserId, effectiveDocId, collectionName, updateChatUnreadCount, userDepartment]);
 
   // Function to check if user can see private messages
   const canSeePrivateMessage = (msg: Message) => {
