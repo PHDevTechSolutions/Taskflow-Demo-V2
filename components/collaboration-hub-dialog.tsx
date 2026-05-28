@@ -87,8 +87,8 @@ export function CollaborationHubDialog({
   chatDocId,
   userDepartment,
 }: CollaborationHubDialogProps) {
-  // Use chatDocId if provided, otherwise use spfNumber as document ID for chat
-  const effectiveDocId = chatDocId ? String(chatDocId) : spfNumber;
+  // Always use spfNumber as document ID for chat to ensure consistency
+  const effectiveDocId = spfNumber;
   const [chatMessage, setChatMessage] = useState("");
   const [isSending, setIsSending] = useState(false);
   const [lastSeenTime, setLastSeenTime] = useState<number>(Date.now());
