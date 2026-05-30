@@ -5,7 +5,7 @@ import { useSearchParams } from "next/navigation";
 import { Spinner } from "@/components/ui/spinner";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import {
-    AlertCircleIcon, PlusCircle, PenIcon, Trash2Icon,
+    AlertCircleIcon, PlusCircle, PenIcon, XCircle,
     Search, FileText, Loader2, Building2, User, ChevronLeft, ChevronRight,
     RefreshCw,
 } from "lucide-react";
@@ -23,6 +23,8 @@ import {
 import { RequestDialog } from "../../activity/spf/dialog/request-dialog";
 import { RevisionDialog } from "../../activity/spf/dialog/revision-dialog";
 import { CollaborationHubRowTrigger } from "@/components/collaboration-row-trigger";
+import { CancelledButton } from "./cancelled-button";
+import { CancelDialog } from "./cancel-dialog";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -63,6 +65,7 @@ interface SPFRecord {
     tin_no?: string;
     date_updated?: string;
     created_at?: string;
+    is_cancelled?: boolean;
 }
 
 interface SPFProps {
@@ -107,84 +110,6 @@ const StatusBadge = ({ status }: { status?: string }) => {
     );
 };
 
-// ─── Hold-to-delete dialog ────────────────────────────────────────────────────
-
-interface DeleteDialogProps {
-    open: boolean;
-    onOpenChange: (v: boolean) => void;
-    onConfirm: () => Promise<void>;
-    label?: string;
-}
-
-const HoldDeleteDialog: React.FC<DeleteDialogProps> = ({
-    open, onOpenChange, onConfirm, label,
-}) => {
-    const [progress, setProgress] = useState(0);
-    const [loading, setLoading] = useState(false);
-    const timerRef = useRef<number | null>(null);
-
-    const clear = () => {
-        if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
-    };
-
-    useEffect(() => { if (!open) { clear(); setProgress(0); } }, [open]);
-    useEffect(() => () => clear(), []);
-
-    const startHold = () => {
-        if (loading) return;
-        clear(); setProgress(0);
-        timerRef.current = window.setInterval(() => {
-            setProgress((p) => {
-                const n = p + 2;
-                if (n >= 100) { clear(); triggerDelete(); return 100; }
-                return n;
-            });
-        }, 20);
-    };
-
-    const cancelHold = () => { clear(); setProgress(0); };
-
-    const triggerDelete = async () => {
-        setLoading(true);
-        try { await onConfirm(); onOpenChange(false); }
-        catch { /* parent handles error */ }
-        finally { setLoading(false); setProgress(0); }
-    };
-
-    return (
-        <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="rounded-none max-w-sm p-0 overflow-hidden border border-red-200">
-                <div className="bg-red-600 px-6 py-4">
-                    <DialogTitle className="text-white text-sm font-bold uppercase tracking-widest">
-                        Delete SPF Record
-                    </DialogTitle>
-                    {label && <p className="text-red-200 text-xs mt-1">{label}</p>}
-                </div>
-                <div className="px-6 py-3 text-xs text-zinc-500">
-                    Hold the button to permanently delete this record.
-                </div>
-                <DialogFooter className="flex flex-col gap-2 px-6 pb-6">
-                    <Button variant="outline" onClick={() => onOpenChange(false)} disabled={loading}
-                        className="rounded-none h-9 text-xs uppercase font-bold tracking-wider border-zinc-200">
-                        Cancel
-                    </Button>
-                    <div className="relative overflow-hidden rounded-none">
-                        <Button variant="destructive" disabled={loading}
-                            onMouseDown={startHold} onMouseUp={cancelHold} onMouseLeave={cancelHold}
-                            onTouchStart={startHold} onTouchEnd={cancelHold}
-                            className="relative w-full h-9 text-xs uppercase font-bold tracking-wider rounded-none">
-                            {loading ? <><Loader2 className="w-4 h-4 animate-spin mr-2" />Deleting…</>
-                                : progress > 0 ? `Hold… ${Math.round(progress)}%`
-                                    : "Hold to Delete"}
-                        </Button>
-                        <div className="absolute inset-0 bg-red-900/30 pointer-events-none transition-all"
-                            style={{ width: `${progress}%` }} />
-                    </div>
-                </DialogFooter>
-            </DialogContent>
-        </Dialog>
-    );
-};
 
 // ─── Pagination Component ─────────────────────────────────────────────────────
 
@@ -301,13 +226,16 @@ const SPF: React.FC<SPFProps> = ({ referenceid, tsm, manager, prepared_by }) => 
     const [currentSPF, setCurrentSPF] = useState<Partial<SPFRecord>>({});
     const [contactDialogOpen, setContactDialogOpen] = useState(false);
     const [contactOptions, setContactOptions] = useState<{ person: string; number: string }[]>([]);
-    const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-    const [deleteTarget, setDeleteTarget] = useState<SPFRecord | null>(null);
     const [loadingSPF, setLoadingSPF] = useState(false);
 
     // Revision dialog state
     const [revisionDialogOpen, setRevisionDialogOpen] = useState(false);
     const [revisionTargetSpfNumber, setRevisionTargetSpfNumber] = useState<string | null>(null);
+
+    // Cancel dialog state
+    const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
+    const [cancelTargetSpfNumber, setCancelTargetSpfNumber] = useState<string | null>(null);
+    const [cancelTargetId, setCancelTargetId] = useState<number | null>(null);
 
     const endTimerRef = useRef<number | null>(null);
 
@@ -656,19 +584,6 @@ const SPF: React.FC<SPFProps> = ({ referenceid, tsm, manager, prepared_by }) => 
         }
     };
 
-    // ─── Delete ──────────────────────────────────────────────────────────────────
-
-    const confirmDelete = async () => {
-        if (!deleteTarget) return;
-        const res = await fetch("/api/activity/tsa/spf/delete", {
-            method: "DELETE",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ id: deleteTarget.id }),
-        });
-        if (!res.ok) throw new Error("Failed to delete SPF");
-        setDeleteTarget(null);
-        fetchActivities();
-    };
 
     // ─── Request Revision ──────────────────────────────────────────────────────────
 
@@ -680,6 +595,44 @@ const SPF: React.FC<SPFProps> = ({ referenceid, tsm, manager, prepared_by }) => 
     const closeRevisionDialog = () => {
         setRevisionDialogOpen(false);
         setRevisionTargetSpfNumber(null);
+    };
+
+    const openCancelDialog = (spf_number: string, id: number) => {
+        setCancelTargetSpfNumber(spf_number);
+        setCancelTargetId(id);
+        setCancelDialogOpen(true);
+    };
+
+    const closeCancelDialog = () => {
+        setCancelDialogOpen(false);
+        setCancelTargetSpfNumber(null);
+        setCancelTargetId(null);
+    };
+
+    const handleCancel = async (reason: string, customReason?: string) => {
+        if (!cancelTargetId) return;
+
+        try {
+            const res = await fetch("/api/activity/tsa/spf/cancel", {
+                method: "PUT",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    id: cancelTargetId,
+                    is_cancelled_reason: reason,
+                    is_cancelled_reason_others_remarks: customReason,
+                }),
+            });
+
+            if (!res.ok) {
+                const data = await res.json();
+                throw new Error(data.message || "Failed to cancel SPF");
+            }
+
+            closeCancelDialog();
+            fetchActivities();
+        } catch (err: any) {
+            alert(err.message || "Failed to cancel SPF");
+        }
     };
 
     const handleRequestRevision = async (spf_number: string, revision_type: string, revision_remarks: string, editedData?: any) => {
@@ -943,21 +896,20 @@ const SPF: React.FC<SPFProps> = ({ referenceid, tsm, manager, prepared_by }) => 
                                                         <button
                                                             title="Edit"
                                                             onClick={() => openEditDialog(item)}
-                                                            className="p-1.5 border border-zinc-200 rounded-none text-zinc-400 hover:text-blue-600 hover:border-blue-200 hover:bg-blue-50 transition-all"
+                                                            disabled={item.is_cancelled}
+                                                            className="p-1.5 border border-zinc-200 rounded-none text-zinc-400 hover:text-blue-600 hover:border-blue-200 hover:bg-blue-50 transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:text-zinc-400 disabled:hover:border-zinc-200 disabled:hover:bg-transparent"
                                                         >
                                                             <PenIcon className="w-3.5 h-3.5" />
                                                         </button>
-                                                        <button
-                                                            title="Delete"
-                                                            onClick={() => { setDeleteTarget(item); setDeleteDialogOpen(true); }}
-                                                            className="p-1.5 border border-zinc-200 rounded-none text-zinc-400 hover:text-red-600 hover:border-red-200 hover:bg-red-50 transition-all"
-                                                        >
-                                                            <Trash2Icon className="w-3.5 h-3.5" />
-                                                        </button>
+                                                        <CancelledButton 
+                                                            onClick={() => openCancelDialog(item.spf_number, item.id)} 
+                                                            disabled={item.is_cancelled}
+                                                        />
                                                         <button
                                                             title="Request Revision"
                                                             onClick={() => openRevisionDialog(item.spf_number)}
-                                                            className="p-1.5 border border-zinc-200 rounded-none text-zinc-400 hover:text-amber-600 hover:border-amber-200 hover:bg-amber-50 transition-all"
+                                                            disabled={item.is_cancelled}
+                                                            className="p-1.5 border border-zinc-200 rounded-none text-zinc-400 hover:text-amber-600 hover:border-amber-200 hover:bg-amber-50 transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:text-zinc-400 disabled:hover:border-zinc-200 disabled:hover:bg-transparent"
                                                         >
                                                             <RefreshCw className="w-3.5 h-3.5" />
                                                         </button>
@@ -1156,13 +1108,6 @@ const SPF: React.FC<SPFProps> = ({ referenceid, tsm, manager, prepared_by }) => 
                 referenceid={referenceid}
             />
 
-            {/* ── Delete dialog ────────────────────────────────────────────────── */}
-            <HoldDeleteDialog
-                open={deleteDialogOpen}
-                onOpenChange={(v) => { setDeleteDialogOpen(v); if (!v) setDeleteTarget(null); }}
-                onConfirm={confirmDelete}
-                label={deleteTarget ? `${deleteTarget.spf_number} — ${deleteTarget.customer_name}` : undefined}
-            />
 
             {/* ── Revision dialog ────────────────────────────────────────────────── */}
             <RevisionDialog
@@ -1170,6 +1115,15 @@ const SPF: React.FC<SPFProps> = ({ referenceid, tsm, manager, prepared_by }) => 
                 onClose={closeRevisionDialog}
                 spf_number={revisionTargetSpfNumber}
                 onRequestRevision={handleRequestRevision}
+            />
+
+            {/* ── Cancel dialog ────────────────────────────────────────────────── */}
+            <CancelDialog
+                open={cancelDialogOpen}
+                onOpenChange={closeCancelDialog}
+                spfNumber={cancelTargetSpfNumber || ""}
+                spfId={cancelTargetId || undefined}
+                onConfirm={handleCancel}
             />
         </div>
     );
